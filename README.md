@@ -35,5 +35,7 @@ cd apps/mobile && flutter run --dart-define=API_URL=http://10.0.2.2:5080 --dart-
 ./scripts/test.sh                     # all tests
 ```
 
+Next steps are listed in [docs/REQUIREMENTS_TRACKER.md](docs/REQUIREMENTS_TRACKER.md#next-actions).
+
 Docs: [Architecture](docs/ARCHITECTURE.md) · [AI architecture](docs/AI_ARCHITECTURE.md) · [Setup](docs/SETUP.md) ·
 [API](docs/API.md) · [Mobile platform limits](docs/MOBILE_PLATFORM_LIMITS.md) · [Requirements](docs/REQUIREMENTS_TRACKER.md)

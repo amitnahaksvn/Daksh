@@ -32,3 +32,11 @@ brief only. Once the master prompt is supplied, import its requirements here.
 | REQ-INF-001 | Dockerfiles, compose, env example, gitignore | P0 | Eng | IMPLEMENTED_UNVERIFIED | Files written | Docker daemon not available to build images in the authoring session |
 | REQ-INF-002 | GitHub Actions CI | P0 | Eng | IMPLEMENTED_UNVERIFIED | `.github/workflows/ci.yml` | Not yet run on GitHub |
 | REQ-INF-004 | Deployment target and templates | P2 | Eng | NOT_STARTED | Unverified k8s template | Target decision |
+
+## Next actions
+
+1. **Provide the Master Prompt** (`Daksh_Master_Prompt.docx` and `.md`) in `docs/` and import its requirements into this tracker (REQ-SPEC-001).
+2. **Real LLM + embeddings, and persistent memory**: add an `IChatClient` adapter for the chosen provider and a PostgreSQL + pgvector `IMemoryStore` (REQ-AI-002, REQ-AI-003).
+3. **Identity**: configure an OIDC provider for the API, web and mobile sign-in (REQ-AUTH-001).
+4. **Real integrations and confirmed-action tools**: email, calendar and push adapters, then agent tools that require user confirmation (REQ-INT-002, REQ-AI-004).
+5. **Quality gates**: AI evaluation harness and web Playwright tests in CI, and confirm the first GitHub Actions run (REQ-AI-006, REQ-WEB-007, REQ-INF-002).
