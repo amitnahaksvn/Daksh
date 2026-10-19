@@ -32,8 +32,18 @@ brief only. Once the master prompt is supplied, import its requirements here.
 | REQ-INF-001 | Dockerfiles, compose, env example, gitignore | P0 | Eng | IMPLEMENTED_UNVERIFIED | Files written | Docker daemon not available to build images in the authoring session |
 | REQ-INF-002 | GitHub Actions CI | P0 | Eng | IMPLEMENTED_UNVERIFIED | `.github/workflows/ci.yml` | Not yet run on GitHub |
 | REQ-INF-004 | Deployment target and templates | P2 | Eng | NOT_STARTED | Unverified k8s template | Target decision |
+| REQ-GOV-001 | Repo governance: PR flow, branch protection, CODEOWNERS, templates, dependency updates, secret scanning | P1 | Eng | NOT_STARTED | | Merge decision |
+| REQ-DATA-001 | Enforce retention, data export and account deletion; audit log hardening | P0 | Eng | NOT_STARTED | `RetentionDays` stored but not enforced | |
+| REQ-API-003 | Complete API surface (CRUD, schedules, notifications, devices, memory, streaming, rate limits) | P0 | Eng | NOT_STARTED | | |
+| REQ-OPS-001 | Observability, alerting, backups, runbooks | P1 | Eng | NOT_STARTED | | Cloud target |
+| REQ-SEC-001 | Threat model, scanning (CodeQL, deps, images), pen test | P0 | Eng | NOT_STARTED | | |
+| REQ-PRIV-001 | Privacy policy/terms, consent records, DPAs, compliance review | P0 | Product | NOT_STARTED | | Legal input |
+| REQ-A11Y-001 | WCAG 2.2 AA audit web + mobile | P1 | Eng | NOT_STARTED | | |
+| REQ-REL-001 | Beta, store submissions, go/no-go checklist | P1 | Product | NOT_STARTED | | Store accounts |
 
 ## Next actions
+
+The exhaustive checklist of all remaining work is in [ROADMAP.md](ROADMAP.md).
 
 1. **Provide the Master Prompt** (`Daksh_Master_Prompt.docx` and `.md`) in `docs/` and import its requirements into this tracker (REQ-SPEC-001).
 2. **Real LLM + embeddings, and persistent memory**: add an `IChatClient` adapter for the chosen provider and a PostgreSQL + pgvector `IMemoryStore` (REQ-AI-002, REQ-AI-003).
