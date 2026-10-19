@@ -1,0 +1,21 @@
+# TEMPLATE ONLY - not applied or verified. Secrets must come from a secret manager, never from this file.
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: daksh-api }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: daksh-api } }
+  template:
+    metadata: { labels: { app: daksh-api } }
+    spec:
+      containers:
+        - name: api
+          image: REGISTRY/daksh-api:TAG
+          ports: [{ containerPort: 8080 }]
+          env:
+            - { name: Auth__Mode, value: Jwt }
+            - { name: Auth__Authority, value: "https://IDP.EXAMPLE" }
+            - name: ConnectionStrings__Daksh
+              valueFrom: { secretKeyRef: { name: daksh-db, key: connection-string } }
+          livenessProbe: { httpGet: { path: /health/live, port: 8080 } }
+          readinessProbe: { httpGet: { path: /health/ready, port: 8080 } }

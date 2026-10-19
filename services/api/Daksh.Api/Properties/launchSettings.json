@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Daksh.Api": {
+      "commandName": "Project",
+      "applicationUrl": "http://localhost:5080",
+      "launchUrl": "openapi/v1.json",
+      "environmentVariables": { "ASPNETCORE_ENVIRONMENT": "Development" }
+    }
+  }
+}
