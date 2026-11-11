@@ -1,17 +1,21 @@
 import type { ReactNode } from "react";
 
+/** The Bento building blocks: one corner radius, soft white tiles on the grey canvas, lime and pink accent tiles. */
+export const tileClass = "tile rounded-[1.25rem] border border-line bg-surface shadow-[var(--shadow)]";
+export const listClass = "tile divide-y divide-line overflow-hidden rounded-[1.25rem] border border-line bg-surface shadow-[var(--shadow)]";
+
 export function PageHeader({ title, children }: { title: string; children?: ReactNode }) {
   return (
-    <header className="mb-6">
-      <h1 className="text-2xl font-semibold">{title}</h1>
-      {children && <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">{children}</p>}
+    <header className={`mb-4 p-6 ${tileClass}`}>
+      <h1 className="text-3xl font-extrabold">{title}</h1>
+      {children && <p className="mt-1 text-sm text-muted">{children}</p>}
     </header>
   );
 }
 
 export function Loading({ label = "Loading" }: { label?: string }) {
   return (
-    <p role="status" aria-live="polite" className="text-sm text-neutral-500">
+    <p role="status" aria-live="polite" className="text-sm text-muted">
       {label}…
     </p>
   );
@@ -19,11 +23,11 @@ export function Loading({ label = "Loading" }: { label?: string }) {
 
 export function ErrorState({ error, onRetry }: { error: Error; onRetry?: () => void }) {
   return (
-    <div role="alert" className="rounded-lg border border-red-300 bg-red-50 p-4 text-red-900 dark:border-red-800 dark:bg-red-950 dark:text-red-100">
-      <p className="font-medium">Something went wrong</p>
+    <div role="alert" className="rounded-[1.25rem] bg-danger-bg p-5 text-danger">
+      <p className="font-semibold">Something went wrong</p>
       <p className="mt-1 text-sm">{error.message}</p>
       {onRetry && (
-        <button onClick={onRetry} className="mt-3 rounded-md border border-red-400 px-3 py-1 text-sm hover:bg-red-100 dark:hover:bg-red-900">
+        <button onClick={onRetry} className="mt-3 rounded-full border border-current px-4 py-1.5 text-sm font-semibold hover:bg-black/5 dark:hover:bg-white/10">
           Try again
         </button>
       )}
@@ -32,14 +36,23 @@ export function ErrorState({ error, onRetry }: { error: Error; onRetry?: () => v
 }
 
 export function EmptyState({ children }: { children: ReactNode }) {
-  return <p className="rounded-lg border border-dashed p-6 text-center text-sm text-neutral-500">{children}</p>;
+  return <p className="rounded-[1.25rem] border border-dashed border-line bg-surface p-8 text-center text-sm text-muted">{children}</p>;
 }
 
+/** A heads-up (for example "this is simulated"): a pink tile with ink text. */
 export function Notice({ children }: { children: ReactNode }) {
-  return <p className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100">{children}</p>;
+  return <p className="mb-4 rounded-[1.25rem] bg-pink p-4 text-sm text-on-tint">{children}</p>;
+}
+
+/** A small status label. `tone="lime"` for a good state, `"pink"` for a simulated or pending one. */
+export function Chip({ children, tone = "pink" }: { children: ReactNode; tone?: "lime" | "pink" | "plain" }) {
+  const tones = { lime: "bg-lime text-on-tint", pink: "bg-pink text-on-tint", plain: "bg-surface-2 text-muted" };
+  return <span className={`ai-mono inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${tones[tone]}`}>{children}</span>;
 }
 
 export const buttonClass =
-  "rounded-md bg-indigo-700 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-800 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-700";
+  "inline-flex items-center justify-center rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-accent-contrast transition-opacity hover:opacity-90 disabled:opacity-50";
+export const secondaryButtonClass =
+  "inline-flex items-center justify-center rounded-full border border-line bg-surface px-5 py-2.5 text-sm font-semibold text-text transition-colors hover:bg-surface-2";
 export const inputClass =
-  "w-full rounded-md border border-neutral-400 bg-transparent px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-700";
+  "w-full rounded-2xl border border-line bg-surface-2 px-4 py-2.5 text-sm text-text placeholder:text-muted";

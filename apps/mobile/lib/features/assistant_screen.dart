@@ -48,22 +48,39 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
   @override
   Widget build(BuildContext context) => Column(children: [
         Expanded(
-          child: ListView(padding: const EdgeInsets.all(16), children: [
+          child: ListView(padding: const EdgeInsets.all(12), children: [
+            if (_lines.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 48),
+                child: Center(child: Text('Ask Daksh anything.', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant))),
+              ),
             for (final (isUser, text) in _lines)
               Align(
                 alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-                child: Card(child: Padding(padding: const EdgeInsets.all(12), child: Text(text))),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.82),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: isUser ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.surface,
+                    borderRadius: BorderRadius.circular(20).copyWith(
+                      bottomRight: isUser ? const Radius.circular(6) : null,
+                      bottomLeft: isUser ? null : const Radius.circular(6),
+                    ),
+                  ),
+                  child: Text(text, style: TextStyle(color: isUser ? Theme.of(context).colorScheme.onPrimary : null)),
+                ),
               ),
           ]),
         ),
-        if (_error != null) Padding(padding: const EdgeInsets.all(8), child: Text(_error!, style: const TextStyle(color: Colors.red))),
+        if (_error != null) Padding(padding: const EdgeInsets.all(8), child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error, fontWeight: FontWeight.w600))),
         Padding(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
           child: Row(children: [
             Expanded(
               child: TextField(
                 controller: _controller,
-                decoration: const InputDecoration(labelText: 'Message', border: OutlineInputBorder()),
+                decoration: const InputDecoration(labelText: 'Message'),
                 onSubmitted: (_) => _send(),
               ),
             ),

@@ -19,11 +19,19 @@ class TasksScreen extends ConsumerWidget {
           onRetry: () => ref.invalidate(tasksProvider),
           builder: (tasks) => tasks.isEmpty
               ? const Center(child: Text('No tasks yet.'))
-              : ListView(children: [
-                  for (final t in tasks)
-                    ListTile(
-                      title: Text(t.title, style: TextStyle(decoration: t.completed ? TextDecoration.lineThrough : null)),
-                    ),
+              : ListView(padding: const EdgeInsets.fromLTRB(12, 4, 12, 88), children: [
+                  Tile(
+                    child: Column(children: [
+                      for (var i = 0; i < tasks.length; i++) ...[
+                        if (i > 0) const Divider(indent: 16, endIndent: 16),
+                        ListTile(
+                          leading: Icon(tasks[i].completed ? Icons.check_circle : Icons.radio_button_unchecked,
+                              color: tasks[i].completed ? Theme.of(context).colorScheme.primary : null),
+                          title: Text(tasks[i].title, style: TextStyle(decoration: tasks[i].completed ? TextDecoration.lineThrough : null)),
+                        ),
+                      ],
+                    ]),
+                  ),
                 ]),
         ),
       );

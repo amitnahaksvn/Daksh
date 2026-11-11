@@ -29,4 +29,16 @@ describe("AssistantChat", () => {
     await userEvent.click(screen.getByRole("button", { name: "Send" }));
     expect(spy).not.toHaveBeenCalled();
   });
+
+  it("shows that Daksh is thinking while the reply is on its way", async () => {
+    let finish: (v: Awaited<ReturnType<typeof api.sendMessage>>) => void = () => {};
+    vi.spyOn(api, "sendMessage").mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    render(<AssistantChat />);
+    await userEvent.type(screen.getByLabelText("Message"), "hello");
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Daksh is thinking");
+    finish({ conversationId: "c1", messageId: "m1", reply: "[mock] done", provider: "mock", isSimulated: true });
+    expect(await screen.findByText(/\[mock\] done/)).toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
 });

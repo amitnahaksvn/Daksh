@@ -6,7 +6,7 @@ export default function CalendarPage() {
     <>
       <PageHeader title="Calendar" />
       <Notice>Calendar access requires a calendar provider to be connected and verified. Currently only a mock adapter exists, so no real events are read or created.</Notice>
-      <Link href="/integrations" className="text-indigo-700 underline">Manage integrations</Link>
+      <Link href="/integrations" className="font-semibold underline underline-offset-4">Manage integrations</Link>
     </>
   );
 }

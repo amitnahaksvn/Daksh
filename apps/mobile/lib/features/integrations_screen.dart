@@ -11,8 +11,22 @@ class IntegrationsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) => AsyncBody(
         value: ref.watch(integrationsProvider),
         onRetry: () => ref.invalidate(integrationsProvider),
-        builder: (items) => ListView(children: [
-          for (final i in items) ListTile(title: Text('${i.key} — ${i.state}'), subtitle: Text(i.note)),
+        builder: (items) => ListView(padding: const EdgeInsets.fromLTRB(12, 4, 12, 16), children: [
+          for (final i in items)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Tile(
+                padding: const EdgeInsets.all(16),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Expanded(child: Text(i.key, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16))),
+                    StatusChip(i.state, lime: i.state != 'Mock'),
+                  ]),
+                  const SizedBox(height: 6),
+                  Text(i.note, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                ]),
+              ),
+            ),
         ]),
       );
 }

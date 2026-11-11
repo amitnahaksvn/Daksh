@@ -1,0 +1,262 @@
+GW-001	Gateway host, start, graceful shutdown	Single long-running control-plane process	ASP.NET Core host `Daksh.Gateway`; hosted services drain on shutdown	Critical	-
+GW-002	Health and readiness	health command and endpoint	`/health/live`, `/health/ready` with per-dependency checks	Critical	GW-001
+GW-003	Configurable host/port, config validation	Config file validated on load, `config validate`	Options validation at start-up; `daksh config validate`	High	GW-001
+GW-004	Version and compatibility reporting	Version in handshake/status	`/api/v1/system/info`; protocol version checked for nodes and plugins	Medium	GW-001
+GW-005	Connection limits and rate limits	Queue caps; auth throttling	ASP.NET rate limiter per user/IP/API key; hub connection caps	High	ID-001
+GW-006	Real-time event interface	WebSocket req/res/event frames	SignalR hub `/hubs/gateway` with workspace/session groups	Critical	GW-001
+GW-007	Event replay after reconnect	Not offered	Persisted execution events, replay from sequence number	High	RT-001
+GW-008	Remote access guidance (TLS, proxy)	Tunnel/tailnet docs	Reverse-proxy and HTTPS docs; forwarded headers	Medium	DEP-001
+GW-009	Diagnostics ("doctor")	doctor command with fixes	`/api/v1/system/diagnostics`; `daksh doctor`	Medium	GW-002
+RT-001	Agent loop with tool calls	Embedded loop, lifecycle phases	`AgentRuntime`: model step, tool step, persisted per step	Critical	MP-001,TL-001
+RT-002	Streaming text and tool events	Assistant/tool/lifecycle streams	Execution events over SignalR and SSE	Critical	GW-006
+RT-003	Multiple, sequential and parallel tool calls	Yes	Parallel for tools marked parallel-safe, else sequential	High	RT-001
+RT-004	Cancellation and interruption	Stop command, interrupt queue mode	Cancel API; cooperative cancellation tokens	Critical	RT-001
+RT-005	Timeouts and retry policies	Run timeout, model idle timeout	Per-run, per-model-call, per-tool timeouts; retry with backoff	High	RT-001
+RT-006	Checkpoints and resumable executions	Not documented	`ExecutionCheckpoints`; lease expiry re-queues after restart	Critical	RT-001
+RT-007	Context window management and compaction	Compaction with summaries	Token budget; summarise older turns into the session summary	High	RT-001
+RT-008	Token and cost tracking	Usage/cost reference	`UsageRecords`, `CostRecords` per model call	High	MP-010
+RT-009	Model fallback	Fallback model list	Ordered fallbacks on provider failure	High	MP-009
+RT-010	Per-agent and per-user execution limits	Concurrency caps per lane	Max steps, max tokens, max concurrent runs per agent/user	High	RT-001
+RT-011	Per-session serialisation and concurrency control	Lanes	One active run per session; global and per-agent caps	Critical	RT-001
+X-RT-012	Queue modes (followup, collect, steer, interrupt)	Four modes, debounce, cap, drop policy	All four modes; cap; debounce	Medium	RT-011
+RT-013	Execution tracing	Lifecycle stream	OpenTelemetry spans per run/step/tool; durable event log	Medium	OBS-002
+RT-014	Durable execution history	Session transcript store	`Executions`, `ExecutionEvents`, `ToolExecutions`	Critical	DB-001
+X-RT-015	Loop detection	Config key exists (name only)	Repeated identical tool-call detector stops the run	Medium	RT-001
+AG-001	Agent CRUD and enable/disable	Agents in config, CLI add/list	`Agents` API + UI: create, edit, duplicate, disable, delete	Critical	WS-001
+AG-002	Identity: name, description, avatar, persona	Identity/persona files	Agent fields + instruction documents	High	AG-001
+AG-003	Reusable instruction files and workspace-level instructions	Workspace Markdown files	`AgentInstructions` (per agent) and workspace instructions, ordered	High	AG-001
+AG-004	Per-agent model, fallbacks, tool policy, skills, memory, limits	Per-agent config entries	`AgentConfiguration` JSON columns, validated	Critical	AG-001
+AG-005	Agent workspace directory	One workspace directory per agent	Isolated directory per agent under the workspace root	High	FL-001
+AG-006	Agent test run from the UI	CLI one-shot agent command	"Test" action runs a throwaway session	Medium	RT-001
+MA-001	Routing users/channels to agents	Bindings by channel/account/peer	`ChannelRoutes` with match tiers; first match wins	High	CH-001
+MA-002	Agent-to-agent messaging with allowlist	Opt-in agent-to-agent tool	`agent_send` tool; `AgentDelegations` allowlist	High	RT-001
+MA-003	Delegation and sub-agents	Sub-agent spawn	`agent_delegate` creates a child session and run	High	RT-001
+MA-004	Parallel sub-agents and result aggregation	Concurrency cap 8, swarm cap	Parallel child runs; results returned to the parent as tool results	High	MA-003
+MA-005	Parent-child tracking, monitoring, cancellation	Sub-agent list/steer/kill	`ParentExecutionId`; cancel cascades to children	High	MA-003
+MA-006	Depth limit and loop prevention	Depth limits	Max depth; ancestry check rejects cycles	Critical	MA-003
+MA-007	Delegated token/cost roll-up	Not documented	Child usage summed into the root execution	Medium	RT-008
+MA-008	Isolated and explicitly shared sessions	Session scopes	Child sessions isolated; shared session opt-in	Medium	SS-001
+MA-009	Approval requirements for delegated actions	Sub-agent sandbox requirement	Child runs inherit the stricter approval policy	Medium	AP-001
+X-MA-010	Goals and progress cards	Goal and progress tools	Not implemented	Low	RT-001
+MP-001	Provider abstraction and registry	Provider plugins	`IModelProvider`, `ProviderRegistry`	Critical	-
+MP-002	OpenAI adapter	Yes	Chat Completions, streaming, tools, vision, JSON schema, embeddings	Critical	MP-001
+MP-003	Anthropic adapter	Yes	Messages API, streaming, tools, vision	Critical	MP-001
+MP-004	Ollama adapter	Yes, with model discovery	`/api/chat` streaming, tools, embeddings, `/api/tags` discovery	Critical	MP-001
+MP-005	OpenAI-compatible endpoints	Yes (vLLM, LM Studio, llama.cpp, OpenRouter, Groq...)	OpenAI adapter with custom base URL and headers	Critical	MP-002
+MP-006	Anthropic-compatible endpoints	Yes	Anthropic adapter with custom base URL	High	MP-003
+MP-007	Model capability metadata and request validation	Per-model compat flags	`ModelCapabilities`; requests rejected before the call if unsupported	Critical	MP-001
+MP-008	Model discovery	Per-provider	Discovery where the API offers it (OpenAI-style `/models`, Ollama tags)	Medium	MP-001
+MP-009	Retry, rate-limit handling, fallback	Cooldowns and failover	Retry-After aware retry; circuit-style cooldown; fallback chain	High	MP-001
+X-MP-010	Credential rotation between several keys of one provider	Auth-profile rotation with cooldowns	Multiple credentials per provider, rotated on auth/rate errors	Medium	MP-009
+MP-011	Usage and cost calculation	Cost reference	Price table per model; cost per call	High	MP-001
+MP-012	Provider health checks	models status	Health probe per provider; shown in UI	Medium	MP-001
+MP-013	Embeddings abstraction	Configurable embedding provider	`IEmbeddingProvider` (OpenAI-style, Ollama, deterministic hash)	High	MP-001
+MP-014	OAuth subscription auth	Yes for some providers	Not implemented (API keys only)	Low	MP-001
+MP-015	Gemini, Azure OpenAI, Bedrock, Mistral native adapters	Yes	Azure OpenAI/OpenRouter/Groq/Mistral/vLLM/LM Studio via OpenAI-compatible; Gemini and Bedrock native not implemented	Medium	MP-005
+MP-016	Secret-free provider logging	Redaction	Keys never logged; redaction filter	Critical	SEC-006
+CH-001	Channel abstraction and registry	Channel plugins	`IChannelAdapter` with capability flags	Critical	-
+CH-002	WebChat	Core	Control UI chat over REST + SignalR	Critical	GW-006
+CH-003	Telegram	Core	Bot API: webhook and long polling, send/edit/delete, reactions, typing, files	High	CH-001
+CH-004	Discord	Plugin	REST send/edit/delete/reactions/typing; Gateway WebSocket receive	High	CH-001
+CH-005	Slack	Plugin	Events API with signature check; Web API send/update/delete/reactions/threads	High	CH-001
+CH-006	WhatsApp	Plugin (personal-account bridge)	WhatsApp Business Cloud API webhook + send (official API only)	High	CH-001
+CH-007	Microsoft Teams	Plugin	Not implemented	Medium	CH-001
+CH-008	Google Chat	Plugin	Not implemented	Medium	CH-001
+CH-009	Signal	Plugin	Not implemented	Low	CH-001
+CH-010	iMessage	Plugin (macOS only)	Not implemented	Low	CH-001
+CH-011	Matrix	Plugin	Not implemented	Medium	CH-001
+CH-012	IRC	Plugin	Not implemented	Low	CH-001
+CH-013	Mattermost	Plugin	Not implemented	Low	CH-001
+CH-014	Feishu	Plugin	Not implemented	Low	CH-001
+CH-015	LINE	Plugin	Not implemented	Low	CH-001
+CH-016	SMS	Plugin	Not implemented	Low	CH-001
+CH-017	Voice call	Plugin	Not implemented	Low	VO-001
+CH-018	Generic webhook channel	Inbound hooks	Signed inbound webhook + outbound callback channel	Medium	CH-001
+CH-019	Mock channel for tests	QA channel	In-memory adapter recording sends, injecting inbound messages	Critical	CH-001
+CH-020	Multiple accounts per channel	Yes	`ChannelAccounts`	High	CH-001
+CH-021	DM pairing and sender authorisation	Pairing codes, DM policies	DM policy: pairing, allowlist, open, disabled	Critical	CH-001
+CH-022	Group allowlists and mention activation	Yes	Group policy with allowlist and require-mention	High	CH-001
+CH-023	User identity mapping	Sender identity keys	`ChannelIdentities` map external senders to users	High	CH-001
+CH-024	Attachments in and out	Yes	Attachments stored as files; outbound media where the API allows	High	FL-001
+CH-025	Channel formatting and chunking	Per-channel formatting, chunking	Markdown conversion per channel; length-based chunking	Medium	CH-001
+CH-026	Reconnection and rate limits	Yes	Backoff reconnect; 429 handling	High	CH-001
+CH-027	Duplicate inbound protection	Idempotency keys	Unique `(account, external message id)`	High	CH-001
+X-CH-028	Bot-loop protection	Yes	Ignore own and bot senders; per-peer rate cap	Medium	CH-001
+X-CH-029	Broadcast and access groups	Yes	Not implemented	Low	CH-001
+CH-030	Other channels through plugins	Yes	Plugin channel capability (protocol defined)	Medium	PL-001
+SS-001	Session create/rename/archive/delete/search	Session store and CLI	Sessions API + UI	Critical	WS-001
+SS-002	History with pagination	Yes	Cursor pagination over messages	Critical	SS-001
+SS-003	Ownership, participants, sharing, isolation	Session scopes	Owner, participants, workspace-visible flag	High	SS-001
+SS-004	DM, group, agent and channel sessions	Session keys by scope	Session key from agent + channel + account + peer per DM/group scope	High	CH-001
+SS-005	Export and import	Not documented	JSON export/import	Medium	SS-001
+SS-006	Reset, continuation, recovery	Reset command and policies	Reset (new epoch); continue after restart	High	SS-001
+SS-007	Branching	Not documented	Fork a session at a message	Low	SS-001
+SS-008	Attachments and message editing	Yes	`MessageAttachments`; edit own user message (creates a branch point)	Medium	FL-001
+X-SS-009	Reset policies (daily, idle) and retention pruning	Yes	Per-agent reset policy; retention job	Medium	AU-001
+X-SS-010	Incognito sessions	Yes	Not implemented	Low	SS-001
+TL-001	Tool contract, registry, discovery	Typed tools	`ITool` with schemas, version, risk, permissions, timeout, retry	Critical	-
+TL-002	Tool policy: allow/deny, per agent, per user	Profiles, allow/deny, per-sender	Policy evaluator: profile, groups, allow/deny with wildcards, deny wins	Critical	TL-001
+X-TL-003	Tool profiles and groups	minimal/coding/messaging/full; groups	Same idea with our own names	High	TL-002
+TL-004	File tools: read, write, edit, search, list	read/write/edit/apply patch	Workspace-jailed file tools	Critical	TL-001
+TL-005	File upload/download	Yes	Files API; tools reference stored files	High	FL-001
+TL-006	Shell execution	exec	`exec` through the sandbox runner	Critical	SB-001
+TL-007	Process management	process	Background processes in the sandbox: start, poll, kill	High	SB-001
+TL-008	Web search	About a dozen providers	SearXNG, Brave, Tavily, DuckDuckGo adapters	High	TL-001
+TL-009	Web fetch	Yes	SSRF-guarded fetch, HTML to text, size cap	Critical	SEC-010
+TL-010	HTTP/API request tool	Through exec/fetch	`http_request` with method, headers, body; SSRF guard; host allowlist	High	SEC-010
+TL-011	Database access through adapters	Not a core tool	`db_query` on named read-only connections	Medium	TL-001
+TL-012	Memory tools	memory search/get	`memory_search`, `memory_write`	Critical	MEM-001
+TL-013	Messaging tool	message	`message_send` restricted to routed channels	High	CH-001
+TL-014	Session tools	sessions list/history/send	`sessions_list`, `sessions_history`, `sessions_send`	Medium	SS-001
+TL-015	Scheduling tool	automations/cron	`schedule_create`, `schedule_list`, `schedule_cancel`	Critical	AU-001
+TL-016	Webhook management tool	Not a separate tool	`webhook_manage`	Low	AU-006
+TL-017	Device/node command tool	nodes	`node_invoke`	Medium	DV-001
+TL-018	Image analysis	view image	`image_analyze` using a vision-capable model	Medium	MP-007
+TL-019	Media generation adapters	image/music/video generate, tts	`image_generate` (OpenAI Images adapter); video/music not implemented	Medium	MD-003
+TL-020	Code execution	code execution	`code_execute` (Python/Node) in the container sandbox only	Medium	SB-001
+TL-021	Output-size limits and secret redaction	Output compaction plugin	Truncation with marker; secret patterns redacted from results	Critical	SEC-006
+TL-022	Tool timeouts, retries, audit	Yes	Per-tool timeout/retry; every call recorded in `ToolExecutions`	Critical	TL-001
+X-TL-023	Ask-the-user and secret-input tools	Yes	Not implemented	Medium	AP-001
+X-TL-024	MCP server tools	Yes	Not implemented	Medium	PL-001
+X-TL-025	Tool search for large catalogues, code mode	Experimental	Not implemented	Low	TL-001
+SB-001	Sandboxed execution backend	Docker/Podman sandbox, modes and scopes	`ISandboxRunner`: Docker backend and restricted child-process backend	Critical	-
+SB-002	Working-directory and file access restrictions	Workspace access none/ro/rw	Path jail with symlink resolution; ro/rw modes	Critical	SB-001
+SB-003	Network restrictions for tools	Sandbox network settings	Container network off by default; SSRF guard for HTTP tools	Critical	SB-001
+SB-004	Command validation	Exec approvals/allowlists	Denylist/allowlist patterns before approval evaluation	High	SB-001
+SB-005	Resource limits	Container limits	Memory, CPU, pids, wall-clock, output caps	High	SB-001
+X-SB-006	Elevated mode	Yes	Not implemented (approvals cover the use case)	Low	AP-001
+BR-001	Browser tool: launch, navigate, click, type, fill, scroll	browser tool	Playwright-backed `browser` tool with actions	High	TL-001
+BR-002	Screenshots, DOM snapshot, element selection	Yes	Screenshot to file store; accessibility/DOM text snapshot	High	BR-001
+BR-003	Sessions, tabs, persistent and isolated profiles, cookies	Profiles	Per-session contexts; named persistent profiles per workspace	Medium	BR-001
+BR-004	Downloads and uploads	Yes	Downloads quarantined into the file store; upload from stored files	Medium	BR-001
+BR-005	Console/network diagnostics, timeouts, recovery	Yes	Console log capture; action timeouts; context restart on crash	Medium	BR-001
+BR-006	Browser safety	Sandbox options	URL policy (SSRF guard), download allowlist, page text marked untrusted	High	SEC-010
+MEM-001	Persistent memory store	Markdown files + index	`Memories` rows in PostgreSQL with scope and kind	Critical	DB-001
+MEM-002	Scopes: user, agent, workspace, session, shared	Per-agent files, user file	Scope column with permission checks	High	MEM-001
+MEM-003	Kinds: semantic, episodic, structured, document	Daily notes vs long-term	Kind column; structured key/value; document chunks	Medium	MEM-001
+MEM-004	Embeddings in pgvector	SQLite vector index	`MemoryEmbeddings` (pgvector)	Critical	MP-013
+MEM-005	Semantic, keyword and hybrid search	Hybrid	Cosine + full-text, reciprocal-rank fusion, metadata filters	Critical	MEM-004
+MEM-006	Keyword fallback without embeddings	FTS-only mode	Full-text only when no embedding provider	Critical	MEM-005
+MEM-007	Automatic extraction from conversations	Memory flush / active memory	Post-run extraction of durable facts by the model	High	RT-001
+MEM-008	Duplicate detection and consolidation	Background consolidation	Similarity/normalised-text dedupe; merge job	Medium	MEM-005
+MEM-009	Expiry, deletion, user control	User edits files	Expiry timestamps; edit/delete API and UI	High	MEM-001
+MEM-010	Provenance and citations	File/line citations	`MemorySources` link to session/message/file	Medium	MEM-001
+MEM-011	Import/export	Files	JSON export/import	Medium	MEM-001
+MEM-012	Recall before a turn	Active memory	Top-k relevant memories injected as untrusted data	High	MEM-005
+SK-001	SKILL.md format with front matter	Yes	Parser + validator for `SKILL.md`	High	-
+SK-002	Install, remove, enable/disable, versions	skills CLI, registry	`Skills`, `SkillVersions`; API + UI	High	SK-001
+SK-003	Workspace, agent and shared skills; precedence	Precedence chain	Scope: bundled < workspace < agent	Medium	SK-002
+SK-004	Requirements gating and compatibility checks	Bins/env/OS gating	Requirement check before a skill is offered	Medium	SK-001
+SK-005	Skills in the prompt with on-demand read	Skill index + read tool	Index in system prompt; `skill_read` tool; prompt budget	High	RT-001
+SK-006	Catalog/marketplace	Public registry	Local catalog directory + import from file/URL; no public registry	Medium	SK-002
+SK-007	Import/export, usage tracking	Yes	Zip/Markdown import-export; `skill_read` calls recorded	Low	SK-002
+PL-001	Plugin manifest and validation	Manifest file	`daksh.plugin.json` schema + validator	High	-
+PL-002	Install, enable/disable, remove, update, configure	plugins CLI	`Plugins`, `PluginConfigurations`; API + UI	High	PL-001
+PL-003	Out-of-process isolation and error isolation	In-process	Child process, JSON-RPC over stdio, restart/backoff, timeouts	Critical	PL-001
+PL-004	Plugin tools	Yes	Tools declared by the plugin appear in the registry	High	PL-003
+PL-005	Plugin hooks	Lifecycle and tool hooks	before/after tool call, message received, run finished	Medium	PL-003
+PL-006	Plugin channels, providers, search, speech, media	Yes	Protocol defined; only tools and hooks implemented	Medium	PL-003
+PL-007	Permissions and secret requirements	Allow/deny lists	Declared permissions approved at install; secrets injected per plugin	High	PL-003
+PL-008	Health, logs	inspect/doctor	Ping health; stderr captured to plugin logs	Medium	PL-003
+PL-009	SDK, example plugin, developer guide	SDK docs	`Daksh.Plugin.Sdk`, example plugin, `PLUGIN_DEVELOPMENT.md`	High	PL-003
+PL-010	Registry/repository installs	Registry	Local package and directory installs only	Low	PL-002
+AU-001	Durable scheduler	Cron service	PostgreSQL-backed job claim with lease	Critical	DB-001
+AU-002	One-time, interval and cron schedules with time zones	at/every/cron + tz	Same three kinds; `Cronos`; IANA zones	Critical	AU-001
+AU-003	Scheduled agent runs and reports	Agent-turn payloads	Automation action: run agent with a prompt	Critical	RT-001
+AU-004	Delivery of results	Announce to channel, webhook	Deliver to session, channel recipient or webhook	High	CH-001
+AU-005	Heartbeat	Yes	Per-agent heartbeat automation	Medium	AU-003
+AU-006	Inbound webhooks	Token-protected hook endpoints	`/hooks/{key}` with token or HMAC, idempotency key	High	SEC-012
+AU-007	Event-driven workflows and conditional triggers	Hooks and triggers	Event triggers on platform events with filter conditions	Medium	AU-001
+AU-008	Retries, failure notifications	Backoff ladder	Retry with backoff; failure notice to the owner	High	AU-001
+AU-009	History, logs, pause/resume, cancel	run history, enable/disable	`JobExecutions`; pause/resume/cancel API + UI	High	AU-001
+AU-010	Survives restart; missed-run policy	Catch-up unless disabled	Jobs are rows; missed runs execute once on start	Critical	AU-001
+AU-011	No duplicate execution	Not documented	Unique scheduled slot + row lock + lease	Critical	AU-001
+AU-012	Natural-language scheduling by the agent	cron tool	`schedule_create` tool subject to permission and approval	High	TL-015
+X-AU-013	Gmail, IMAP and MCP event triggers	Yes	Not implemented	Low	AU-007
+X-AU-014	Standing orders	Yes	Not implemented (agent instructions cover the basic case)	Low	AG-003
+VO-001	Speech-to-text	Voice-note transcription	`ISpeechToText`: OpenAI-compatible transcription adapter	Medium	MD-001
+VO-002	Text-to-speech	Multiple providers	`ITextToSpeech`: OpenAI-compatible speech adapter	Medium	MD-001
+VO-003	Browser voice notes and playback	Control UI audio	Record in the browser, transcribe, play replies	Medium	VO-001
+VO-004	Real-time voice conversation	Realtime voice plugins	Not implemented	Low	VO-001
+VO-005	Voices, language, provider failover	Yes	Voice and language options; ordered provider failover	Low	VO-002
+MD-001	File storage with metadata	Media store	`Files`: size, MIME, hash, owner, storage path; local disk store	Critical	DB-001
+MD-002	Image input and analysis	Yes	Images passed to vision models; capability-checked	High	MP-007
+MD-003	Image generation	Yes	OpenAI Images adapter	Medium	MP-001
+MD-004	Audio input/output	Yes	Through VO-001/VO-002	Medium	VO-001
+MD-005	Video input/analysis/generation	Yes	Not implemented (files can be stored)	Low	MD-001
+MD-006	PDF and Office document text	pdf tool	PDF, DOCX, XLSX, PPTX text extraction	Medium	MD-001
+MD-007	Safe file handling, scanning hook, retention	Media limits	MIME sniffing, size caps, `IMalwareScanner` hook, retention job	High	MD-001
+DV-001	Node registration, pairing, approval, revocation	Device pairing	Pairing code, approval by a user, device token, revoke	High	ID-001
+DV-002	Node connection and health	Node role over WebSocket	SignalR `/hubs/node`; last-seen and status	High	DV-001
+DV-003	Capability discovery and authorisation	Node commands with allow/deny	Declared capabilities; per-device allowed commands	High	DV-001
+DV-004	Command execution and event reporting	node invoke	Invoke with timeout; node events recorded	High	DV-002
+DV-005	Reference desktop node	macOS/Windows/Linux apps	`Daksh.Node.Desktop` console node (info, notify, screenshot, files)	Medium	DV-002
+DV-006	Mobile nodes	iOS and Android apps	Protocol/API contract documented; no mobile node app	Low	DV-002
+UI-001	Control UI shell, navigation, auth	Control UI	Vite React app with 20 sections	Critical	ID-001
+UI-002	Dashboard	Status views	Gateway, runs, jobs, usage, health widgets	High	UI-001
+UI-003	Chat: streaming, Markdown, code, tools, approvals, stop/retry	WebChat	Chat page	Critical	RT-002
+UI-004	Agents, sessions, providers/models pages	Yes	CRUD pages	Critical	UI-001
+UI-005	Channels, tools, skills, plugins pages	Yes	Management pages	High	UI-001
+UI-006	Memory, automations, devices, approvals pages	Yes	Management pages	High	UI-001
+UI-007	Files, logs, usage, settings, system health pages	Yes	Management pages	High	UI-001
+UI-008	Accessibility, responsive layout, loading/error states	Yes	Keyboard access, ARIA, responsive, skeletons	High	UI-001
+X-UI-009	Terminal UI, canvas/widgets, themes tools	Yes	Not implemented (light/dark theme only)	Low	UI-001
+ID-001	Registration, login, logout, sessions	Token/password	Local accounts, JWT + rotating refresh tokens	Critical	DB-001
+ID-002	Password reset, secure hashing	n/a	PBKDF2 hashing; single-use reset tokens	Critical	ID-001
+ID-003	Optional MFA	n/a	TOTP with recovery codes	High	ID-001
+ID-004	API keys	Gateway token	Hashed keys with scopes and expiry	High	ID-001
+ID-005	Roles and permissions	Operator roles (limited)	Six roles mapped to permissions; policy per endpoint	Critical	ID-001
+WS-001	Workspaces, membership, invitations, role assignment, ownership transfer	n/a (single operator)	Workspace APIs	Critical	ID-001
+WS-002	Tenant isolation at API and data-access level	n/a	Membership check + EF global query filters	Critical	WS-001
+WS-003	Audit log	Audit command	Append-only `AuditLogs`	Critical	DB-001
+SEC-001	TLS, CORS, CSRF stance, security headers	Loopback default	Bearer tokens (no cookies), CORS allowlist, headers, HSTS behind proxy	High	GW-001
+SEC-002	Rate limiting and request validation	Auth throttling	Rate limiter; FluentValidation; body size limits	High	GW-005
+SEC-003	Encrypted secrets and rotation	Secrets CLI, secret refs	AES-GCM envelope with key ring; rotate command	Critical	DB-001
+SEC-004	Session expiry	Yes	Token lifetimes; refresh revocation	High	ID-001
+SEC-005	Prompt-injection defence	Untrusted content model	Untrusted content wrapped and labelled; policy enforced in code	Critical	TL-002
+SEC-006	Secret redaction in logs, API and tool output	Redaction	Central redactor	Critical	-
+SEC-007	Path traversal defence	Workspace access	Path jail	Critical	SB-002
+SEC-008	Command injection defence	Exec approvals	No shell interpolation of model input outside the sandbox; argv exec	Critical	SB-004
+SEC-009	Cross-workspace access defence	n/a	Tests for every resource type	Critical	WS-002
+SEC-010	SSRF defence	SSRF guard on fetch	Resolve-then-connect guard blocking private ranges	Critical	-
+SEC-011	Replay protection	Idempotency keys	Timestamp + idempotency key on webhooks; refresh token reuse detection	High	AU-006
+SEC-012	Webhook spoofing defence	Hook token	HMAC signatures (per channel scheme)	Critical	-
+SEC-013	Unsafe plugin install defence	Allow/deny lists	Manifest validation, permission approval, no in-process load	High	PL-003
+SEC-014	Privilege escalation defence	n/a	Role checks on role changes; tests	Critical	ID-005
+SEC-015	Threat model document	Security docs	`docs/SECURITY.md`	High	-
+X-SEC-016	Security audit command	Yes	`daksh security audit` (config checks)	Low	CLI-001
+AP-001	Approval workflow for risky actions	Exec approvals	`Approvals` with risk level; run pauses and resumes	Critical	RT-006
+AP-002	Configurable approval policy	Approval modes	Policy per agent: by risk level, by tool, auto-approve list	High	AP-001
+AP-003	Approval queue UI and notifications	Yes	Approvals page; real-time notification	High	UI-006
+CFG-001	Layered configuration	Config file + env	appsettings + environment variables + database settings	High	GW-003
+CFG-002	Per-user/workspace/agent/provider/channel settings	Config scopes	Scoped settings in the database	High	DB-001
+CFG-003	`.env.example`, no secrets in source	Yes	Placeholders only	Critical	-
+DB-001	Schema and migrations for all entities	SQLite state	EF Core migrations, schema `platform`	Critical	-
+DB-002	Constraints, indexes, soft delete, concurrency	n/a	FKs, unique indexes, `DeletedAt`, row versions	High	DB-001
+API-001	Versioned REST API by domain	RPC methods	`/api/v1/*` minimal APIs	Critical	GW-001
+API-002	Consistent errors, pagination, filtering, sorting	n/a	Problem details; cursor/page conventions	High	API-001
+API-003	Correlation IDs	n/a	`X-Correlation-Id` middleware	Medium	API-001
+API-004	OpenAPI documentation	n/a	OpenAPI document + Swagger UI	High	API-001
+OBS-001	Structured logging	Log files, logs command	Serilog JSON with redaction	High	-
+OBS-002	Tracing and metrics	n/a	OpenTelemetry traces/metrics, OTLP export	High	-
+OBS-003	Metrics listed in the master prompt	n/a	Latency, TTFT, tokens, tool duration, failures, queue depth, health	Medium	OBS-002
+OBS-004	Diagnostics for providers, channels, workers	status/doctor	Diagnostics endpoint and UI page	Medium	GW-009
+OBS-005	Monitoring integration	n/a	OTel collector + Prometheus/Grafana compose profile	Low	OBS-002
+REL-001	Idempotency and duplicate-event protection	Idempotency keys	Idempotency keys on runs, inbound messages, jobs	High	DB-001
+REL-002	Distributed locking	n/a	PostgreSQL advisory locks; Redis locks optional	High	-
+REL-003	Dead-letter handling	Channel dead letters	Dead-letter state for jobs and outbound messages; requeue	Medium	AU-001
+REL-004	Graceful shutdown and restart recovery	Yes	Drain, lease expiry recovery, tested	Critical	RT-006
+REL-005	Backup and restore	backup command	`daksh backup`/`restore` (pg_dump + files), encryption	High	CLI-001
+REL-006	Upgrade and disaster-recovery docs	Updating docs	`BACKUP_AND_RESTORE.md`, `DEPLOYMENT.md`	Medium	-
+CLI-001	Administration CLI	Large CLI	`daksh` CLI over the REST API and local operations	High	API-001
+X-CLI-002	Onboarding wizard	Yes	First-run setup endpoint and UI step; no CLI wizard	Low	CLI-001
+DEP-001	Dockerfiles and Compose stack	Docker install	Gateway + Control UI + PostgreSQL + Redis + RabbitMQ	Critical	-
+DEP-002	Environment-specific configuration	n/a	Development, Testing, Staging, Production settings	High	CFG-001
+DEP-003	CI pipeline	CI docs	GitHub Actions: build, test, UI build	High	-
+TST-001	Unit tests	Yes	xUnit + NSubstitute	Critical	-
+TST-002	Integration tests on real PostgreSQL	Yes	Testcontainers (pgvector image)	Critical	-
+TST-003	Security tests	Yes	Authorisation, isolation, injection, SSRF, traversal, webhook auth	Critical	-
+TST-004	End-to-end tests	Yes	Playwright against the running stack	High	-
+TST-005	Required 16-step scenario	n/a	Automated scenario incl. restart	Critical	-
+TST-006	Coverage target 90% on critical logic	n/a	Coverlet report	High	-
+LEG-001	Legacy personal-assistant services keep working	n/a	`Daksh.Api`, `Daksh.Worker` unchanged, tests green	Critical	-

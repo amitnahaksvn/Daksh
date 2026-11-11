@@ -6,7 +6,7 @@ export default function EmailPage() {
     <>
       <PageHeader title="Email" />
       <Notice>Email access requires an email provider to be connected and verified. Currently only a mock adapter exists, so no real mail is read or sent.</Notice>
-      <Link href="/integrations" className="text-indigo-700 underline">Manage integrations</Link>
+      <Link href="/integrations" className="font-semibold underline underline-offset-4">Manage integrations</Link>
     </>
   );
 }

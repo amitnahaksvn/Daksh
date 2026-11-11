@@ -1,0 +1,33 @@
+{
+  "key": "example-time",
+  "name": "Example: current time",
+  "version": "1.0.0",
+  "description": "Reference plugin demonstrating the plugin SDK: a single tool that returns the current time in a requested time zone.",
+  "author": "Daksh",
+  "license": "MIT",
+  "protocolVersion": "1.0",
+  "entry": { "command": "dotnet", "args": ["Daksh.Plugin.Example.dll"] },
+  "compatibility": { "os": ["windows", "macos", "linux"] },
+  "dependencies": [],
+  "permissions": [],
+  "secrets": [],
+  "config": [],
+  "capabilities": {
+    "tools": [
+      {
+        "name": "current_time",
+        "description": "Returns the current date and time in a given IANA time zone.",
+        "risk": "low",
+        "timeoutSeconds": 5,
+        "inputSchema": {
+          "type": "object",
+          "properties": { "timezone": { "type": "string", "description": "IANA time zone, e.g. 'Asia/Kolkata'. Defaults to UTC." } },
+          "additionalProperties": false
+        }
+      }
+    ],
+    "hooks": [],
+    "channels": [],
+    "providers": []
+  }
+}

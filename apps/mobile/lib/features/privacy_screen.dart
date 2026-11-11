@@ -23,18 +23,24 @@ class PrivacyScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) => AsyncBody(
         value: ref.watch(privacyProvider),
         onRetry: () => ref.invalidate(privacyProvider),
-        builder: (s) => ListView(children: [
-          SwitchListTile(
-            title: const Text('Remember things between conversations'),
-            value: s.memoryEnabled,
-            onChanged: (v) => _save(context, ref, PrivacySettings(v, s.allowProviderDataSharing, s.retentionDays)),
+        builder: (s) => ListView(padding: const EdgeInsets.fromLTRB(12, 4, 12, 16), children: [
+          Tile(
+            child: Column(children: [
+              SwitchListTile(
+                title: const Text('Remember things between conversations'),
+                value: s.memoryEnabled,
+                onChanged: (v) => _save(context, ref, PrivacySettings(v, s.allowProviderDataSharing, s.retentionDays)),
+              ),
+              const Divider(indent: 16, endIndent: 16),
+              SwitchListTile(
+                title: const Text('Allow sharing content with AI providers'),
+                value: s.allowProviderDataSharing,
+                onChanged: (v) => _save(context, ref, PrivacySettings(s.memoryEnabled, v, s.retentionDays)),
+              ),
+              const Divider(indent: 16, endIndent: 16),
+              ListTile(title: const Text('Retention'), trailing: StatusChip('${s.retentionDays} days', lime: true)),
+            ]),
           ),
-          SwitchListTile(
-            title: const Text('Allow sharing content with AI providers'),
-            value: s.allowProviderDataSharing,
-            onChanged: (v) => _save(context, ref, PrivacySettings(s.memoryEnabled, v, s.retentionDays)),
-          ),
-          ListTile(title: const Text('Retention'), subtitle: Text('${s.retentionDays} days')),
         ]),
       );
 }

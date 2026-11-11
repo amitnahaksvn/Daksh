@@ -1,0 +1,2 @@
+# id	status	evidence	limitations
+LEG-001	Verified	`dotnet test Daksh.sln` (23 legacy tests) before platform work	

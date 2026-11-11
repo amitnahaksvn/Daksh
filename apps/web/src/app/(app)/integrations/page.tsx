@@ -1,7 +1,7 @@
 "use client";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
-import { ErrorState, Loading, PageHeader } from "@/components/ui";
+import { Chip, ErrorState, listClass, Loading, PageHeader } from "@/components/ui";
 
 export default function IntegrationsPage() {
   const { state, reload } = useApi(api.integrations);
@@ -11,11 +11,11 @@ export default function IntegrationsPage() {
       {state.status === "loading" && <Loading />}
       {state.status === "error" && <ErrorState error={state.error} onRetry={reload} />}
       {state.status === "ready" && (
-        <ul className="divide-y rounded-lg border">
+        <ul className={listClass}>
           {state.data.map((i) => (
-            <li key={i.key} className="p-3">
-              <p className="font-medium">{i.key} <span className="ml-2 rounded bg-neutral-200 px-2 py-0.5 text-xs text-neutral-900">{i.state}</span></p>
-              <p className="text-sm text-neutral-600 dark:text-neutral-400">{i.note}</p>
+            <li key={i.key} className="px-5 py-3.5">
+              <p className="flex flex-wrap items-center gap-2 font-semibold">{i.key} <Chip tone={i.state === "Mock" ? "pink" : "lime"}>{i.state}</Chip></p>
+              <p className="mt-1 text-sm text-muted">{i.note}</p>
             </li>
           ))}
         </ul>

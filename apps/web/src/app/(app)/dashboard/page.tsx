@@ -15,9 +15,9 @@ export default function DashboardPage() {
       {state.status === "loading" && <Loading />}
       {state.status === "error" && <ErrorState error={state.error} onRetry={reload} />}
       {state.status === "ready" && (
-        <ul className="grid gap-4 sm:grid-cols-2">
-          <li className="rounded-lg border p-5"><Link href="/tasks" className="font-semibold underline">Open tasks</Link><p className="text-3xl">{state.data.open}</p></li>
-          <li className="rounded-lg border p-5"><Link href="/reminders" className="font-semibold underline">Reminders</Link><p className="text-3xl">{state.data.reminders}</p></li>
+        <ul className="grid gap-3 sm:grid-cols-2">
+          <li className="rounded-[1.25rem] bg-lime p-6 text-on-tint"><Link href="/tasks" className="font-semibold underline-offset-4 hover:underline">Open tasks</Link><p className="ai-number ai-mono mt-2 text-5xl font-extrabold tracking-tight">{state.data.open}</p></li>
+          <li className="rounded-[1.25rem] bg-pink p-6 text-on-tint"><Link href="/reminders" className="font-semibold underline-offset-4 hover:underline">Reminders</Link><p className="ai-number ai-mono mt-2 text-5xl font-extrabold tracking-tight">{state.data.reminders}</p></li>
         </ul>
       )}
     </>
