@@ -296,8 +296,9 @@ public sealed class Device : WorkspaceEntity
     /// <summary>windows | macos | linux | ios | android</summary>
     public string Platform { get; set; } = "";
     public Guid OwnerUserId { get; set; }
-    /// <summary>active | revoked</summary>
-    public string Status { get; set; } = "active";
+    /// <summary>pending_approval | active | revoked. A device is created in pending_approval when a node
+    /// redeems a pairing code; a user must explicitly approve it before it can connect to the node hub.</summary>
+    public string Status { get; set; } = "pending_approval";
     public string TokenHash { get; set; } = "";
     public DateTimeOffset? LastSeenAt { get; set; }
     public bool Online { get; set; }

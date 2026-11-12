@@ -103,7 +103,9 @@ app.MapAgents();
 app.MapSessions();
 app.MapApprovalsAndAutomations();
 app.MapChannels();
+app.MapDevices();
 app.MapHub<GatewayHub>("/hubs/gateway");
+app.MapHub<Daksh.Gateway.Hubs.NodeHub>("/hubs/node");
 
 using (var scope = app.Services.CreateScope())
 {
