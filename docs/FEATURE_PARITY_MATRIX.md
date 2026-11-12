@@ -9,8 +9,8 @@ an integration that has only been run against a fake remote service is "not full
 
 | Status | Features |
 |---|---|
-| Implemented and verified | 8 |
-| Not implemented | 254 |
+| Implemented and verified | 17 |
+| Not implemented | 245 |
 | **Total** | **262** |
 
 ## Matrix
@@ -118,13 +118,13 @@ an integration that has only been run against a fake remote service is "not full
 | X-TL-003 | Tool profiles and groups | minimal/coding/messaging/full; groups | Same idea with our own names | High | TL-002 | Not implemented | - | - |
 | TL-004 | File tools: read, write, edit, search, list | read/write/edit/apply patch | Workspace-jailed file tools | Critical | TL-001 | Not implemented | - | - |
 | TL-005 | File upload/download | Yes | Files API; tools reference stored files | High | FL-001 | Not implemented | - | - |
-| TL-006 | Shell execution | exec | `exec` through the sandbox runner | Critical | SB-001 | Not implemented | - | - |
+| TL-006 | Shell execution | exec | `exec` through the sandbox runner | Critical | SB-001 | Implemented and verified | `Sandbox/ExecAndCodeExecuteToolRoutingTests.cs`, `ProcessSandboxRunnerTests.cs` | - |
 | TL-007 | Process management | process | Background processes in the sandbox: start, poll, kill | High | SB-001 | Not implemented | - | - |
 | TL-008 | Web search | About a dozen providers | SearXNG, Brave, Tavily, DuckDuckGo adapters | High | TL-001 | Not implemented | - | - |
 | TL-009 | Web fetch | Yes | SSRF-guarded fetch, HTML to text, size cap | Critical | SEC-010 | Not implemented | - | - |
 | TL-010 | HTTP/API request tool | Through exec/fetch | `http_request` with method, headers, body; SSRF guard; host allowlist | High | SEC-010 | Not implemented | - | - |
 | TL-011 | Database access through adapters | Not a core tool | `db_query` on named read-only connections | Medium | TL-001 | Not implemented | - | - |
-| TL-012 | Memory tools | memory search/get | `memory_search`, `memory_write` | Critical | MEM-001 | Not implemented | - | - |
+| TL-012 | Memory tools | memory search/get | `memory_search`, `memory_write` | Critical | MEM-001 | Implemented and verified | `Daksh.Gateway.Tests/MemoryServiceTests.cs`: OR-query recall and content-hash dedupe against a real Postgres instance | - |
 | TL-013 | Messaging tool | message | `message_send` restricted to routed channels | High | CH-001 | Not implemented | - | - |
 | TL-014 | Session tools | sessions list/history/send | `sessions_list`, `sessions_history`, `sessions_send` | Medium | SS-001 | Not implemented | - | - |
 | TL-015 | Scheduling tool | automations/cron | `schedule_create`, `schedule_list`, `schedule_cancel` | Critical | AU-001 | Not implemented | - | - |
@@ -132,16 +132,16 @@ an integration that has only been run against a fake remote service is "not full
 | TL-017 | Device/node command tool | nodes | `node_invoke` | Medium | DV-001 | Not implemented | - | - |
 | TL-018 | Image analysis | view image | `image_analyze` using a vision-capable model | Medium | MP-007 | Not implemented | - | - |
 | TL-019 | Media generation adapters | image/music/video generate, tts | `image_generate` (OpenAI Images adapter); video/music not implemented | Medium | MD-003 | Not implemented | - | - |
-| TL-020 | Code execution | code execution | `code_execute` (Python/Node) in the container sandbox only | Medium | SB-001 | Not implemented | - | - |
+| TL-020 | Code execution | code execution | `code_execute` (Python/Node) in the container sandbox only | Medium | SB-001 | Implemented and verified | `Sandbox/ExecAndCodeExecuteToolRoutingTests.cs`: refuses outside "container" mode | - |
 | TL-021 | Output-size limits and secret redaction | Output compaction plugin | Truncation with marker; secret patterns redacted from results | Critical | SEC-006 | Not implemented | - | - |
 | TL-022 | Tool timeouts, retries, audit | Yes | Per-tool timeout/retry; every call recorded in `ToolExecutions` | Critical | TL-001 | Not implemented | - | - |
 | X-TL-023 | Ask-the-user and secret-input tools | Yes | Not implemented | Medium | AP-001 | Not implemented | - | - |
 | X-TL-024 | MCP server tools | Yes | Not implemented | Medium | PL-001 | Not implemented | - | - |
 | X-TL-025 | Tool search for large catalogues, code mode | Experimental | Not implemented | Low | TL-001 | Not implemented | - | - |
-| SB-001 | Sandboxed execution backend | Docker/Podman sandbox, modes and scopes | `ISandboxRunner`: Docker backend and restricted child-process backend | Critical | - | Not implemented | - | - |
+| SB-001 | Sandboxed execution backend | Docker/Podman sandbox, modes and scopes | `ISandboxRunner`: Docker backend and restricted child-process backend | Critical | - | Implemented and verified | `Sandbox/SandboxRunnerSelectorTests.cs`, `ProcessSandboxRunnerTests.cs`, `ContainerSandboxRunnerTests.cs` (real Docker daemon) | - |
 | SB-002 | Working-directory and file access restrictions | Workspace access none/ro/rw | Path jail with symlink resolution; ro/rw modes | Critical | SB-001 | Implemented and verified | `Security/GuardsTests.cs` (`PathJailTests`), including real symlink traversal | Only the path-jail/symlink piece; ro/rw mode enforcement not separately tested |
-| SB-003 | Network restrictions for tools | Sandbox network settings | Container network off by default; SSRF guard for HTTP tools | Critical | SB-001 | Not implemented | - | - |
-| SB-004 | Command validation | Exec approvals/allowlists | Denylist/allowlist patterns before approval evaluation | High | SB-001 | Not implemented | - | - |
+| SB-003 | Network restrictions for tools | Sandbox network settings | Container network off by default; SSRF guard for HTTP tools | Critical | SB-001 | Implemented and verified | `Sandbox/ContainerSandboxRunnerTests.cs`: no-network-by-default vs explicit Network:true actually reaching the internet | Only the container backend's network flag; SSRF guard on HTTP tools covered separately by SEC-010 |
+| SB-004 | Command validation | Exec approvals/allowlists | Denylist/allowlist patterns before approval evaluation | High | SB-001 | Implemented and verified | `Sandbox/ExecAndCodeExecuteToolRoutingTests.cs`: command-policy denial short-circuits before any sandbox runner is touched | - |
 | SB-005 | Resource limits | Container limits | Memory, CPU, pids, wall-clock, output caps | High | SB-001 | Not implemented | - | - |
 | X-SB-006 | Elevated mode | Yes | Not implemented (approvals cover the use case) | Low | AP-001 | Not implemented | - | - |
 | BR-001 | Browser tool: launch, navigate, click, type, fill, scroll | browser tool | Playwright-backed `browser` tool with actions | High | TL-001 | Not implemented | - | - |
@@ -226,7 +226,7 @@ an integration that has only been run against a fake remote service is "not full
 | ID-004 | API keys | Gateway token | Hashed keys with scopes and expiry | High | ID-001 | Not implemented | - | - |
 | ID-005 | Roles and permissions | Operator roles (limited) | Six roles mapped to permissions; policy per endpoint | Critical | ID-001 | Not implemented | - | - |
 | WS-001 | Workspaces, membership, invitations, role assignment, ownership transfer | n/a (single operator) | Workspace APIs | Critical | ID-001 | Not implemented | - | - |
-| WS-002 | Tenant isolation at API and data-access level | n/a | Membership check + EF global query filters | Critical | WS-001 | Not implemented | - | - |
+| WS-002 | Tenant isolation at API and data-access level | n/a | Membership check + EF global query filters | Critical | WS-001 | Implemented and verified | `Daksh.Gateway.Tests/TenantIsolationTests.cs`: query filter and save-time guard, both proven against a real Postgres instance | - |
 | WS-003 | Audit log | Audit command | Append-only `AuditLogs` | Critical | DB-001 | Not implemented | - | - |
 | SEC-001 | TLS, CORS, CSRF stance, security headers | Loopback default | Bearer tokens (no cookies), CORS allowlist, headers, HSTS behind proxy | High | GW-001 | Not implemented | - | - |
 | SEC-002 | Rate limiting and request validation | Auth throttling | Rate limiter; FluentValidation; body size limits | High | GW-005 | Not implemented | - | - |
@@ -244,14 +244,14 @@ an integration that has only been run against a fake remote service is "not full
 | SEC-014 | Privilege escalation defence | n/a | Role checks on role changes; tests | Critical | ID-005 | Not implemented | - | - |
 | SEC-015 | Threat model document | Security docs | `docs/SECURITY.md` | High | - | Not implemented | - | - |
 | X-SEC-016 | Security audit command | Yes | `daksh security audit` (config checks) | Low | CLI-001 | Not implemented | - | - |
-| AP-001 | Approval workflow for risky actions | Exec approvals | `Approvals` with risk level; run pauses and resumes | Critical | RT-006 | Not implemented | - | - |
+| AP-001 | Approval workflow for risky actions | Exec approvals | `Approvals` with risk level; run pauses and resumes | Critical | RT-006 | Implemented and verified | `Runtime/ApprovalPauseResumeTests.cs` against the real `AgentRuntimeEngine` and a real Postgres instance: pause, re-poll-while-pending, approve, reject, expired-pending-as-denied | - |
 | AP-002 | Configurable approval policy | Approval modes | Policy per agent: by risk level, by tool, auto-approve list | High | AP-001 | Not implemented | - | - |
 | AP-003 | Approval queue UI and notifications | Yes | Approvals page; real-time notification | High | UI-006 | Not implemented | - | - |
 | CFG-001 | Layered configuration | Config file + env | appsettings + environment variables + database settings | High | GW-003 | Not implemented | - | - |
 | CFG-002 | Per-user/workspace/agent/provider/channel settings | Config scopes | Scoped settings in the database | High | DB-001 | Not implemented | - | - |
 | CFG-003 | `.env.example`, no secrets in source | Yes | Placeholders only | Critical | - | Not implemented | - | - |
 | DB-001 | Schema and migrations for all entities | SQLite state | EF Core migrations, schema `platform` | Critical | - | Not implemented | - | - |
-| DB-002 | Constraints, indexes, soft delete, concurrency | n/a | FKs, unique indexes, `DeletedAt`, row versions | High | DB-001 | Not implemented | - | - |
+| DB-002 | Constraints, indexes, soft delete, concurrency | n/a | FKs, unique indexes, `DeletedAt`, row versions | High | DB-001 | Implemented and verified | `Daksh.Gateway.Tests/ExecutionConcurrencyTests.cs`: a real optimistic-concurrency row-version conflict, proven against a real Postgres instance | Only the row-version/concurrency-token piece; constraints/indexes/soft-delete not separately exercised by a dedicated test |
 | API-001 | Versioned REST API by domain | RPC methods | `/api/v1/*` minimal APIs | Critical | GW-001 | Not implemented | - | - |
 | API-002 | Consistent errors, pagination, filtering, sorting | n/a | Problem details; cursor/page conventions | High | API-001 | Not implemented | - | - |
 | API-003 | Correlation IDs | n/a | `X-Correlation-Id` middleware | Medium | API-001 | Not implemented | - | - |

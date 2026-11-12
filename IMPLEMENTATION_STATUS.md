@@ -12,9 +12,11 @@ because the person running this asked for a file literally named `chatgpt_change
 
 On `main`, pushed through this session's work. In order: `8b61c92` (unblock and verify the full 16-step
 scenario), `7e20656` (fix two execution double-run races), `53d935a` (Phase 5 security/policy test suite, 124
-tests), `600c686` (TST-005: automate the 16-step scenario under `dotnet test`). `docs/parity/status.tsv` and
-the regenerated `docs/FEATURE_PARITY_MATRIX.md` (now 8 "Verified" rows, up from 1) are the next thing to commit
-and push if they aren't already — check `git status` first.
+tests), `600c686` (TST-005: automate the 16-step scenario under `dotnet test`), `f786610` (status docs + first
+parity update, 8 Verified rows), `db916e5` (tenant isolation / memory OR-query / claim-race regression tests),
+`6735f74` (sandbox workspace-access-none bug fix + remaining Phase 5 tests). `docs/parity/status.tsv` and the
+regenerated `docs/FEATURE_PARITY_MATRIX.md` (now 17 "Verified" rows) are the next thing to commit and push if
+they aren't already — check `git status` first.
 
 ## Where things stand
 
@@ -77,9 +79,14 @@ with real automated-test evidence, up from 1.
   channel. No real channel (Telegram/Discord/Slack/WhatsApp) is wired yet.
 - **Sandbox**: a container backend (Docker, no network, resource limits — the real boundary) and a process
   backend (explicitly documented as not a boundary), selected per agent and capped by an instance-wide ceiling.
+  **Verified this session** against a real Docker daemon (`Sandbox/ContainerSandboxRunnerTests.cs`):
+  no-network-by-default, unprivileged uid, workspace mount modes, a real OOM kill under the memory limit — and a
+  real bug was found and fixed in the process (`WorkspaceAccess="none"` wasn't actually removing the workspace
+  mount from the Docker args, so "no access" tools still got the workspace bind-mounted in).
 - **Identity/workspaces**: register/login/refresh-with-reuse-detection/MFA scaffolding, six built-in roles with a
   real permission set, tenant isolation enforced in `PlatformDbContext` (query filters + a save-time guard that
-  rejects a write into another workspace even if a check upstream was missed). Fully verified working.
+  rejects a write into another workspace even if a check upstream was missed). Fully verified working, including
+  dedicated tests this session (`Daksh.Gateway.Tests/TenantIsolationTests.cs`) proving both mechanisms for real.
 - **Gateway** (`services/gateway/Daksh.Gateway`): ASP.NET Core host, JWT auth, SignalR hub for live run events,
   REST modules for auth/workspaces/providers/agents/sessions/approvals/automations/usage/mock-channel testing,
   OpenTelemetry, Serilog, health checks, OpenAPI.
@@ -195,30 +202,28 @@ actively progressing either way) instead of letting the exception propagate out 
 
 ## Exact next steps, in order
 
-Everything numbered 1-4 in the previous version of this file is now **done**: the working tree was committed
-and pushed through this session (see "Current git state"), TST-005 landed (`Daksh.Gateway.Tests`:
-`E2eScenarioTests`, `RestartRecoveryTests`, real `Testcontainers.PostgreSql`), the Phase 5 security/policy
-suite landed (`Daksh.Platform.Tests`: `Security/GuardsTests.cs`, `Tools/ToolPolicyTests.cs`,
-`Automation/ScheduleCalculatorTests.cs`, `Providers/ResearchBehaviorTests.cs`, 124 tests), and
-`docs/parity/status.tsv`/`FEATURE_PARITY_MATRIX.md` were updated for the 7 newly-verified rows (`SB-002`,
-`SEC-006`, `SEC-007`, `SEC-010`, `TL-002`, `AU-002`, `TST-005`) plus the pre-existing `LEG-001`. What's left:
+All of Phase 5's testable acceptance criteria are now **done** except the browser tool (which doesn't exist in
+the codebase yet - not a missing test, a missing feature). This session landed, in order: the 16-step scenario
+fix, two execution double-run race fixes, a 124-test security/policy suite, TST-005 (the scenario automated
+under `dotnet test`), then two more rounds of tests (165 total in `Daksh.Platform.Tests`, 9 in
+`Daksh.Gateway.Tests`) covering tenant isolation, the memory OR-query fix, a dedicated claim-race regression
+test, sandbox execution (process and container backends, against a real Docker daemon), and approval
+pause/resume against the real engine. One more real bug was found and fixed along the way: `ContainerSandboxRunner`'s
+`WorkspaceAccess="none"` only stripped part of the `-v` mount from the Docker args, so "no workspace access"
+tools still got the workspace bind-mounted in. `docs/parity/status.tsv`/`FEATURE_PARITY_MATRIX.md` are updated:
+17 "Verified" rows now, up from 1 at the start of this session. What's left:
 
-1. **Commit and push `docs/parity/status.tsv` and `docs/FEATURE_PARITY_MATRIX.md`** if `git status` shows them
-   uncommitted — check this first, it may already be done.
-2. Add a dedicated regression test for the two claim-race bugs fixed this session (see
-   `## The IX_Messages_SessionId_Seq race` below): a test that fires two concurrent claims at the same
-   `Execution` row and asserts only one proceeds (`DbUpdateConcurrencyException` on the loser) would catch both
-   bugs #1 and #2 there if either ever regresses. This wasn't written this session - the fix was verified by
-   re-running the full scenario seven times and grepping logs, which is real evidence but not a permanent
-   regression test. Also worth adding: `MemoryService.SearchAsync`'s OR-query behavior (`BuildOrTsQuery`) has
-   no dedicated unit test yet either - it's only exercised indirectly through `E2eScenarioTests`.
-3. `PlatformDbContext` tenant-isolation tests (`Testcontainers.PostgreSql`-backed) were explicitly deferred by
-   the agent that wrote the Phase 5 suite, as lower priority than the items that landed; still open.
-4. `web_fetch`/`http_request` tools' actual use of the SSRF guard (as opposed to the guard itself, which is
-   tested) is only exercised indirectly via `E2eScenarioTests` - see the `Limitations` column for `SEC-010` in
-   `docs/parity/status.tsv`.
-5. Then continue down `docs/IMPLEMENTATION_ROADMAP.md` from Phase 5 (remaining items: exec-only-via-sandbox
-   test, approval pause/resume test, browser tool test) onward.
+1. **Build the browser tool** (there is none yet) if/when Phase 5's last acceptance criterion needs closing -
+   this is new feature work, not a test gap.
+2. Continue down `docs/IMPLEMENTATION_ROADMAP.md` from Phase 6 (memory: pgvector + full-text + hybrid tests,
+   extraction and dedupe tests - note `MemoryService.SearchAsync`'s core behavior already has real test
+   coverage from this session's `MemoryServiceTests.cs`, so Phase 6 is a continuation, not a start from zero)
+   onward through 7-16 (multi-agent, channels beyond the mock, skills/plugins, voice/media, devices, Control UI,
+   CLI completeness, hardening, final verification, legacy convergence) - all still "Not implemented" per the
+   matrix, nothing hidden.
+3. Minor polish, not urgent: `web_fetch`/`http_request` tools' actual use of the SSRF guard (as opposed to the
+   guard itself, which is tested) is only exercised indirectly via `E2eScenarioTests` - see the `Limitations`
+   column for `SEC-010` in `docs/parity/status.tsv` if this ever needs its own direct test.
 
 ## How to resume, concretely (copy-pasteable)
 

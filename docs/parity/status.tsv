@@ -7,3 +7,12 @@ SEC-006	Verified	`Security/GuardsTests.cs` (`RedactorTests`)
 TL-002	Verified	`Tools/ToolPolicyTests.cs`, every allow/alsoAllow/deny/approve combination	
 AU-002	Verified	`Automation/ScheduleCalculatorTests.cs`: at/every/cron, IANA time zones, a DST transition, retry backoff	
 TST-005	Verified	`Daksh.Gateway.Tests` (`E2eScenarioTests`, `RestartRecoveryTests`) against a real `Testcontainers.PostgreSql` instance	Restart recovery is simulated as "job became overdue while unattended" rather than a real process kill/restart, since the catch-up query doesn't distinguish the two - see chatgpt_changes.md
+SB-001	Verified	`Sandbox/SandboxRunnerSelectorTests.cs`, `ProcessSandboxRunnerTests.cs`, `ContainerSandboxRunnerTests.cs` (real Docker daemon)	
+SB-003	Verified	`Sandbox/ContainerSandboxRunnerTests.cs`: no-network-by-default vs explicit Network:true actually reaching the internet	Only the container backend's network flag; SSRF guard on HTTP tools covered separately by SEC-010
+SB-004	Verified	`Sandbox/ExecAndCodeExecuteToolRoutingTests.cs`: command-policy denial short-circuits before any sandbox runner is touched	
+TL-006	Verified	`Sandbox/ExecAndCodeExecuteToolRoutingTests.cs`, `ProcessSandboxRunnerTests.cs`	
+TL-012	Verified	`Daksh.Gateway.Tests/MemoryServiceTests.cs`: OR-query recall and content-hash dedupe against a real Postgres instance	
+TL-020	Verified	`Sandbox/ExecAndCodeExecuteToolRoutingTests.cs`: refuses outside "container" mode	
+AP-001	Verified	`Runtime/ApprovalPauseResumeTests.cs` against the real `AgentRuntimeEngine` and a real Postgres instance: pause, re-poll-while-pending, approve, reject, expired-pending-as-denied	
+WS-002	Verified	`Daksh.Gateway.Tests/TenantIsolationTests.cs`: query filter and save-time guard, both proven against a real Postgres instance	
+DB-002	Verified	`Daksh.Gateway.Tests/ExecutionConcurrencyTests.cs`: a real optimistic-concurrency row-version conflict, proven against a real Postgres instance	Only the row-version/concurrency-token piece; constraints/indexes/soft-delete not separately exercised by a dedicated test
