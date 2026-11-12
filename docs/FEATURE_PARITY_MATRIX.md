@@ -9,8 +9,8 @@ an integration that has only been run against a fake remote service is "not full
 
 | Status | Features |
 |---|---|
-| Implemented and verified | 1 |
-| Not implemented | 261 |
+| Implemented and verified | 8 |
+| Not implemented | 254 |
 | **Total** | **262** |
 
 ## Matrix
@@ -114,7 +114,7 @@ an integration that has only been run against a fake remote service is "not full
 | X-SS-009 | Reset policies (daily, idle) and retention pruning | Yes | Per-agent reset policy; retention job | Medium | AU-001 | Not implemented | - | - |
 | X-SS-010 | Incognito sessions | Yes | Not implemented | Low | SS-001 | Not implemented | - | - |
 | TL-001 | Tool contract, registry, discovery | Typed tools | `ITool` with schemas, version, risk, permissions, timeout, retry | Critical | - | Not implemented | - | - |
-| TL-002 | Tool policy: allow/deny, per agent, per user | Profiles, allow/deny, per-sender | Policy evaluator: profile, groups, allow/deny with wildcards, deny wins | Critical | TL-001 | Not implemented | - | - |
+| TL-002 | Tool policy: allow/deny, per agent, per user | Profiles, allow/deny, per-sender | Policy evaluator: profile, groups, allow/deny with wildcards, deny wins | Critical | TL-001 | Implemented and verified | `Tools/ToolPolicyTests.cs`, every allow/alsoAllow/deny/approve combination | - |
 | X-TL-003 | Tool profiles and groups | minimal/coding/messaging/full; groups | Same idea with our own names | High | TL-002 | Not implemented | - | - |
 | TL-004 | File tools: read, write, edit, search, list | read/write/edit/apply patch | Workspace-jailed file tools | Critical | TL-001 | Not implemented | - | - |
 | TL-005 | File upload/download | Yes | Files API; tools reference stored files | High | FL-001 | Not implemented | - | - |
@@ -139,7 +139,7 @@ an integration that has only been run against a fake remote service is "not full
 | X-TL-024 | MCP server tools | Yes | Not implemented | Medium | PL-001 | Not implemented | - | - |
 | X-TL-025 | Tool search for large catalogues, code mode | Experimental | Not implemented | Low | TL-001 | Not implemented | - | - |
 | SB-001 | Sandboxed execution backend | Docker/Podman sandbox, modes and scopes | `ISandboxRunner`: Docker backend and restricted child-process backend | Critical | - | Not implemented | - | - |
-| SB-002 | Working-directory and file access restrictions | Workspace access none/ro/rw | Path jail with symlink resolution; ro/rw modes | Critical | SB-001 | Not implemented | - | - |
+| SB-002 | Working-directory and file access restrictions | Workspace access none/ro/rw | Path jail with symlink resolution; ro/rw modes | Critical | SB-001 | Implemented and verified | `Security/GuardsTests.cs` (`PathJailTests`), including real symlink traversal | Only the path-jail/symlink piece; ro/rw mode enforcement not separately tested |
 | SB-003 | Network restrictions for tools | Sandbox network settings | Container network off by default; SSRF guard for HTTP tools | Critical | SB-001 | Not implemented | - | - |
 | SB-004 | Command validation | Exec approvals/allowlists | Denylist/allowlist patterns before approval evaluation | High | SB-001 | Not implemented | - | - |
 | SB-005 | Resource limits | Container limits | Memory, CPU, pids, wall-clock, output caps | High | SB-001 | Not implemented | - | - |
@@ -180,7 +180,7 @@ an integration that has only been run against a fake remote service is "not full
 | PL-009 | SDK, example plugin, developer guide | SDK docs | `Daksh.Plugin.Sdk`, example plugin, `PLUGIN_DEVELOPMENT.md` | High | PL-003 | Not implemented | - | - |
 | PL-010 | Registry/repository installs | Registry | Local package and directory installs only | Low | PL-002 | Not implemented | - | - |
 | AU-001 | Durable scheduler | Cron service | PostgreSQL-backed job claim with lease | Critical | DB-001 | Not implemented | - | - |
-| AU-002 | One-time, interval and cron schedules with time zones | at/every/cron + tz | Same three kinds; `Cronos`; IANA zones | Critical | AU-001 | Not implemented | - | - |
+| AU-002 | One-time, interval and cron schedules with time zones | at/every/cron + tz | Same three kinds; `Cronos`; IANA zones | Critical | AU-001 | Implemented and verified | `Automation/ScheduleCalculatorTests.cs`: at/every/cron, IANA time zones, a DST transition, retry backoff | - |
 | AU-003 | Scheduled agent runs and reports | Agent-turn payloads | Automation action: run agent with a prompt | Critical | RT-001 | Not implemented | - | - |
 | AU-004 | Delivery of results | Announce to channel, webhook | Deliver to session, channel recipient or webhook | High | CH-001 | Not implemented | - | - |
 | AU-005 | Heartbeat | Yes | Per-agent heartbeat automation | Medium | AU-003 | Not implemented | - | - |
@@ -233,11 +233,11 @@ an integration that has only been run against a fake remote service is "not full
 | SEC-003 | Encrypted secrets and rotation | Secrets CLI, secret refs | AES-GCM envelope with key ring; rotate command | Critical | DB-001 | Not implemented | - | - |
 | SEC-004 | Session expiry | Yes | Token lifetimes; refresh revocation | High | ID-001 | Not implemented | - | - |
 | SEC-005 | Prompt-injection defence | Untrusted content model | Untrusted content wrapped and labelled; policy enforced in code | Critical | TL-002 | Not implemented | - | - |
-| SEC-006 | Secret redaction in logs, API and tool output | Redaction | Central redactor | Critical | - | Not implemented | - | - |
-| SEC-007 | Path traversal defence | Workspace access | Path jail | Critical | SB-002 | Not implemented | - | - |
+| SEC-006 | Secret redaction in logs, API and tool output | Redaction | Central redactor | Critical | - | Implemented and verified | `Security/GuardsTests.cs` (`RedactorTests`) | - |
+| SEC-007 | Path traversal defence | Workspace access | Path jail | Critical | SB-002 | Implemented and verified | `Security/GuardsTests.cs` (`PathJailTests`) | - |
 | SEC-008 | Command injection defence | Exec approvals | No shell interpolation of model input outside the sandbox; argv exec | Critical | SB-004 | Not implemented | - | - |
 | SEC-009 | Cross-workspace access defence | n/a | Tests for every resource type | Critical | WS-002 | Not implemented | - | - |
-| SEC-010 | SSRF defence | SSRF guard on fetch | Resolve-then-connect guard blocking private ranges | Critical | - | Not implemented | - | - |
+| SEC-010 | SSRF defence | SSRF guard on fetch | Resolve-then-connect guard blocking private ranges | Critical | - | Implemented and verified | `Security/GuardsTests.cs` (`SsrfGuardTests`), including resolved-address (not just hostname) checks | Only the guard itself; `web_fetch`/`http_request` tools' use of it is exercised only indirectly via `Daksh.Gateway.Tests` |
 | SEC-011 | Replay protection | Idempotency keys | Timestamp + idempotency key on webhooks; refresh token reuse detection | High | AU-006 | Not implemented | - | - |
 | SEC-012 | Webhook spoofing defence | Hook token | HMAC signatures (per channel scheme) | Critical | - | Not implemented | - | - |
 | SEC-013 | Unsafe plugin install defence | Allow/deny lists | Manifest validation, permission approval, no in-process load | High | PL-003 | Not implemented | - | - |
@@ -276,6 +276,6 @@ an integration that has only been run against a fake remote service is "not full
 | TST-002 | Integration tests on real PostgreSQL | Yes | Testcontainers (pgvector image) | Critical | - | Not implemented | - | - |
 | TST-003 | Security tests | Yes | Authorisation, isolation, injection, SSRF, traversal, webhook auth | Critical | - | Not implemented | - | - |
 | TST-004 | End-to-end tests | Yes | Playwright against the running stack | High | - | Not implemented | - | - |
-| TST-005 | Required 16-step scenario | n/a | Automated scenario incl. restart | Critical | - | Not implemented | - | - |
+| TST-005 | Required 16-step scenario | n/a | Automated scenario incl. restart | Critical | - | Implemented and verified | `Daksh.Gateway.Tests` (`E2eScenarioTests`, `RestartRecoveryTests`) against a real `Testcontainers.PostgreSql` instance | Restart recovery is simulated as "job became overdue while unattended" rather than a real process kill/restart, since the catch-up query doesn't distinguish the two - see chatgpt_changes.md |
 | TST-006 | Coverage target 90% on critical logic | n/a | Coverlet report | High | - | Not implemented | - | - |
 | LEG-001 | Legacy personal-assistant services keep working | n/a | `Daksh.Api`, `Daksh.Worker` unchanged, tests green | Critical | - | Implemented and verified | `dotnet test Daksh.sln` (23 legacy tests) before platform work | - |

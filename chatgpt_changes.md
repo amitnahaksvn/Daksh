@@ -10,10 +10,11 @@ because the person running this asked for a file literally named `chatgpt_change
 
 ## Current git state
 
-On `main`, nothing pushed yet this session (`e1eac34` is the last pushed commit). The working tree has real,
-verified changes not yet committed — see "What changed this session" below. Review the diff with `git status`/
-`git diff`, then commit and push it before anything else in the next session, since it's the fix for the
-known gap the previous session left off at, not speculative work.
+On `main`, pushed through this session's work. In order: `8b61c92` (unblock and verify the full 16-step
+scenario), `7e20656` (fix two execution double-run races), `53d935a` (Phase 5 security/policy test suite, 124
+tests), `600c686` (TST-005: automate the 16-step scenario under `dotnet test`). `docs/parity/status.tsv` and
+the regenerated `docs/FEATURE_PARITY_MATRIX.md` (now 8 "Verified" rows, up from 1) are the next thing to commit
+and push if they aren't already — check `git status` first.
 
 ## Where things stand
 
@@ -23,10 +24,14 @@ legacy `Daksh.Api`/`Daksh.Worker`/`Daksh.Ai` projects. Phases 5–15 (sandbox ha
 channels beyond the mock, skills, plugins beyond the example, voice/media, devices, Control UI, CLI completeness,
 hardening, final verification) are **not started** beyond what's noted below.
 
-**The single biggest change this session: the full required 16-step end-to-end scenario now passes, for real,
-against a live database and a live running Gateway** — not just steps 1-12 as before. That took five separate
-bugs found and fixed by actually running it (see below), not just the one offline-testing gap the previous
-session left off at.
+**This session, in order: (1)** the full required 16-step end-to-end scenario now passes, for real, against a
+live database and a live running Gateway — not just steps 1-12 as before — after finding and fixing five
+separate bugs by actually running it; **(2)** two more real bugs causing double-execution of the same run
+(`IX_Messages_SessionId_Seq` races) were found and fixed; **(3)** a 124-test Phase 5 security/policy suite was
+added to `Daksh.Platform.Tests` (previously empty); **(4)** the 16-step scenario was converted from manual
+Python scripts into real automated tests under `dotnet test` (TST-005), using `Testcontainers.PostgreSql`; and
+**(5)** `docs/parity/status.tsv` / `FEATURE_PARITY_MATRIX.md` were updated accordingly — 8 rows now "Verified"
+with real automated-test evidence, up from 1.
 
 ## What is built and compiles
 
@@ -190,29 +195,30 @@ actively progressing either way) instead of letting the exception propagate out 
 
 ## Exact next steps, in order
 
-1. **Commit and push what's in the working tree right now** (see "Current git state" above) — it is the real,
-   verified fix for the gap the previous session left off at, not speculative work; don't let it sit
-   uncommitted into the next session.
-2. Turn `tests/manual/e2e_scenario.py` and `tests/manual/e2e_restart_recovery.py` into real automated tests now
-   that they fully pass — move their logic into `tests/gateway/Daksh.Gateway.Tests` using
-   `Microsoft.AspNetCore.Mvc.Testing` / `Testcontainers.PostgreSql` so they run under `dotnet test` without a
-   hand-started Gateway, and so the restart-recovery scenario can simulate "Gateway was down" by just not
-   polling `JobRunnerWorker` for a while, rather than needing a real process kill/restart. This is TST-005 in
-   the parity matrix.
-3. Write the rest of the automated test projects' actual test classes — `tests/platform/Daksh.Platform.Tests`
-   and `tests/gateway/Daksh.Gateway.Tests` currently have `.csproj` files only, no test code yet beyond what #2
-   produces. Priority order: security tests (tenant isolation, path jail, SSRF guard, command policy — pure
-   functions, easy and high value), `ToolPolicy.Evaluate`, `ScheduleCalculator`, the scripted-provider research
-   behaviour (including the recall-vs-research regex ordering fixed this session — that deserves a regression
-   test so it can't silently flip back), `MemoryService.SearchAsync`'s OR-query behaviour, the two claim races
-   fixed this session (a test that fires two concurrent claims at the same `Execution` row and asserts only one
-   proceeds would catch both bugs #1 and #2 above if either ever regresses), then
-   `Testcontainers.PostgreSql`-backed integration tests for `PlatformDbContext` tenant filters.
-4. Update `docs/parity/status.tsv` as each feature above is actually verified by an *automated* test (not a
-   manual script — that's a deliberate policy in this repo; see the file's existing single `LEG-001` row and
-   don't add rows for this session's work until #2/#3 land), then run `python3 scripts/parity.py` to regenerate
-   `docs/FEATURE_PARITY_MATRIX.md`.
-5. Then continue down `docs/IMPLEMENTATION_ROADMAP.md` from Phase 5 (sandbox/approval hardening tests) onward.
+Everything numbered 1-4 in the previous version of this file is now **done**: the working tree was committed
+and pushed through this session (see "Current git state"), TST-005 landed (`Daksh.Gateway.Tests`:
+`E2eScenarioTests`, `RestartRecoveryTests`, real `Testcontainers.PostgreSql`), the Phase 5 security/policy
+suite landed (`Daksh.Platform.Tests`: `Security/GuardsTests.cs`, `Tools/ToolPolicyTests.cs`,
+`Automation/ScheduleCalculatorTests.cs`, `Providers/ResearchBehaviorTests.cs`, 124 tests), and
+`docs/parity/status.tsv`/`FEATURE_PARITY_MATRIX.md` were updated for the 7 newly-verified rows (`SB-002`,
+`SEC-006`, `SEC-007`, `SEC-010`, `TL-002`, `AU-002`, `TST-005`) plus the pre-existing `LEG-001`. What's left:
+
+1. **Commit and push `docs/parity/status.tsv` and `docs/FEATURE_PARITY_MATRIX.md`** if `git status` shows them
+   uncommitted — check this first, it may already be done.
+2. Add a dedicated regression test for the two claim-race bugs fixed this session (see
+   `## The IX_Messages_SessionId_Seq race` below): a test that fires two concurrent claims at the same
+   `Execution` row and asserts only one proceeds (`DbUpdateConcurrencyException` on the loser) would catch both
+   bugs #1 and #2 there if either ever regresses. This wasn't written this session - the fix was verified by
+   re-running the full scenario seven times and grepping logs, which is real evidence but not a permanent
+   regression test. Also worth adding: `MemoryService.SearchAsync`'s OR-query behavior (`BuildOrTsQuery`) has
+   no dedicated unit test yet either - it's only exercised indirectly through `E2eScenarioTests`.
+3. `PlatformDbContext` tenant-isolation tests (`Testcontainers.PostgreSql`-backed) were explicitly deferred by
+   the agent that wrote the Phase 5 suite, as lower priority than the items that landed; still open.
+4. `web_fetch`/`http_request` tools' actual use of the SSRF guard (as opposed to the guard itself, which is
+   tested) is only exercised indirectly via `E2eScenarioTests` - see the `Limitations` column for `SEC-010` in
+   `docs/parity/status.tsv`.
+5. Then continue down `docs/IMPLEMENTATION_ROADMAP.md` from Phase 5 (remaining items: exec-only-via-sandbox
+   test, approval pause/resume test, browser tool test) onward.
 
 ## How to resume, concretely (copy-pasteable)
 

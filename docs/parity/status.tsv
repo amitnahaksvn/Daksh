@@ -1,2 +1,9 @@
 # id	status	evidence	limitations
 LEG-001	Verified	`dotnet test Daksh.sln` (23 legacy tests) before platform work	
+SB-002	Verified	`Security/GuardsTests.cs` (`PathJailTests`), including real symlink traversal	Only the path-jail/symlink piece; ro/rw mode enforcement not separately tested
+SEC-007	Verified	`Security/GuardsTests.cs` (`PathJailTests`)	
+SEC-010	Verified	`Security/GuardsTests.cs` (`SsrfGuardTests`), including resolved-address (not just hostname) checks	Only the guard itself; `web_fetch`/`http_request` tools' use of it is exercised only indirectly via `Daksh.Gateway.Tests`
+SEC-006	Verified	`Security/GuardsTests.cs` (`RedactorTests`)	
+TL-002	Verified	`Tools/ToolPolicyTests.cs`, every allow/alsoAllow/deny/approve combination	
+AU-002	Verified	`Automation/ScheduleCalculatorTests.cs`: at/every/cron, IANA time zones, a DST transition, retry backoff	
+TST-005	Verified	`Daksh.Gateway.Tests` (`E2eScenarioTests`, `RestartRecoveryTests`) against a real `Testcontainers.PostgreSql` instance	Restart recovery is simulated as "job became overdue while unattended" rather than a real process kill/restart, since the catch-up query doesn't distinguish the two - see chatgpt_changes.md
