@@ -55,7 +55,10 @@ public sealed class ContainerSandboxRunner(IOptions<SandboxOptions> options, ILo
             "-v", $"{jail.Root}:/workspace:{mountMode}",
             "-w", cwd,
         };
-        if (request.WorkspaceAccess == "none") { args.RemoveRange(args.Count - 2, 2); args.AddRange(["-w", "/tmp"]); }
+        // "none" must mean no workspace access at all: remove BOTH the "-v" mount pair and the "-w" cwd pair
+        // (4 elements), not just the last 2 - leaving the "-v" in place would still bind-mount the workspace
+        // into the container even though the caller asked for no access to it.
+        if (request.WorkspaceAccess == "none") { args.RemoveRange(args.Count - 4, 4); args.AddRange(["-w", "/tmp"]); }
         foreach (var (k, v) in request.Environment ?? new Dictionary<string, string>()) args.AddRange(["-e", $"{k}={v}"]);
         args.AddRange([image, "/bin/sh", "-c", request.Command]);
 
