@@ -80,7 +80,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<SchedulerService>();
         services.AddHostedService<JobRunnerWorker>();
 
-        services.AddSingleton<IChannelAdapter, Channels.Core.MockChannelAdapter>();
+        services.AddSingleton<Channels.Core.MockChannelAdapter>();
+        services.AddSingleton<IChannelAdapter>(sp => sp.GetRequiredService<Channels.Core.MockChannelAdapter>());
         services.AddScoped<ChannelService>();
         services.AddHostedService<ChannelOutboxWorker>();
 
@@ -102,6 +103,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IWebSearchBackend, SearXngSearchBackend>();
         services.AddSingleton<IWebSearchBackend, BraveSearchBackend>();
         services.AddSingleton<IWebSearchBackend, TavilySearchBackend>();
+        services.AddSingleton<IWebSearchBackend, ScriptedSearchBackend>();
         services.AddSingleton<ITool, WebSearchTool>();
         services.AddSingleton<ITool, WebFetchTool>();
         services.AddSingleton<ITool, HttpRequestTool>();

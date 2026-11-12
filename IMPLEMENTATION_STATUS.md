@@ -10,8 +10,10 @@ because the person running this asked for a file literally named `chatgpt_change
 
 ## Current git state
 
-On `main`, already merged and pushed (commit `1766d74`, "Add Daksh agent platform foundation (OpenClaw-inspired)
-+ bento web theme"). Nothing is pending in a branch or stash. The next work should branch off `main`.
+On `main`, nothing pushed yet this session (`e1eac34` is the last pushed commit). The working tree has real,
+verified changes not yet committed — see "What changed this session" below. Review the diff with `git status`/
+`git diff`, then commit and push it before anything else in the next session, since it's the fix for the
+known gap the previous session left off at, not speculative work.
 
 ## Where things stand
 
@@ -20,6 +22,11 @@ built and the whole solution compiles: `dotnet build Daksh.sln` → 0 errors, 0 
 legacy `Daksh.Api`/`Daksh.Worker`/`Daksh.Ai` projects. Phases 5–15 (sandbox hardening, memory polish, multi-agent,
 channels beyond the mock, skills, plugins beyond the example, voice/media, devices, Control UI, CLI completeness,
 hardening, final verification) are **not started** beyond what's noted below.
+
+**The single biggest change this session: the full required 16-step end-to-end scenario now passes, for real,
+against a live database and a live running Gateway** — not just steps 1-12 as before. That took five separate
+bugs found and fixed by actually running it (see below), not just the one offline-testing gap the previous
+session left off at.
 
 ## What is built and compiles
 
@@ -32,34 +39,42 @@ hardening, final verification) are **not started** beyond what's noted below.
   deny-pattern command policy, and the untrusted-content wrapper used everywhere outside content reaches a model.
 - **Tool framework** (`.../Tools/Contracts.cs`): `ITool`, JSON-schema validation, tool groups/profiles, and the
   full allow/alsoAllow/deny/approve policy evaluator (deny always wins). A tool can declare itself `Unavailable`
-  (e.g. no API key configured); unavailable tools are never offered to the model — see the open gap below.
+  (e.g. no API key configured); unavailable tools are never offered to the model.
 - **Model providers** (`.../Providers/*`): OpenAI, Anthropic, Ollama adapters against the real wire formats
   (streaming, tool calls, vision, embeddings), and a **scripted provider** with two behaviours — `echo` and a
-  rule-based `research` behaviour meant to drive the required end-to-end scenario deterministically and offline
-  (see "Known gap" below — it currently has nothing to call). `ModelCallRunner` (in `Daksh.Platform`) resolves
-  "provider/model" refs, rotates credentials on auth/rate-limit failures with growing cooldowns, and records
-  usage/cost.
+  rule-based `research` behaviour that drives the required end-to-end scenario deterministically and offline.
+  `ModelCallRunner` (in `Daksh.Platform`) resolves "provider/model" refs, rotates credentials on auth/rate-limit
+  failures with growing cooldowns, and records usage/cost.
+- **Web tools, now with an offline backend** (`.../Tools/WebTools.cs`): `web_search`/`web_fetch`/`http_request`,
+  plus `SearXngSearchBackend`/`BraveSearchBackend`/`TavilySearchBackend` and (new this session) a
+  **`ScriptedSearchBackend`** that returns a small fixed result (pointing at `https://example.com/`) when
+  `Tools:WebSearch:Provider=scripted`, so the scripted `research` behaviour's whole tool chain can run without
+  any real search provider configured. `web_fetch` then does a real (small, public, deterministic) HTTP fetch —
+  this only works with actual network access from the machine running the Gateway; there is no fully-offline
+  path yet if that's ever needed (not required for anything today).
 - **Agent runtime** (`Daksh.Platform/Runtime/AgentRuntimeEngine.cs`): the full step loop — prompt building with
   instructions + memory recall + history, streaming, tool-call execution with policy/approval/risk checks, loop
   detection, context compaction via a summarizing model call, usage/cost recording. `RuntimeWorker` claims queued
   or lease-expired executions (SKIP-LOCKED-style, lease renewal in the background) so a restart resumes work
-  instead of losing it. **Verified working end-to-end** (see below): register → create agent → create session →
-  send message → execution runs to `Succeeded` and returns a real answer.
+  instead of losing it. **Verified working end-to-end, including channel delivery** (see below).
 - **Memory** (`Daksh.Platform/Memory/MemoryService.cs`): pgvector cosine search fused (reciprocal-rank) with
   PostgreSQL full-text search; falls back to full-text alone with no embedding model configured; dedupe by
-  normalized-content hash. Not yet exercised end-to-end (see gap below — nothing has called `memory_write` yet).
+  normalized-content hash. **Fixed this session** (see below) and now verified working end-to-end: `memory_write`
+  then a later natural-language recall question via `memory_search` actually finds it.
 - **Automation** (`Daksh.Platform/Automation/*`): `ScheduleCalculator` (at/every/cron, IANA time zones, retry
   backoff) and `JobRunnerWorker`, which claims due jobs with `FOR UPDATE SKIP LOCKED` and runs the agent prompt
-  action through the same runtime engine. Not yet exercised end-to-end.
+  action through the same runtime engine. **Verified working end-to-end this session, including restart
+  recovery**: a job scheduled while the Gateway is up still runs correctly if the Gateway is killed and
+  restarted after the job's due time passes (see below).
 - **Channels**: `IChannelAdapter` contract, DM/group access policy evaluated in code, and a `MockChannelAdapter` +
-  `ChannelService` + `ChannelOutboxWorker` sufficient for the required scenario's "deliver through a channel" step
-  and for automated channel tests. No real channel (Telegram/Discord/Slack/WhatsApp) is wired yet.
+  `ChannelService` + `ChannelOutboxWorker`. **Fixed this session** (see below) and now verified working
+  end-to-end: an inbound message routed to an agent produces a real reply delivered back out through the
+  channel. No real channel (Telegram/Discord/Slack/WhatsApp) is wired yet.
 - **Sandbox**: a container backend (Docker, no network, resource limits — the real boundary) and a process
   backend (explicitly documented as not a boundary), selected per agent and capped by an instance-wide ceiling.
 - **Identity/workspaces**: register/login/refresh-with-reuse-detection/MFA scaffolding, six built-in roles with a
   real permission set, tenant isolation enforced in `PlatformDbContext` (query filters + a save-time guard that
-  rejects a write into another workspace even if a check upstream was missed). **Fully verified working**
-  (see below).
+  rejects a write into another workspace even if a check upstream was missed). Fully verified working.
 - **Gateway** (`services/gateway/Daksh.Gateway`): ASP.NET Core host, JWT auth, SignalR hub for live run events,
   REST modules for auth/workspaces/providers/agents/sessions/approvals/automations/usage/mock-channel testing,
   OpenTelemetry, Serilog, health checks, OpenAPI.
@@ -69,103 +84,113 @@ hardening, final verification) are **not started** beyond what's noted below.
 - **Database**: one EF Core migration (`InitialCreate`) applied cleanly to real PostgreSQL 17 with pgvector
   (58 tables; verified with `\dx` and `\d` against the running container). `pgvector` extension creation and the
   unmapped `vector` column are added as raw SQL inside the migration (see TD-012 in `docs/TECHNICAL_DECISIONS.md`).
-- **Manual end-to-end script**: `tests/manual/e2e_scenario.py` — a real, runnable (not hypothetical) script that
-  drives the required 16-step scenario via plain `urllib` HTTP calls against a running Gateway. It registers a
-  fresh user each run (timestamped email), so it's safe to re-run against the same database. This is a durable
-  repo file now, not a scratchpad artifact — run it any time with Python 3's standard library only, no deps.
+- **Manual end-to-end scripts**: `tests/manual/e2e_scenario.py` drives steps 1-14 (register → research →
+  recall → schedule → channel delivery → usage queryable) via plain `urllib` HTTP calls against a running
+  Gateway; it registers a fresh user each run, so it's safe to re-run against the same database.
+  `tests/manual/e2e_restart_recovery.py` (new this session) drives steps 15-16 (restart mid-schedule, catch-up
+  poll) as a two-phase script (`schedule` then `verify`), because that one genuinely needs an external process
+  restart between the two halves — see "How to resume" below for the exact commands. Both are durable repo
+  files, not scratchpad artifacts.
 
 ## Verified by actually running it, this session (2026-11-12)
 
-Previously (2026-11-11) a JWT bug was found and a fix wreitten but not re-verified. **It has now been verified
-end to end**, against a live `pgvector/pgvector:pg17` Postgres container and the real built Gateway binary:
+Starting point: the previous session had fixed and verified a JWT bug (steps 1-4 of the scenario: register,
+login, provider/model/agent/session setup, execution lifecycle) but found that steps 5-16 couldn't run at all,
+because no tool in the "web" group was ever offered to the scripted model (`Tools:WebSearch:Provider` defaults
+to `"none"`, so `WebSearchTool.Unavailable` always failed and the tool was filtered out). This session fixed that
+and then found and fixed four more real bugs by actually running the rest of the scenario, in this order:
 
-1. `docker compose up -d postgres` (reads `POSTGRES_PORT` from `.env`, 5440 on this machine) → container healthy.
-2. `dotnet build Daksh.sln -c Release` → 0 errors.
-3. Gateway started against that database with `Database__MigrateOnStartup=true` → migration applied (idempotent;
-   the `daksh_platform` database already existed from a prior run), `/health/ready` → `Healthy`.
-4. `python3 -I tests/manual/e2e_scenario.py` run against it:
-   - Step 1 (register/login): **HTTP 200**, issues a workspace with all six built-in roles and the owner's full
-     permission set.
-   - `GET /api/v1/auth/me` with the issued token: **HTTP 200** (previously 401 — this is the bug that's now
-     confirmed fixed: `o.MapInboundClaims = false;` on the JWT bearer options in
-     `services/gateway/Daksh.Gateway/Program.cs`).
-   - Step 3 (configure scripted provider + two models): **HTTP 200** each.
-   - Step 2 (create research agent): **HTTP 200**.
-   - Step 4 (create session, send a research request): **HTTP 200** / **HTTP 202**.
-   - The execution it started reached status **`Succeeded`** (not stuck, not failed) and returned a real,
-     non-error answer. `RuntimeWorker` correctly picked up the queued execution and ran it to completion.
+1. **Built `ScriptedSearchBackend`** (`.../Tools/WebTools.cs`) and set
+   `Tools:WebSearch:Provider=scripted` in `appsettings.Development.json`, exactly as the previous session's
+   "exact next steps" said to. This unblocked `web_search` → `web_fetch` → `memory_write` (steps 5-8): **verified
+   with the real built Gateway binary against a live `pgvector/pgvector:pg17` container**, execution reaches
+   `Succeeded` with a real summarized answer.
+2. **Found and fixed a regex-ordering bug in `ResearchBehavior`**
+   (`Daksh.Platform.Core/Providers/ScriptedProvider.cs`): the recall check (`RecallIntent`) was being tested
+   *after* the research check (`ResearchIntent`), but `ResearchIntent` matches the phrase "find out about" —
+   which a natural follow-up question like "What did you find out about X earlier?" contains — so every
+   follow-up re-triggered a brand new web search instead of a memory recall. Swapped the order (recall checked
+   first). This is the actual reason step 9-10 wasn't reachable, not a limitation of the scripted provider.
+3. **Found and fixed a real functional bug in `MemoryService.SearchAsync`**: the full-text search used
+   `plainto_tsquery`, which ANDs every word in the query, so a multi-word natural-language recall question
+   would only ever match a memory containing every one of those words verbatim — which essentially never
+   happens. Added `BuildOrTsQuery` (OR's the query's words together) and switched to `EF.Functions.ToTsQuery`
+   with that. Verified: the same follow-up question now actually finds and returns the earlier research memory,
+   not "I have nothing stored about that yet."
+4. **Found and fixed a missing DI registration**: `MockChannelAdapter` was registered only as `IChannelAdapter`
+   in `ServiceCollectionExtensions.cs`, but the mock-channel test endpoint
+   (`GET /api/v1/testing/mock-channel/accounts/{id}/outbound`) asks for the concrete `MockChannelAdapter` type
+   directly, which had no registration — every call 500'd with "No service for type ... has been registered."
+   Fixed by registering the concrete type as a singleton and forwarding `IChannelAdapter` to it, so both
+   resolutions share the same instance (and its in-memory sent-message list).
+5. **Found and fixed a real missing feature, not a wiring bug**: `AgentRuntimeEngine` never created an outbound
+   `ChannelMessage` when an execution for a channel-backed session succeeded — so `ChannelOutboxWorker` (which
+   only ever looks for already-queued `Direction="out"` rows) had nothing to deliver, ever, for any channel.
+   The required scenario's "deliver through a channel" step was simply not reachable before this fix, for *any*
+   channel, not just the mock one. Fixed in `AgentRuntimeEngine.FinishAsync`: on a successful finish, if the
+   session has a `ChannelAccountId`, it now inserts a pending outbound `ChannelMessage` with the final text,
+   which `ChannelOutboxWorker` then picks up and delivers through the adapter within its normal poll interval.
 
-So: **registration, authentication, tenant/workspace resolution, provider/model configuration, agent creation,
-session creation, and the full execution lifecycle (queued → running → succeeded) are all confirmed working
-end to end against a real database and a real running process.** This is the single most important thing fixed
-and verified this session — the platform's core request path works.
+After all five fixes, **every one of the 16 required scenario steps is confirmed working end to end**, against
+a real database and a real running Gateway process, split across two scripts because step 15 genuinely needs an
+external Gateway restart between two halves:
+
+- `python3 -I tests/manual/e2e_scenario.py` → all of steps 1-14 pass: register/login, provider/model/agent/session
+  setup, `web_search`→`web_fetch`→`memory_write`, follow-up `memory_search` recall, scheduling a job, mock-channel
+  inbound→reply→outbound delivery, and `GET /api/v1/usage/summary` showing real recorded calls/tokens.
+- `python3 -I tests/manual/e2e_restart_recovery.py schedule`, then (externally) kill the Gateway, wait past the
+  job's due time, restart it, then `python3 -I tests/manual/e2e_restart_recovery.py verify` → steps 15-16 pass:
+  the automation's `lastRunAt` gets set and `consecutiveFailures` stays 0 even though the Gateway was down when
+  the job was originally due, confirming `JobRunnerWorker`'s catch-up poll (it claims any `Pending` job whose
+  `RunAfter` has passed, regardless of how long ago) actually works, not just in theory.
+- `dotnet test Daksh.sln -c Release` → still 0 failures (23 legacy tests, same as `LEG-001`); nothing regressed.
 
 ## Known gap found by this same run (not a regression, a real missing piece)
 
-Step "5-8" (agent searches the web, fetches a page, summarizes, saves to memory) **did not call any tools**. The
-scripted `research` model behaviour fell through to its default branch and just echoed the user's message back,
-because **no tool in the "web" group was actually offered to the model**:
-
-- `WebSearchTool.Unavailable(services)` returns a non-null reason whenever no web search backend is enabled
-  (`Tools:WebSearch:Provider` defaults to `"none"` in `appsettings.json`), and `AgentRuntimeEngine.BuildToolSpecsAsync`
-  correctly filters out any tool whose `Unavailable` check fails — so the model is never given `web_search` or
-  `web_fetch` to call, regardless of the agent's tool profile.
-- With those unavailable, the scripted `ResearchBehavior` in `ScriptedProvider.cs` never sees `Has(request,
-  "web_search")` return true, so it never calls `web_search` → never calls `web_fetch` → never calls
-  `memory_write`. The follow-up/recall step and the scheduling step were **not reached** in this run because the
-  manual test script's assertion on tool names stops it there by design (so a silent "it looks fine but nothing
-  really happened" pass can't occur).
-
-This is **not a bug in the policy/approval/execution machinery** — it's working exactly as designed (don't offer
-a tool the platform can't actually run). It is a **missing piece for offline/CI testing specifically**: there is
-no way today to exercise `web_search`/`web_fetch` without a real external search provider (SearXNG, Brave,
-Tavily) configured, which defeats the point of the scripted provider being usable without credentials.
-
-**The fix, not yet built**: add a fourth `IWebSearchBackend` (e.g. `ScriptedSearchBackend`) alongside
-`SearXngSearchBackend`/`BraveSearchBackend`/`TavilySearchBackend` in
-`services/platform/Daksh.Platform/Tools/WebTools.cs`, enabled when `Tools:WebSearch:Provider == "scripted"`,
-returning a small fixed/deterministic result set so `WebSearchTool.Unavailable` returns null and the scripted
-`research` behaviour's whole call chain (`web_search` → `web_fetch` → `memory_write` → `memory_search` →
-`schedule_create`) can actually run in tests and in this manual script. `web_fetch` itself has no such gap — it's
-unconditionally available (it has no "no backend configured" state) — so once `web_search` can return a result,
-`web_fetch`, `memory_write` and the rest of the chain should work without further changes, but that is **not
-verified** and is exactly the next thing to check once the scripted search backend exists.
+While investigating fix #5 above, noticed `RuntimeWorker`'s log filled with `DbUpdateException` /
+`IX_Messages_SessionId_Seq` duplicate-key errors during the run — something is occasionally double-claiming or
+double-running the same session's message append path, logged as an error but not visibly breaking the scripted
+scenario (the client-visible execution still completes `Succeeded` once). This did not block any of the 16
+steps from passing, but it's real log noise/wasted work that points at a genuine concurrency bug somewhere in
+how `Session.NextSeq` is incremented and saved versus how `RuntimeWorker`/lease renewal claims and re-claims
+executions. **Not investigated further this session** (out of scope for "unblock the required scenario," which
+is what this session set out to do) — next session should grep the Gateway log for
+`IX_Messages_SessionId_Seq` while re-running `e2e_scenario.py`, find exactly which two code paths race, and fix
+the race (likely either a missing lock/transaction around `session.NextSeq++` + `SaveChanges`, or the claim
+query in `RuntimeWorker` picking up an execution a second time before the first run's status update is visible).
 
 ## Exact next steps, in order
 
-1. Build the `ScriptedSearchBackend` described above (small, self-contained, no new dependencies) and set
-   `Tools:WebSearch:Provider=scripted` in `appsettings.Development.json` (or via `Tools__WebSearch__Provider=scripted`
-   env var) for local/offline runs.
-2. Re-run `python3 -I tests/manual/e2e_scenario.py` (same commands as in "Verified" above) and confirm it now
-   gets all the way through: web_search → web_fetch → memory_write (steps 5–8), the follow-up/memory_search step
-   (9–10), and the scheduling step (11–12). The script will tell you exactly which assertion fails if any step
-   still doesn't behave as expected — read its output, don't guess.
-3. Steps 13–16 of the required scenario (restart the Gateway mid-schedule, confirm the job still fires via
-   `JobRunnerWorker`'s catch-up poll, confirm delivery through the mock channel, confirm usage/cost/logs are
-   queryable) are written into the engine and worker but **have never been exercised**, automated or manual. Add
-   that to `tests/manual/e2e_scenario.py` (it already prints an automation id to extend from) or a new script.
-4. Turn `tests/manual/e2e_scenario.py` into a real automated test once it fully passes (currently it's a manual
-   script you run by hand against a Gateway you started yourself) — move its logic into
-   `tests/gateway/Daksh.Gateway.Tests` using `Microsoft.AspNetCore.Mvc.Testing` / `Testcontainers.PostgreSql` so
-   it runs under `dotnet test` without a hand-started Gateway. This is TST-005 in the parity matrix.
-5. Write the rest of the automated test projects' actual test classes — `tests/platform/Daksh.Platform.Tests`
-   and `tests/gateway/Daksh.Gateway.Tests` currently have `.csproj` files only, no test code yet beyond what #4
+1. **Commit and push what's in the working tree right now** (see "Current git state" above) — it is the real,
+   verified fix for the gap the previous session left off at, not speculative work; don't let it sit
+   uncommitted into the next session.
+2. Investigate and fix the `IX_Messages_SessionId_Seq` race described above. It's log noise today, but it's
+   exactly the kind of thing that turns into real double-sent messages or lost state under load, and it should
+   be understood before anything is built on top of the runtime/scheduler.
+3. Turn `tests/manual/e2e_scenario.py` and `tests/manual/e2e_restart_recovery.py` into real automated tests now
+   that they fully pass — move their logic into `tests/gateway/Daksh.Gateway.Tests` using
+   `Microsoft.AspNetCore.Mvc.Testing` / `Testcontainers.PostgreSql` so they run under `dotnet test` without a
+   hand-started Gateway, and so the restart-recovery scenario can simulate "Gateway was down" by just not
+   polling `JobRunnerWorker` for a while, rather than needing a real process kill/restart. This is TST-005 in
+   the parity matrix.
+4. Write the rest of the automated test projects' actual test classes — `tests/platform/Daksh.Platform.Tests`
+   and `tests/gateway/Daksh.Gateway.Tests` currently have `.csproj` files only, no test code yet beyond what #3
    produces. Priority order: security tests (tenant isolation, path jail, SSRF guard, command policy — pure
    functions, easy and high value), `ToolPolicy.Evaluate`, `ScheduleCalculator`, the scripted-provider research
-   behaviour, then `Testcontainers.PostgreSql`-backed integration tests for `PlatformDbContext` tenant filters
-   and `MemoryService`.
-6. Update `docs/parity/status.tsv` as each feature above is actually verified by a test (not just "written"),
-   then run `python3 scripts/parity.py` to regenerate `docs/FEATURE_PARITY_MATRIX.md`. Right now only `LEG-001`
-   (legacy tests still pass) is marked verified; everything built this session is still "Not implemented" in the
-   matrix because it has no automated-test evidence yet — a passing manual script is real progress but is
-   intentionally not enough to mark a matrix row verified.
-7. Then continue down `docs/IMPLEMENTATION_ROADMAP.md` from Phase 5 (sandbox/approval hardening tests) onward.
+   behaviour (including the recall-vs-research regex ordering fixed this session — that deserves a regression
+   test so it can't silently flip back), `MemoryService.SearchAsync`'s OR-query behaviour, then
+   `Testcontainers.PostgreSql`-backed integration tests for `PlatformDbContext` tenant filters.
+5. Update `docs/parity/status.tsv` as each feature above is actually verified by an *automated* test (not a
+   manual script — that's a deliberate policy in this repo; see the file's existing single `LEG-001` row and
+   don't add rows for this session's work until #3/#4 land), then run `python3 scripts/parity.py` to regenerate
+   `docs/FEATURE_PARITY_MATRIX.md`.
+6. Then continue down `docs/IMPLEMENTATION_ROADMAP.md` from Phase 5 (sandbox/approval hardening tests) onward.
 
 ## How to resume, concretely (copy-pasteable)
 
 ```bash
 cd "/Volumes/रत्नकोष/Projects/amitnahaksvn/Daksh/Daksh"
-git status   # should be clean, on main, at or after commit 1766d74
+git status   # should show the uncommitted fixes from this session until step 1 above is done
 
 # 1. Start Postgres (pgvector image; POSTGRES_PORT=5440 is set in .env on this machine because 5432 is
 #    already used by another local project — see docs/TECHNICAL_DECISIONS.md TD-013).
@@ -175,18 +200,28 @@ docker compose up -d postgres
 dotnet build Daksh.sln -c Release
 
 # 3. Run the Gateway against that database (first run creates/migrates daksh_platform automatically).
+#    Tools:WebSearch:Provider=scripted is already set in appsettings.Development.json.
 ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS=http://localhost:5190 \
   Database__MigrateOnStartup=true \
   ConnectionStrings__Platform="Host=localhost;Port=5440;Database=daksh_platform;Username=daksh;Password=change-me" \
   dotnet run --project services/gateway/Daksh.Gateway -c Release --no-build
 
-# 4. In another terminal, confirm health and run the manual scenario.
+# 4. In another terminal, confirm health and run the scenario scripts.
 curl -s http://localhost:5190/health/ready
 python3 -I tests/manual/e2e_scenario.py
+
+# 5. For restart recovery (needs the Gateway process from step 3 to actually be killed and restarted):
+python3 -I tests/manual/e2e_restart_recovery.py schedule
+#   ... now Ctrl-C the Gateway from step 3, wait a few seconds past the printed "next run" time, restart it
+#   with the same command as step 3 ...
+python3 -I tests/manual/e2e_restart_recovery.py verify
 ```
 
-If step 4 fails, the script's own `[FAIL]` line and the printed response body tell you exactly which HTTP call
-and assertion broke — start there, not by re-deriving the whole flow.
+If any script step fails, its own `[FAIL]` line and the printed response body (or traceback) tell you exactly
+which HTTP call and assertion broke — start there, not by re-deriving the whole flow. If a fix doesn't seem to
+take effect after rebuilding, make sure the Gateway process was fully killed (`pgrep -f Daksh.Gateway` should
+print nothing) *before* rebuilding and restarting — an old process can keep running against the pre-fix binary
+otherwise and make a real fix look like it didn't work.
 
 ## Decisions made worth knowing about
 
@@ -201,9 +236,9 @@ surprise a reviewer:
 - **JWT inbound claim mapping must stay off** (`o.MapInboundClaims = false` in `Daksh.Gateway/Program.cs`).
   Without it, ASP.NET Core's JWT bearer handler silently renames the `sub` claim to the legacy
   `ClaimTypes.NameIdentifier` URI on validation, which no longer matches what `TokenService` writes and what
-  `TenantMiddleware`/`/auth/me` read — this was the whole-platform-unusable-past-login bug found and fixed in the
-  previous session and reconfirmed working in this one. If this setting is ever removed "to simplify," every
-  authenticated request will silently stop resolving a workspace again.
+  `TenantMiddleware`/`/auth/me` read — this was the whole-platform-unusable-past-login bug found and fixed two
+  sessions ago and reconfirmed working since. If this setting is ever removed "to simplify," every authenticated
+  request will silently stop resolving a workspace again.
 
 ## What is explicitly not done yet (not hidden, just not reached)
 

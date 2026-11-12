@@ -201,10 +201,10 @@ public sealed partial class ResearchBehavior : IScriptedBehavior
             }
             return ScriptedProvider.Call(request, "schedule_create", new { name = Clip(userText, 60), kind = "at", in_seconds = 3600, prompt });
         }
-        if (ResearchIntent().IsMatch(userText) && Has(request, "web_search"))
-            return ScriptedProvider.Call(request, "web_search", new { query = topic }, $"Searching the web for \"{topic}\".");
         if (RecallIntent().IsMatch(userText) && Has(request, "memory_search"))
             return ScriptedProvider.Call(request, "memory_search", new { query = userText });
+        if (ResearchIntent().IsMatch(userText) && Has(request, "web_search"))
+            return ScriptedProvider.Call(request, "web_search", new { query = topic }, $"Searching the web for \"{topic}\".");
         return ScriptedProvider.Text(request, $"You said: {userText}");
     }
 

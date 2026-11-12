@@ -78,9 +78,9 @@ b = expect("4b. send research request", s, b)
 execution_id = b["executionId"]
 
 
-def wait_for_execution(execution_id, label, timeout=30):
+def wait_for_execution(execution_id, label, timeout=30, in_session_id=None):
     for _ in range(timeout * 2):
-        s, b = call("GET", f"/api/v1/sessions/{session_id}/executions/{execution_id}", token, ws)
+        s, b = call("GET", f"/api/v1/sessions/{in_session_id or session_id}/executions/{execution_id}", token, ws)
         if s == 200 and b["status"] in ("Succeeded", "Failed", "Cancelled", "WaitingApproval"):
             print(f"[{'OK' if b['status'] == 'Succeeded' else 'FAIL'}] {label}: status={b['status']}")
             if b["status"] != "Succeeded":
@@ -125,7 +125,35 @@ automations = expect("12b. list automations", s, b)
 assert len(automations) >= 1, "expected at least one automation to have been created"
 print("    automation:", automations[0])
 
-print("\nAll steps through scheduling passed. (Restart recovery and channel delivery are tested separately.)")
+# 13. Deliver a message through a channel (the mock channel adapter), and check the reply comes back out.
+s, b = call("POST", "/api/v1/testing/mock-channel/accounts", token, ws, {"name": f"e2e-mock-{RUN_ID}", "defaultAgentId": agent_id})
+b = expect("13a. create mock channel account", s, b)
+mock_account_id = b["accountId"]
+
+s, b = call("POST", f"/api/v1/testing/mock-channel/accounts/{mock_account_id}/inbound", token, ws, {
+    "chatId": "chat-1", "senderId": "user-1", "senderName": "Alice", "text": "Hello from the mock channel"})
+b = expect("13b. inject inbound channel message", s, b)
+assert b["status"] == "routed", f"expected the inbound message to be routed, got {b}"
+wait_for_execution(b["executionId"], "13c. channel execution completes", in_session_id=b["sessionId"])
+
+# ChannelOutboxWorker delivers asynchronously (polls every 500ms), so give it a moment to catch up.
+outbound = []
+for _ in range(20):
+    s, b = call("GET", f"/api/v1/testing/mock-channel/accounts/{mock_account_id}/outbound", token, ws)
+    outbound = expect("13d. read outbound channel messages", s, b)
+    if outbound:
+        break
+    time.sleep(0.5)
+assert len(outbound) >= 1, f"expected at least one outbound message delivered through the channel, got {outbound}"
+print("    channel reply:", outbound[0]["text"][:200])
+
+# 14. Usage/cost is queryable.
+s, b = call("GET", "/api/v1/usage/summary", token, ws)
+usage = expect("14. usage summary queryable", s, b)
+assert usage["calls"] >= 1, f"expected at least one usage record, got {usage}"
+print("    usage summary:", usage)
+
+print("\nAll steps including channel delivery and usage passed. Restart recovery is tested by e2e_restart_recovery.py.")
 with open("/tmp/e2e_state.json", "w") as f:
     json.dump({"token": token, "ws": ws, "agent_id": agent_id, "session_id": session_id,
                "automation_id": automations[0]["id"]}, f)

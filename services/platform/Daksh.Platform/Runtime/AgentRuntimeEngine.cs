@@ -417,6 +417,12 @@ public sealed class AgentRuntimeEngine(
             execution.FinishedAt = clock.UtcNow;
             execution.LeaseUntil = null;
         }
+        if (status == ExecutionStatus.Succeeded && !string.IsNullOrWhiteSpace(finalText) && session.ChannelAccountId is { } channelAccountId)
+            db.ChannelMessages.Add(new ChannelMessage
+            {
+                WorkspaceId = execution.WorkspaceId, ChannelAccountId = channelAccountId, Direction = "out",
+                ExternalChatId = session.PeerId ?? "", Text = finalText, Status = "pending", SessionId = session.Id, ExecutionId = execution.Id,
+            });
         await db.SaveChangesAsync(ct);
         await events.PublishAsync(execution.WorkspaceId, session.Id, execution.Id, "run." + status.ToString().ToLowerInvariant(),
             new { text = finalText, error }, ct);

@@ -10,7 +10,7 @@ namespace Daksh.Platform.Tools.Core;
 
 public sealed class WebSearchOptions
 {
-    /// <summary>searxng | brave | tavily | duckduckgo | none</summary>
+    /// <summary>searxng | brave | tavily | scripted | none</summary>
     public string Provider { get; set; } = "none";
     public string? BaseUrl { get; set; }
     public string? ApiKey { get; set; }
@@ -88,6 +88,25 @@ public sealed class TavilySearchBackend(IHttpClientFactory httpFactory, IOptions
             .Select(r => (r.GetProperty("title").GetString() ?? "", r.GetProperty("url").GetString() ?? "",
                 r.TryGetProperty("content", out var c) ? c.GetString() ?? "" : ""))
             .ToList();
+    }
+}
+
+/// <summary>
+/// Fixed/deterministic results, no network, so the scripted provider's research behaviour (and automated tests)
+/// can exercise web_search -> web_fetch -> memory_write offline without a real search provider configured.
+/// </summary>
+public sealed class ScriptedSearchBackend(IOptions<WebSearchOptions> options) : IWebSearchBackend
+{
+    public string Name => "scripted";
+    public bool Enabled => options.Value.Provider == "scripted";
+
+    public Task<IReadOnlyList<(string Title, string Url, string Snippet)>> SearchAsync(string query, int count, CancellationToken ct)
+    {
+        IReadOnlyList<(string Title, string Url, string Snippet)> results =
+        [
+            ($"Scripted result for \"{query}\"", "https://example.com/", $"Deterministic offline search result for \"{query}\"."),
+        ];
+        return Task.FromResult(results.Take(count).ToList() as IReadOnlyList<(string Title, string Url, string Snippet)>);
     }
 }
 

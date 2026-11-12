@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Daksh.Platform.Data;
 using Daksh.Platform.Domain;
 using Daksh.Platform.Providers;
@@ -85,10 +86,16 @@ public sealed class MemoryService(PlatformDbContext db, ModelCallRunner models, 
             ((m.Scope == "agent" && m.AgentId == agentId) || (m.Scope == "user" && m.UserId == userId) ||
              (m.Scope == "workspace") || (m.Scope == "shared")) && scopes.Contains(m.Scope));
 
-        var keywordIds = await scoped
-            .Where(m => EF.Functions.ToTsVector("english", m.Content).Matches(EF.Functions.PlainToTsQuery("english", query)))
-            .OrderByDescending(m => EF.Functions.ToTsVector("english", m.Content).Rank(EF.Functions.PlainToTsQuery("english", query)))
-            .Take(50).Select(m => m.Id).ToListAsync(ct);
+        // plainto_tsquery ANDs every word, so a multi-word natural-language question would need every one of its
+        // words to appear in the memory verbatim to match at all. Recall queries should match on word overlap
+        // instead, so the query's words are OR'd together.
+        var orQuery = BuildOrTsQuery(query);
+        List<Guid> keywordIds = [];
+        if (orQuery.Length > 0)
+            keywordIds = await scoped
+                .Where(m => EF.Functions.ToTsVector("english", m.Content).Matches(EF.Functions.ToTsQuery("english", orQuery)))
+                .OrderByDescending(m => EF.Functions.ToTsVector("english", m.Content).Rank(EF.Functions.ToTsQuery("english", orQuery)))
+                .Take(50).Select(m => m.Id).ToListAsync(ct);
 
         List<Memory.RankedId> vectorHits = [];
         if (!string.IsNullOrWhiteSpace(options.Value.EmbeddingModelRef))
@@ -140,6 +147,12 @@ public sealed class MemoryService(PlatformDbContext db, ModelCallRunner models, 
         foreach (var m in expired) m.DeletedAt = now;
         await db.SaveChangesAsync(ct);
         return expired.Count;
+    }
+
+    private static string BuildOrTsQuery(string query)
+    {
+        var words = Regex.Matches(query, @"[A-Za-z0-9]+").Select(m => m.Value).Where(w => w.Length > 1).Distinct();
+        return string.Join(" | ", words);
     }
 
     private sealed class VectorRow { public Guid MemoryId { get; set; } public double Score { get; set; } }
