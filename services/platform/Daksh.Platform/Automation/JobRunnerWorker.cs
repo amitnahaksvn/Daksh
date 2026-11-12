@@ -142,6 +142,26 @@ public sealed class JobRunnerWorker(IServiceScopeFactory scopes, IOptions<Schedu
         var execution = await queue.StartAsync(session, agent, message.Seq, "automation", automation.OwnerUserId, null, 0, null,
             $"automation:{automation.Id}:{job.ScheduledFor:O}", automation.Delivery, ct);
 
+        // Claim the execution ourselves, the same optimistic way RuntimeWorker does, before running it: the row
+        // is Queued and otherwise just as visible to RuntimeWorker's own poll loop as any chat-triggered one, so
+        // without this both workers would run the same execution concurrently. Whichever of the two wins the
+        // race to flip it to Running proceeds; the loser (rare - this claim happens immediately after creation)
+        // waits for the winner to finish instead of running the engine a second time.
+        execution.Status = ExecutionStatus.Running;
+        execution.LeaseUntil = DateTimeOffset.UtcNow.AddSeconds(services.GetRequiredService<IOptions<RuntimeOptions>>().Value.LeaseSeconds);
+        execution.WorkerId = $"scheduler-{Environment.MachineName}-{Environment.ProcessId}";
+        try { await db.SaveChangesAsync(ct); }
+        catch (DbUpdateConcurrencyException)
+        {
+            while (true)
+            {
+                await Task.Delay(500, ct);
+                var current = await db.Executions.IgnoreQueryFilters().AsNoTracking().FirstAsync(e => e.Id == execution.Id, ct);
+                if (current.Status is ExecutionStatus.Succeeded or ExecutionStatus.Failed or ExecutionStatus.Cancelled)
+                    return execution.Id;
+            }
+        }
+
         var engine = services.GetRequiredService<AgentRuntimeEngine>();
         await engine.RunAsync(execution.Id, ct);
         return execution.Id;

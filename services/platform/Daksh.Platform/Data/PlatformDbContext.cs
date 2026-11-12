@@ -173,7 +173,9 @@ public class PlatformDbContext(DbContextOptions<PlatformDbContext> options, Tena
         b.Entity<MessageAttachment>(e => e.HasOne<StoredFile>().WithMany().HasForeignKey(x => x.FileId).OnDelete(DeleteBehavior.Restrict));
         b.Entity<Execution>(e =>
         {
-            e.Ignore(x => x.Version);
+            // A real concurrency token (not ignored): RuntimeWorker's claim relies on losing this race when two
+            // pollers both try to move the same row to Running, so Execution.Version must actually be enforced.
+            e.Property(x => x.Version).IsRowVersion();
             e.HasIndex(x => new { x.Status, x.LeaseUntil });
             e.HasIndex(x => new { x.SessionId, x.CreatedAt });
             e.HasIndex(x => new { x.WorkspaceId, x.CreatedAt });

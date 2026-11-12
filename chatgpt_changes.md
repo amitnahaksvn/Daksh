@@ -145,46 +145,74 @@ external Gateway restart between two halves:
   `RunAfter` has passed, regardless of how long ago) actually works, not just in theory.
 - `dotnet test Daksh.sln -c Release` → still 0 failures (23 legacy tests, same as `LEG-001`); nothing regressed.
 
-## Known gap found by this same run (not a regression, a real missing piece)
+## The `IX_Messages_SessionId_Seq` race: found, root-caused, and fixed
 
-While investigating fix #5 above, noticed `RuntimeWorker`'s log filled with `DbUpdateException` /
-`IX_Messages_SessionId_Seq` duplicate-key errors during the run — something is occasionally double-claiming or
-double-running the same session's message append path, logged as an error but not visibly breaking the scripted
-scenario (the client-visible execution still completes `Succeeded` once). This did not block any of the 16
-steps from passing, but it's real log noise/wasted work that points at a genuine concurrency bug somewhere in
-how `Session.NextSeq` is incremented and saved versus how `RuntimeWorker`/lease renewal claims and re-claims
-executions. **Not investigated further this session** (out of scope for "unblock the required scenario," which
-is what this session set out to do) — next session should grep the Gateway log for
-`IX_Messages_SessionId_Seq` while re-running `e2e_scenario.py`, find exactly which two code paths race, and fix
-the race (likely either a missing lock/transaction around `session.NextSeq++` + `SaveChanges`, or the claim
-query in `RuntimeWorker` picking up an execution a second time before the first run's status update is visible).
+The gap noted above (duplicate-key errors in the Gateway log, not visibly breaking the scenario but real wasted
+work) turned out to be **two separate bugs**, both now fixed, both verified by re-running the full scenario
+seven times back-to-back (three plain runs, a restart-recovery cycle, three more plain runs) against one
+Gateway process with zero `IX_Messages_SessionId_Seq` occurrences afterward (there were 15 before, across 5
+distinct exception instances, in the same test sequence):
+
+1. **`Execution.Version` was never a real concurrency token.** `RuntimeWorker.RunOneAsync`'s claim step has a
+   comment reading "Optimistic claim: only proceed if we win the race to set status/lease", but
+   `PlatformDbContext.OnModelCreating` had `e.Ignore(x => x.Version)` for `Execution` — so that optimistic check
+   was dead code: `SaveChangesAsync` never threw `DbUpdateConcurrencyException`, because there was no
+   concurrency token for Postgres to check. Compounding this, `RuntimeWorker.ClaimAndRunBatchAsync` fires
+   `RunOneAsync` as fire-and-forget and only delays before the *next* poll if nothing was claimed - so a busy
+   poll loop can run its next `SELECT` candidates query before a just-fired claim's `UPDATE ... SET Status =
+   Running` has committed, re-selecting and re-running the same `Queued` row a second time. Fixed by changing
+   `Execution`'s mapping to `e.Property(x => x.Version).IsRowVersion()` (same `uint` + Npgsql `xmin` pattern
+   already used for `Agent`/`Approval`/`Automation`), so the claim's own optimistic check is finally real: the
+   loser of that race gets `DbUpdateConcurrencyException` and returns immediately instead of also running the
+   engine. No physical schema change was needed (`xmin` is a Postgres system column that already exists on
+   every table), but EF Core still requires a migration to record the mapping change - see
+   `20261112071622_ExecutionVersionConcurrencyToken.cs`. **Important**: the scaffolded migration initially tried
+   to `AddColumn("xmin", ...)`, which fails against a real Postgres server because `xmin` is a reserved system
+   column name - the committed migration has an intentionally empty `Up`/`Down`. If this migration is ever
+   regenerated from scratch, re-empty it the same way; don't apply the scaffolded version verbatim.
+2. **`JobRunnerWorker.RunActionAsync` never claimed the execution it created.** It called
+   `ExecutionQueueService.StartAsync` (which leaves the row `Queued`) and then called `engine.RunAsync` on it
+   *directly itself*, without ever flipping the row to `Running` first. That `Queued` row was just as visible to
+   `RuntimeWorker`'s own poll loop as any chat-triggered execution, so **every automation-triggered run was
+   guaranteed to be picked up and run twice** - once by `JobRunnerWorker` inline, once by `RuntimeWorker`'s
+   normal claim path - independent of bug #1. This is the bug that was actually firing in the observed log (the
+   failing stack traces were in `JobRunnerWorker.RunActionAsync` → `AgentRuntimeEngine.RecordUsageAsync`, not in
+   `RuntimeWorker`'s own re-claim path). Fixed by making `RunActionAsync` claim the execution itself (same
+   optimistic `Status = Running` + lease + `WorkerId` pattern as `RuntimeWorker.RunOneAsync`) before calling the
+   engine; on the rare loss of that race it now polls for the winner's terminal status instead of also running
+   the engine.
+
+Fixing bug #1 also required hardening `RuntimeWorker.RenewLeaseLoopAsync`: once `Execution.Version` is a real
+concurrency token, the lease-renewal loop's periodic `LeaseUntil` write (from its own separate `DbContext`
+scope) can legitimately lose a race against the engine's own in-flight writes on a long-running execution. That
+loop now catches `DbUpdateConcurrencyException` and just skips that renewal tick (harmless - the engine is
+actively progressing either way) instead of letting the exception propagate out of a fire-and-forget task.
 
 ## Exact next steps, in order
 
 1. **Commit and push what's in the working tree right now** (see "Current git state" above) — it is the real,
    verified fix for the gap the previous session left off at, not speculative work; don't let it sit
    uncommitted into the next session.
-2. Investigate and fix the `IX_Messages_SessionId_Seq` race described above. It's log noise today, but it's
-   exactly the kind of thing that turns into real double-sent messages or lost state under load, and it should
-   be understood before anything is built on top of the runtime/scheduler.
-3. Turn `tests/manual/e2e_scenario.py` and `tests/manual/e2e_restart_recovery.py` into real automated tests now
+2. Turn `tests/manual/e2e_scenario.py` and `tests/manual/e2e_restart_recovery.py` into real automated tests now
    that they fully pass — move their logic into `tests/gateway/Daksh.Gateway.Tests` using
    `Microsoft.AspNetCore.Mvc.Testing` / `Testcontainers.PostgreSql` so they run under `dotnet test` without a
    hand-started Gateway, and so the restart-recovery scenario can simulate "Gateway was down" by just not
    polling `JobRunnerWorker` for a while, rather than needing a real process kill/restart. This is TST-005 in
    the parity matrix.
-4. Write the rest of the automated test projects' actual test classes — `tests/platform/Daksh.Platform.Tests`
-   and `tests/gateway/Daksh.Gateway.Tests` currently have `.csproj` files only, no test code yet beyond what #3
+3. Write the rest of the automated test projects' actual test classes — `tests/platform/Daksh.Platform.Tests`
+   and `tests/gateway/Daksh.Gateway.Tests` currently have `.csproj` files only, no test code yet beyond what #2
    produces. Priority order: security tests (tenant isolation, path jail, SSRF guard, command policy — pure
    functions, easy and high value), `ToolPolicy.Evaluate`, `ScheduleCalculator`, the scripted-provider research
    behaviour (including the recall-vs-research regex ordering fixed this session — that deserves a regression
-   test so it can't silently flip back), `MemoryService.SearchAsync`'s OR-query behaviour, then
+   test so it can't silently flip back), `MemoryService.SearchAsync`'s OR-query behaviour, the two claim races
+   fixed this session (a test that fires two concurrent claims at the same `Execution` row and asserts only one
+   proceeds would catch both bugs #1 and #2 above if either ever regresses), then
    `Testcontainers.PostgreSql`-backed integration tests for `PlatformDbContext` tenant filters.
-5. Update `docs/parity/status.tsv` as each feature above is actually verified by an *automated* test (not a
+4. Update `docs/parity/status.tsv` as each feature above is actually verified by an *automated* test (not a
    manual script — that's a deliberate policy in this repo; see the file's existing single `LEG-001` row and
-   don't add rows for this session's work until #3/#4 land), then run `python3 scripts/parity.py` to regenerate
+   don't add rows for this session's work until #2/#3 land), then run `python3 scripts/parity.py` to regenerate
    `docs/FEATURE_PARITY_MATRIX.md`.
-6. Then continue down `docs/IMPLEMENTATION_ROADMAP.md` from Phase 5 (sandbox/approval hardening tests) onward.
+5. Then continue down `docs/IMPLEMENTATION_ROADMAP.md` from Phase 5 (sandbox/approval hardening tests) onward.
 
 ## How to resume, concretely (copy-pasteable)
 

@@ -117,7 +117,12 @@ public sealed class RuntimeWorker(IServiceScopeFactory scopes, IOptions<RuntimeO
                 var row = await db.Executions.IgnoreQueryFilters().FirstOrDefaultAsync(e => e.Id == executionId, ct);
                 if (row is null || row.Status != ExecutionStatus.Running) return;
                 row.LeaseUntil = clock.UtcNow.AddSeconds(options.Value.LeaseSeconds);
-                await db.SaveChangesAsync(ct);
+                try { await db.SaveChangesAsync(ct); }
+                catch (DbUpdateConcurrencyException)
+                {
+                    // The engine's own scope saved the same row between our read and our write. Harmless: the
+                    // engine is actively progressing, so the lease doesn't need renewing this tick either way.
+                }
             }
         }
         catch (OperationCanceledException) { }
