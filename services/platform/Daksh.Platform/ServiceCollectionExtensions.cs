@@ -82,7 +82,19 @@ public static class ServiceCollectionExtensions
         services.AddScoped<SchedulerService>();
         services.AddHostedService<JobRunnerWorker>();
 
-        services.AddHttpClient<Daksh.Platform.Integrations.DeveloperPlatforms.GitHubIntegration>(c =>\n        {\n            c.BaseAddress = new Uri("https://api.github.com/");\n            c.Timeout = TimeSpan.FromSeconds(30);\n        });\n\n        services.AddSingleton<Channels.Core.MockChannelAdapter>();
+        services.AddHttpClient<Daksh.Platform.Integrations.DeveloperPlatforms.GitHubIntegration>(c =>
+        {
+            c.BaseAddress = new Uri("https://api.github.com/");
+            c.Timeout = TimeSpan.FromSeconds(30);
+        });
+
+        services.AddHttpClient<Daksh.Platform.Integrations.DeveloperPlatforms.GitLabIntegration>(c =>
+        {
+            c.BaseAddress = new Uri("https://gitlab.com/api/v4/");
+            c.Timeout = TimeSpan.FromSeconds(30);
+        });
+
+        services.AddSingleton<Channels.Core.MockChannelAdapter>();
         services.AddSingleton<IChannelAdapter>(sp => sp.GetRequiredService<Channels.Core.MockChannelAdapter>());
         services.AddSingleton<Channels.Core.TelegramChannelAdapter>();
         services.AddSingleton<IChannelAdapter>(sp => sp.GetRequiredService<Channels.Core.TelegramChannelAdapter>());
