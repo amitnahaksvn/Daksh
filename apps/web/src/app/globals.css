@@ -61,13 +61,13 @@
   --color-pink: var(--pink);
   --color-on-tint: var(--on-tint);
   --color-danger: var(--danger);
-  --color-danger-bg: var(--danger-bg);
+  --color-danger-bg: var(--danger-bg);\n  --color-card: var(--card, var(--surface));\n  --color-success: var(--success, #22c55e);\n  --color-warning: var(--warning, #f59e0b);
 }
 
 body {
   background: var(--canvas);
   color: var(--text);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: Inter, Manrope, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
 h1,
@@ -333,7 +333,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 
 /* AURORA: Daksha's branded violet-lotus theme, separate from Neural. */
 [data-style="aurora"] {
- --canvas:#0B1020; --surface:#0F1220; --surface-2:#202640; --line:#2A2F45;
+ --canvas:#0B1020; --surface:#0F1220; --surface-2:#1A1F32; --card:#1A1F32; --line:#2A2F45; --success:#22C55E; --warning:#F59E0B;
  --text:#F8FAFC; --muted:#94A3B8; --accent:#8B5CF6; --accent-contrast:#FFFFFF;
  --accent-gradient:linear-gradient(120deg,#8B5CF6 0%,#6D28D9 55%,#A855F7 100%);
  --lime:#22C55E; --pink:#A855F7; --on-tint:#FFFFFF; --danger:#EF4444;
