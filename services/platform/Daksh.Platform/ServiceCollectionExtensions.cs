@@ -108,6 +108,7 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<Daksh.Platform.Integrations.Storage.BoxIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
         services.AddHttpClient<Daksh.Platform.Integrations.Meetings.ZoomIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
         services.AddHttpClient<Daksh.Platform.Integrations.Storage.GoogleDriveIntegration>(c => c.Timeout = TimeSpan.FromSeconds(60));
+        services.AddHttpClient<Daksh.Platform.Integrations.Meetings.CalendlyIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
 
         services.AddSingleton<Channels.Core.MockChannelAdapter>();
         services.AddSingleton<IChannelAdapter>(sp => sp.GetRequiredService<Channels.Core.MockChannelAdapter>());
