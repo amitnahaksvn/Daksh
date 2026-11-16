@@ -348,3 +348,16 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 [data-style="aurora"] .bg-pink { background:linear-gradient(135deg,rgb(168 85 247 / .2),rgb(109 40 217 / .18)); box-shadow:inset 0 0 0 1px rgb(168 85 247 / .3); }
 [data-style="aurora"] input:focus-visible,[data-style="aurora"] textarea:focus-visible { outline:none; box-shadow:0 0 0 1px rgb(139 92 246 / .9),0 0 20px rgb(139 92 246 / .28); }
 [data-style="aurora"] .ai-gradient-text { background:linear-gradient(100deg,#C4B5FD 0%,#A855F7 55%,#F0ABFC 100%); -webkit-background-clip:text; background-clip:text; color:transparent; }
+
+
+/* User-selectable accent palettes. Each palette updates buttons, focus rings and the Daksha presence orb. */
+[data-accent="violet"] { --palette:#8B5CF6; --palette-soft:#EDE9FE; --orb-a:#8B5CF6; --orb-b:#C084FC; --orb-glow:rgb(139 92 246 / .45); }
+[data-accent="blue"] { --palette:#3B82F6; --palette-soft:#DBEAFE; --orb-a:#3B82F6; --orb-b:#22D3EE; --orb-glow:rgb(59 130 246 / .45); }
+[data-accent="emerald"] { --palette:#10B981; --palette-soft:#D1FAE5; --orb-a:#10B981; --orb-b:#34D399; --orb-glow:rgb(16 185 129 / .45); }
+[data-accent="rose"] { --palette:#F43F5E; --palette-soft:#FFE4E6; --orb-a:#F43F5E; --orb-b:#FB7185; --orb-glow:rgb(244 63 94 / .45); }
+[data-accent="amber"] { --palette:#F59E0B; --palette-soft:#FEF3C7; --orb-a:#F59E0B; --orb-b:#FCD34D; --orb-glow:rgb(245 158 11 / .45); }
+[data-style="bento"][data-accent] { --accent:var(--palette); --accent-contrast:#fff; }
+.dark[data-style="bento"][data-accent] { --accent:var(--palette); --accent-contrast:#111214; }
+[data-style="neural"][data-accent] { --accent:var(--palette); --accent-gradient:linear-gradient(120deg,var(--palette),#22D3EE); --orb-c:var(--palette); }
+[data-style="aurora"][data-accent] { --accent:var(--palette); --accent-gradient:linear-gradient(120deg,var(--palette),#6D28D9 55%,#A855F7); --orb-c:var(--palette); }
+[data-accent] :focus-visible { outline-color:var(--palette); }
