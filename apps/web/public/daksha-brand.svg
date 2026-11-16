@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 180" fill="none" role="img" aria-labelledby="title desc">
+<title id="title">Daksha — The Prajapati</title><desc id="desc">Glowing violet lotus mark with Daksha wordmark and The Prajapati subtitle.</desc>
+<defs><linearGradient id="lotus" x1="40" y1="8" x2="130" y2="120" gradientUnits="userSpaceOnUse"><stop stop-color="#F5D0FE"/><stop offset=".48" stop-color="#C084FC"/><stop offset="1" stop-color="#7C3AED"/></linearGradient><filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+<g transform="translate(8 14)" stroke="url(#lotus)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)">
+<path d="M68 4C42 34 42 70 68 100C94 70 94 34 68 4Z"/><path d="M59 91C27 83 12 59 12 36C40 37 59 54 68 82"/><path d="M77 91C109 83 124 59 124 36C96 37 77 54 68 82"/><path d="M65 101C35 112 9 102 0 82C25 67 51 76 68 96"/><path d="M71 101C101 112 127 102 136 82C111 67 85 76 68 96"/><path d="M8 120C42 107 94 107 128 120"/></g>
+<text x="174" y="94" fill="#F8FAFC" font-family="Inter,Manrope,Arial,sans-serif" font-size="66" font-weight="750" letter-spacing="-2">Daksha</text>
+<path d="M176 116H224M458 116H506" stroke="#C084FC" stroke-width="2"/>
+<text x="240" y="123" fill="#D8B4FE" font-family="Inter,Manrope,Arial,sans-serif" font-size="17" font-weight="600" letter-spacing="5">THE PRAJAPATI</text>
+</svg>
