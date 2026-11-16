@@ -334,13 +334,21 @@ function AppsPageContent({ apps }: { apps: AppCatalogEntry[] }) {
     return true;
   });
 
-  // WhatsApp is the one live integration — always show it first, then preserve the catalogue's order.
-  const byWhatsAppFirst = (a: AppCatalogEntry, b: AppCatalogEntry) =>
-    (a.integrationKey === "whatsapp" ? -1 : 0) - (b.integrationKey === "whatsapp" ? -1 : 0);
+  // WhatsApp is the one live integration, so it always leads; these are pinned next by explicit request,
+  // in this order; everything else keeps the catalogue's original order.
+  const PINNED_ORDER = ["whatsapp", "telegram", "slack", "imessage", "facebook-messenger", "signal", "microsoft-teams"];
+  const byPinnedFirst = (a: AppCatalogEntry, b: AppCatalogEntry) => {
+    const ai = PINNED_ORDER.indexOf(a.integrationKey);
+    const bi = PINNED_ORDER.indexOf(b.integrationKey);
+    if (ai === -1 && bi === -1) return 0;
+    if (ai === -1) return 1;
+    if (bi === -1) return -1;
+    return ai - bi;
+  };
 
   const sections = CATEGORY_ORDER.filter((c) => category === "All" || category === c).map((c) => ({
     category: c,
-    apps: filtered.filter((a) => a.category === c).sort(byWhatsAppFirst),
+    apps: filtered.filter((a) => a.category === c).sort(byPinnedFirst),
   }));
   const showEmptyCategoryNotice = category !== "All" && category !== "More" && sections.every((s) => s.apps.length === 0) && !query;
 
