@@ -108,6 +108,13 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 - **Missing implementation:** OAuth; file metadata/download/upload; resumable uploads; changes feed; permissions; webhook renewal; tests.
 - **Code status:** Not implemented; this section is a gap register, not a working connector.
 
+
+### Google Drive
+
+- **Integration surface:** Google Drive API v3.
+- **Implemented / remaining:** OAuth bearer-token account probe, file listing with page-token support, and folder creation are implemented. Remaining: OAuth consent/refresh lifecycle, file upload/download/export/delete/share operations, change notifications and delta sync, durable credential storage, API/UI and automated tests.
+- **Code status:** Partial client; `services/platform/Daksh.Platform/Integrations/Storage/GoogleDriveIntegration.cs`. Not production-complete.
+
 ### Google Docs
 
 - **Integration surface:** Google Docs API plus Drive API.
