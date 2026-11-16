@@ -278,9 +278,8 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 
 - **Integration surface:** Sentry API and webhooks.
 - **Required setup / access:** Sentry OAuth app or auth token; organization/project scopes.
-- **Missing implementation:** Issues/events/releases/projects; webhook signature verification; pagination/rate limits/tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
-
+- **Implemented / remaining:** Connection probe and listing unresolved organization issues are implemented. Remaining: events/releases/projects management, webhook signature verification/event routing, pagination, token storage, endpoints/UI and tests.
+- **Code status:** Partial implementation; `services/platform/Daksh.Platform/Integrations/Observability/SentryIntegration.cs`. Not production-complete.
 ### Docker Hub
 
 - **Integration surface:** Docker Hub API and webhooks.
@@ -382,10 +381,9 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 ### Stripe
 
 - **Integration surface:** Stripe API and webhooks.
-- **Required setup / access:** Stripe account, restricted API key/OAuth Connect as applicable, webhook signing secret.
-- **Missing implementation:** Customers/products/prices/payment intents/subscriptions; signature verification; idempotency; Connect; tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
-
+- **Required setup / access:** Stripe account, restricted API key or OAuth Connect as applicable, webhook signing secret.
+- **Implemented / remaining:** Account connection probe, PaymentIntent creation with optional idempotency key, and Stripe webhook signature verification with timestamp tolerance. Remaining: customers/products/prices/subscriptions/refunds/Connect, event parsing/routing, encrypted key storage, endpoints/UI and tests.
+- **Code status:** Partial implementation; `services/platform/Daksh.Platform/Integrations/Payments/StripeIntegration.cs`. Not production-complete.
 ### PayPal
 
 - **Integration surface:** PayPal REST APIs and webhooks.
