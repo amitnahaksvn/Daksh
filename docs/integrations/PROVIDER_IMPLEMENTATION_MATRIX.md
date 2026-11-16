@@ -37,10 +37,9 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 ### Microsoft Outlook Mail
 
 - **Integration surface:** Microsoft Graph Mail API.
-- **Required setup / access:** Entra app registration; OAuth 2.0 authorization-code/device flow; Mail.Read or Mail.ReadWrite and Mail.Send; tenant consent; delta/webhook subscriptions.
-- **Missing implementation:** OAuth token lifecycle, mailbox selection, send/reply/draft, delta sync, subscription renewal, notifications, throttling and integration tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
-
+- **Required setup / access:** Entra app registration; delegated or application Graph permissions, tenant consent and redirect URI.
+- **Implemented / remaining:** Connection probe, message listing and sending mail are implemented. Remaining: OAuth/token lifecycle, subscriptions, drafts, attachments, folders, per-account storage, endpoints/UI and tests.
+- **Code status:** Partial implementation; `services/platform/Daksh.Platform/Integrations/Microsoft/MicrosoftGraphIntegration.cs`. Not production-complete.
 ### Yahoo Mail
 
 - **Integration surface:** Yahoo Mail API / OAuth where account/API access is available.
@@ -65,17 +64,15 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 ### Google Calendar
 
 - **Integration surface:** Google Calendar API.
-- **Required setup / access:** Google Cloud project, OAuth consent, Calendar scopes, redirect URIs, optional push channel configuration.
-- **Missing implementation:** OAuth; list/create/update/delete events; free/busy; incremental sync; watch renewal; timezone handling; tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
-
+- **Required setup / access:** Google Cloud OAuth client, consent screen, Calendar scopes and redirect URI.
+- **Implemented / remaining:** Calendar list probe, event listing, event creation and deletion are implemented. Remaining: OAuth lifecycle and encrypted refresh-token storage, free/busy, incremental sync, push channel renewal, event updates, endpoints/UI and tests.
+- **Code status:** Partial implementation; `services/platform/Daksh.Platform/Integrations/Google/GoogleCalendarIntegration.cs`. Not production-complete.
 ### Microsoft Outlook Calendar
 
 - **Integration surface:** Microsoft Graph Calendar API.
-- **Required setup / access:** Entra app registration, delegated/application permissions, tenant consent, redirect URIs.
-- **Missing implementation:** OAuth; event CRUD; availability; delta sync; subscriptions/renewal; timezone handling; tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
-
+- **Required setup / access:** Entra app registration, Calendar.Read/Calendar.ReadWrite scopes and tenant consent.
+- **Implemented / remaining:** Calendar event listing and creation are implemented. Remaining: OAuth/token lifecycle, update/delete, free/busy, delta sync, subscriptions, endpoints/UI and tests.
+- **Code status:** Partial implementation; `services/platform/Daksh.Platform/Integrations/Microsoft/MicrosoftGraphIntegration.cs`. Not production-complete.
 ### Apple Calendar
 
 - **Integration surface:** EventKit on Apple devices or supported CalDAV account integration.
@@ -128,17 +125,15 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 ### OneDrive
 
 - **Integration surface:** Microsoft Graph Drive API.
-- **Required setup / access:** Entra app registration, Files.Read/Files.ReadWrite scopes, tenant consent.
-- **Missing implementation:** OAuth; upload sessions; delta sync; sharing permissions; subscriptions; throttling/retry/tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
-
+- **Required setup / access:** Entra app registration, Files.Read/Files.ReadWrite scopes and tenant consent.
+- **Implemented / remaining:** Listing children in a drive is implemented. Remaining: upload/download, delta sync, sharing, subscription renewal, OAuth lifecycle, endpoints/UI and tests.
+- **Code status:** Partial implementation; `services/platform/Daksh.Platform/Integrations/Microsoft/MicrosoftGraphIntegration.cs`. Not production-complete.
 ### SharePoint
 
 - **Integration surface:** Microsoft Graph Sites/Lists/Drive APIs.
-- **Required setup / access:** Entra app registration, Sites/Files permissions, tenant admin consent, site selection.
-- **Missing implementation:** Site discovery; lists/documents CRUD; delta sync; permissions; subscription renewal; tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
-
+- **Required setup / access:** Entra app registration, Sites/Files permissions and tenant admin consent.
+- **Implemented / remaining:** SharePoint site search is implemented. Remaining: list/document operations, permissions, delta sync, OAuth lifecycle, endpoints/UI and tests.
+- **Code status:** Partial implementation; `services/platform/Daksh.Platform/Integrations/Microsoft/MicrosoftGraphIntegration.cs`. Not production-complete.
 ### Dropbox
 
 - **Integration surface:** Dropbox API v2.
@@ -156,10 +151,9 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 ### Notion
 
 - **Integration surface:** Notion API.
-- **Required setup / access:** Notion integration, OAuth or internal token, workspace connection and capabilities.
-- **Missing implementation:** OAuth/install flow; pages/blocks/databases CRUD; pagination; rate limits; webhook support strategy; tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
-
+- **Required setup / access:** Notion integration installed in workspace; integration token and page/database access granted.
+- **Implemented / remaining:** Connection probe, workspace search and page creation are implemented. Remaining: database-parent support, blocks CRUD, pagination completion, OAuth install flow, token storage, endpoints/UI and tests.
+- **Code status:** Partial implementation; `services/platform/Daksh.Platform/Integrations/Notion/NotionIntegration.cs`. Not production-complete.
 ### Confluence
 
 - **Integration surface:** Atlassian Confluence REST API.
@@ -276,11 +270,10 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 
 ### Jira
 
-- **Integration surface:** Jira Cloud REST API and webhooks.
-- **Required setup / access:** Atlassian OAuth 2.0 (3LO), scopes, site/cloud ID.
-- **Missing implementation:** OAuth; issues/projects/search/transitions; webhook registration/validation; pagination/rate limits/tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
-
+- **Integration surface:** Jira Cloud REST API.
+- **Required setup / access:** Atlassian OAuth 2.0 (3LO), scopes and Atlassian cloud ID.
+- **Implemented / remaining:** Connection probe, JQL issue search and issue creation are implemented. Remaining: OAuth/token refresh, pagination, issue updates/transitions/comments, webhook registration, endpoints/UI and tests.
+- **Code status:** Partial implementation; `services/platform/Daksh.Platform/Integrations/Atlassian/JiraIntegration.cs`. Not production-complete.
 ### Sentry
 
 - **Integration surface:** Sentry API and webhooks.
