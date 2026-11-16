@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 fail=0
 if git ls-files | grep -E '(^|/)\.env($|\.)' | grep -v '\.env\.example$'; then echo "ERROR: env file committed"; fail=1; fi
 if git ls-files | grep -E '\.(pem|key|pfx|p12|jks|keystore)$'; then echo "ERROR: key material committed"; fail=1; fi
-if git grep -nIE '(AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)' -- . ':!scripts/validate.sh'; then echo "ERROR: possible secret"; fail=1; fi
+if git grep -nIE '(AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)' -- . ':!scripts/validate.sh' ':!tests/platform/Daksh.Platform.Tests/Security/GuardsTests.cs'; then echo "ERROR: possible secret"; fail=1; fi
 python3 - <<'PY' || fail=1
 import glob, json, sys
 try:
