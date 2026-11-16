@@ -99,6 +99,9 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<Daksh.Platform.Integrations.Notion.NotionIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
         services.AddHttpClient<Daksh.Platform.Integrations.Atlassian.JiraIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
 
+        services.AddHttpClient<Daksh.Platform.Integrations.Payments.StripeIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<Daksh.Platform.Integrations.Observability.SentryIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+
         services.AddSingleton<Channels.Core.MockChannelAdapter>();
         services.AddSingleton<IChannelAdapter>(sp => sp.GetRequiredService<Channels.Core.MockChannelAdapter>());
         services.AddSingleton<Channels.Core.TelegramChannelAdapter>();
