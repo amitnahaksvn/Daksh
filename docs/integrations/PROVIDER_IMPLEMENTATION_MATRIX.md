@@ -246,17 +246,19 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 
 ### GitHub
 
-- **Integration surface:** GitHub REST/GraphQL APIs and webhooks.
-- **Required setup / access:** GitHub App preferred; app registration, private key, installation permissions and webhook secret.
-- **Missing implementation:** App JWT/install tokens; repo/issues/PRs/actions; webhook signature verification; pagination/rate limits/tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Integration surface:** GitHub REST API.
+- **Required setup / access:** Personal access token for initial connection, or GitHub App installation token for production multi-tenant use.
+- **Implemented in this PR:** Connection probe (`GET /user`), repository listing, open issue listing (excluding pull requests returned by GitHub's shared issues endpoint), issue creation, and open pull-request listing. HTTP client is registered with a fixed GitHub API base URL and API version header.
+- **Missing implementation:** GitHub App JWT/install token lifecycle, OAuth installation flow, webhook signature verification and event routing, pagination cursors, rate-limit/backoff handling, richer Actions/Checks/Projects APIs, encrypted per-account token persistence, API endpoints/UI, and automated integration tests.
+- **Code status:** Partial implementation. See `services/platform/Daksh.Platform/Integrations/DeveloperPlatforms/GitHubIntegration.cs`. Not production-complete.
 
 ### GitLab
 
-- **Integration surface:** GitLab REST/GraphQL APIs and webhooks.
-- **Required setup / access:** OAuth app or project/group access token; instance URL; webhook secret.
-- **Missing implementation:** OAuth; projects/issues/MRs/pipelines; webhook verification; self-managed instance support; tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Integration surface:** GitLab.com REST API v4.
+- **Required setup / access:** Personal, project or group access token with the required API scope. Self-managed GitLab requires a separately configured trusted instance base URL.
+- **Implemented in this PR:** Connection probe, membership project listing, and issue creation by numeric project ID. Token is supplied per call and is not stored by this client.
+- **Missing implementation:** OAuth install flow, token storage/rotation, self-managed host support, merge-request and pipeline operations, webhook signature validation/event routing, cursor pagination, rate-limit handling, API endpoints/UI, and automated tests.
+- **Code status:** Partial implementation. See `services/platform/Daksh.Platform/Integrations/DeveloperPlatforms/GitLabIntegration.cs`. Not production-complete.
 
 ### Bitbucket
 
