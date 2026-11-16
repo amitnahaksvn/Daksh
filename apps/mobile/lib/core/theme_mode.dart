@@ -20,7 +20,8 @@ class ThemeStyleNotifier extends Notifier<String> {
 }
 class AccentColorNotifier extends Notifier<String> {
  static const _key='daksh.accentColor';
+ static bool _valid(String value)=>RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)||['violet','blue','emerald','rose','amber'].contains(value);
  @override String build(){_load();return 'violet';}
- Future<void> _load() async {try{final v=(await SharedPreferences.getInstance()).getString(_key);state=['blue','emerald','rose','amber'].contains(v)?v!:'violet';}catch(_){}}
- Future<void> set(String value) async {if(!['violet','blue','emerald','rose','amber'].contains(value))return;state=value;try{await(await SharedPreferences.getInstance()).setString(_key,value);}catch(_){}}
+ Future<void> _load() async {try{final v=(await SharedPreferences.getInstance()).getString(_key);state=v!=null&&_valid(v)?v:'violet';}catch(_){}}
+ Future<void> set(String value) async {if(!_valid(value))return;state=value.toLowerCase();try{await(await SharedPreferences.getInstance()).setString(_key,state);}catch(_){}}
 }
