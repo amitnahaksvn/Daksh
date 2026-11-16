@@ -4,7 +4,9 @@ using Daksh.Api.Infrastructure;
 using Daksh.Api.Modules;
 using Daksh.Domain;
 using Daksh.Integrations;
+using Daksh.Platform.Security;
 using FluentValidation;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,10 +18,13 @@ builder.Services.AddSingleton(_ => MongoConnection.CreateDatabase(
 builder.Services.AddScoped<IAuditLog, AuditLog>();
 builder.Services.AddSingleton<IEmailSender, GmailEmailSender>();
 builder.Services.AddSingleton<UserTokenService>();
+builder.Services.Configure<SecretProtectorOptions>(builder.Configuration.GetSection("Security:Encryption"));
+builder.Services.AddSingleton<ISecretProtector>(sp => new SecretProtector(sp.GetRequiredService<IOptions<SecretProtectorOptions>>().Value));
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ClaimsPrincipalAccessor>();
 builder.Services.AddDakshIntegrations();
 builder.Services.AddDakshWhatsAppIntegration(builder.Configuration);
+builder.Services.AddGmailIntegration();
 builder.Services.AddSignalR();
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 builder.Services.AddDakshAuth(builder.Configuration, builder.Environment);
@@ -35,6 +40,7 @@ var app = builder.Build();
 
 await AccountModule.EnsureAccountIndexesAsync(app.Services.GetRequiredService<MongoDB.Driver.IMongoDatabase>());
 await IntegrationsModule.EnsureIntegrationIndexesAndCatalogAsync(app.Services.GetRequiredService<MongoDB.Driver.IMongoDatabase>());
+await GmailIntegrationModule.EnsureGmailIndexesAsync(app.Services.GetRequiredService<MongoDB.Driver.IMongoDatabase>());
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
@@ -52,6 +58,7 @@ app.MapTasksAndReminders();
 app.MapPlatform();
 app.MapAccount();
 app.MapIntegrations();
+app.MapGmailIntegration();
 app.MapDashboardApps();
 app.MapHub<IntegrationsHub>("/hubs/integrations").RequireAuthorization(Daksh.Api.Auth.AuthSetup.UserScheme);
 

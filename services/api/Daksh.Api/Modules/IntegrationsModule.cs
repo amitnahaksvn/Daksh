@@ -8,9 +8,8 @@ using MongoDB.Driver;
 
 namespace Daksh.Api.Modules;
 
-// Reusable integration catalogue + per-user connection lifecycle (spec: "Implement WhatsApp Integration in
-// Daksha"). WhatsApp is the first live provider; every other catalogue entry is seeded IsEnabled=false and
-// the UI shows it as "Coming soon" — nothing here fabricates a connection status for an unbuilt provider.
+// Reusable integration catalogue + per-user connection lifecycle. WhatsApp and Gmail are live providers;
+// every other catalogue entry remains disabled until its provider is implemented.
 
 public enum ConnectionStatus { NotConnected, Connecting, Connected, Disconnected, Error }
 
@@ -197,7 +196,7 @@ public static class IntegrationsModule
             ("feishu-lark", "Feishu / Lark", "mono:L", "#3370FF", "Messaging", false),
             ("twitch-chat", "Twitch Chat", "SiTwitch", "#9146FF", "Messaging", false),
             ("sms-twilio", "SMS (Twilio)", "mono:SMS", "#F22F46", "Messaging", false),
-            ("gmail", "Gmail", "SiGmail", "#EA4335", "Email", false),
+            ("gmail", "Gmail", "SiGmail", "#EA4335", "Email", true),
             ("microsoft-outlook", "Microsoft Outlook Mail", "mono:O", "#0078D4", "Email", false),
             ("yahoo-mail", "Yahoo Mail", "mono:Y!", "#6001D2", "Email", false),
             ("zoho-mail", "Zoho Mail", "SiZoho", "#E42527", "Email", false),
@@ -312,6 +311,9 @@ public static class IntegrationsModule
                 .SetOnInsert(c => c.IsEnabled, s.Enabled);
             await catalog.UpdateOneAsync(c => c.IntegrationKey == s.Key, update, new UpdateOptions { IsUpsert = true }, ct);
         }
+
+        await catalog.UpdateOneAsync(c => c.IntegrationKey == "gmail",
+            Builders<IntegrationCatalogEntry>.Update.Set(c => c.IsEnabled, true), cancellationToken: ct);
     }
 
     private static IIntegrationProvider? FindProvider(IEnumerable<IIntegrationProvider> providers, string key) =>

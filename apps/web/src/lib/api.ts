@@ -103,6 +103,17 @@ export type ConnectionStatusDto = {
 export type AppDetail = { catalog: AppCatalogEntry; connection: ConnectionStatusDto | null };
 export type QrResponse = { qr: string | null; expiresAt: string | null; status: string };
 export type ConnectResponse = { connectionId: string; status: string };
+export type GmailAuthorizationResponse = { authorizationUrl: string };
+export type GmailMessageSummary = {
+  id: string;
+  threadId: string;
+  from: string;
+  subject: string;
+  snippet: string;
+  date: string | null;
+};
+export type GmailMessagePage = { messages: GmailMessageSummary[]; nextPageToken: string | null };
+export type GmailMessage = { id: string; from: string; to: string; subject: string; date: string; body: string };
 export type DashboardApp = {
   id: string;
   connectionId: string;
@@ -140,6 +151,16 @@ export const api = {
   appCatalog: () => apiFetch<AppCatalogEntry[]>("/api/integrations"),
   appDetail: (integrationKey: string) => apiFetch<AppDetail>(`/api/integrations/${integrationKey}`),
   connectWhatsApp: () => apiFetch<ConnectResponse>("/api/integrations/whatsapp/connect", { method: "POST" }),
+  connectGmail: () => apiFetch<GmailAuthorizationResponse>("/api/integrations/gmail/connect", { method: "POST" }),
+  gmailMessages: (query: string, pageToken?: string | null) => {
+    const params = new URLSearchParams({ q: query });
+    if (pageToken) params.set("pageToken", pageToken);
+    return apiFetch<GmailMessagePage>(`/api/integrations/gmail/messages?${params.toString()}`);
+  },
+  gmailMessage: (id: string) => apiFetch<GmailMessage>(`/api/integrations/gmail/messages/${encodeURIComponent(id)}`),
+  sendGmailMessage: (message: { to: string; subject: string; body: string }) =>
+    apiFetch<{ messageId: string | null }>("/api/integrations/gmail/messages", json(message)),
+  disconnectGmail: () => apiFetch<{ status: string }>("/api/integrations/gmail/disconnect", { method: "POST" }),
   getQr: (connectionId: string) => apiFetch<QrResponse>(`/api/integrations/${connectionId}/qr`),
   getConnectionStatus: (connectionId: string) => apiFetch<ConnectionStatusDto>(`/api/integrations/${connectionId}/status`),
   reconnectApp: (connectionId: string) => apiFetch<{ status: string }>(`/api/integrations/${connectionId}/reconnect`, { method: "POST" }),

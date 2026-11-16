@@ -4,7 +4,7 @@ import { AppCard, BrandTile } from "@/components/integrations";
 import { Modal } from "@/components/Modal";
 import { ErrorState, Loading, inputClass, tileClass } from "@/components/ui";
 import { WhatsAppConnectPanel } from "@/components/WhatsAppConnectPanel";
-import { api, type AppCatalogEntry } from "@/lib/api";
+import { api, type AppCatalogEntry, type ConnectionStatusValue } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 
 type Priority = "High" | "Medium" | "Low";
@@ -326,6 +326,10 @@ function AppsPageContent({ apps }: { apps: AppCatalogEntry[] }) {
   // the "Coming soon" badge every unbuilt integration gets.
   const { state: whatsAppDetail, reload: reloadWhatsAppDetail } = useApi(() => api.appDetail("whatsapp"));
   const whatsAppStatus = whatsAppDetail.status === "ready" ? (whatsAppDetail.data.connection?.status ?? "NotConnected") : undefined;
+  const { state: gmailDetail } = useApi(() => api.appDetail("gmail"));
+  const gmailStatus: ConnectionStatusValue | undefined = gmailDetail.status === "ready"
+    ? gmailDetail.data.connection?.status ?? "NotConnected"
+    : undefined;
 
   const filtered = apps.filter((a) => {
     if (category !== "All" && category !== "More" && a.category !== category) return false;
@@ -415,7 +419,7 @@ function AppsPageContent({ apps }: { apps: AppCatalogEntry[] }) {
                       app={app}
                       priority={APP_META[app.integrationKey]?.priority ?? "Low"}
                       description={APP_META[app.integrationKey]?.description ?? app.description}
-                      status={app.integrationKey === "whatsapp" ? whatsAppStatus : undefined}
+                      status={app.integrationKey === "whatsapp" ? whatsAppStatus : app.integrationKey === "gmail" ? gmailStatus : undefined}
                       onConfigure={app.integrationKey === "whatsapp" ? () => setWhatsAppOpen(true) : undefined}
                     />
                   ))}
