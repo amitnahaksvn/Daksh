@@ -1,6 +1,6 @@
 "use client";
-import { useSyncExternalStore } from "react";
-import { readAccentPref, readStylePref, readThemePref, setAccentPref, setStylePref, setThemePref, subscribeAppearance, type AccentPref, type StylePref, type ThemePref } from "@/lib/theme";
+import { useState, useSyncExternalStore } from "react";
+import { readAccentPref, readStylePref, readThemePref, setAccentPref, setStylePref, setThemePref, subscribeAppearance, isHexColour, type AccentPref, type StylePref, type ThemePref } from "@/lib/theme";
 const MODES:{value:ThemePref;label:string}[]=[{value:"light",label:"Day"},{value:"dark",label:"Night"},{value:"system",label:"Auto"}];
 const STYLES:{value:StylePref;label:string}[]=[{value:"bento",label:"Bento"},{value:"neural",label:"Neural"},{value:"aurora",label:"Aurora"}];
 const ACCENTS:{value:AccentPref;label:string;color:string}[]=[
@@ -13,10 +13,18 @@ function Segmented<T extends string>({label,options,value,onChange,className=""}
 }
 function AccentPicker(){
  const accent=useSyncExternalStore(subscribeAppearance,readAccentPref,()=>"violet" as AccentPref);
- return <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label="Accent colour">
-  {ACCENTS.map(item=><button key={item.value} type="button" role="radio" aria-checked={accent===item.value} aria-label={item.label} title={item.label} onClick={()=>setAccentPref(item.value)} className={`flex h-8 items-center gap-2 rounded-full border px-2.5 text-xs font-semibold ${accent===item.value?"border-text bg-surface-2":"border-line"}`}>
+ const [hex,setHex]=useState(isHexColour(accent)?accent:"#8B5CF6");
+ return <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Accent colour">
+  {ACCENTS.map(item=><button key={item.value} type="button" aria-pressed={accent===item.value} aria-label={item.label} title={item.label} onClick={()=>setAccentPref(item.value)} className={`flex h-8 items-center gap-2 rounded-full border px-2.5 text-xs font-semibold ${accent===item.value?"border-text bg-surface-2":"border-line"}`}>
    <span className="h-3.5 w-3.5 rounded-full" style={{background:item.color}}/><span className="text-text">{item.label}</span>
   </button>)}
+  <label className="flex h-8 items-center gap-2 rounded-full border border-line px-2.5 text-xs font-semibold text-text">
+   <input aria-label="Choose any accent colour" type="color" value={isHexColour(accent)?accent:hex} onChange={event=>{setHex(event.target.value);setAccentPref(event.target.value)}} className="h-5 w-5 cursor-pointer rounded border-0 bg-transparent p-0"/>
+   Custom
+  </label>
+  <label className="flex items-center gap-1 text-xs text-muted">HEX
+   <input aria-label="Custom HEX colour" value={hex} onChange={event=>{const next=event.target.value;setHex(next);if(isHexColour(next))setAccentPref(next)}} onBlur={()=>{if(!isHexColour(hex))setHex(isHexColour(accent)?accent:"#8B5CF6")}} placeholder="#8B5CF6" maxLength={7} className="w-24 rounded-lg border border-line bg-surface px-2 py-1 font-mono text-text"/>
+  </label>
  </div>;
 }
 export function ThemeToggle({className=""}:{className?:string}){
