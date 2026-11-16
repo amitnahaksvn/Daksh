@@ -11,30 +11,36 @@ class AppTheme {
   static const Color pink = Color(0xFFFFC9D6);
   static const double tileRadius = 22;
 
-  static ThemeData light() => _build(Brightness.light);
-  static ThemeData dark() => _build(Brightness.dark);
-
-  static ThemeData _build(Brightness brightness) {
+  static Color accent(String name) => switch (name) {
+    'blue' => const Color(0xFF3B82F6),
+    'emerald' => const Color(0xFF10B981),
+    'rose' => const Color(0xFFF43F5E),
+    'amber' => const Color(0xFFF59E0B),
+    _ => const Color(0xFF8B5CF6),
+  };
+  static ThemeData light({String style = 'bento', String palette = 'violet'}) => _build(Brightness.light, style, accent(palette));
+  static ThemeData dark({String style = 'bento', String palette = 'violet'}) => _build(Brightness.dark, style, accent(palette));
+  static ThemeData _build(Brightness brightness, String style, Color accentColor) {
     final isDark = brightness == Brightness.dark;
-    final canvas = isDark ? const Color(0xFF111214) : const Color(0xFFECEEF2);
-    final surface = isDark ? const Color(0xFF1B1C20) : Colors.white;
-    final surface2 = isDark ? const Color(0xFF26282D) : const Color(0xFFF4F5F7);
+    final canvas = style == 'neural' ? const Color(0xFF06070F) : style == 'aurora' ? const Color(0xFF0B1020) : isDark ? const Color(0xFF111214) : const Color(0xFFECEEF2);
+    final surface = style == 'neural' ? const Color(0xFF101224) : style == 'aurora' ? const Color(0xFF0F1220) : isDark ? const Color(0xFF1B1C20) : Colors.white;
+    final surface2 = style == 'neural' ? const Color(0xFF202238) : style == 'aurora' ? const Color(0xFF202640) : isDark ? const Color(0xFF26282D) : const Color(0xFFF4F5F7);
     final text = isDark ? const Color(0xFFF2F3F5) : ink;
     final muted = isDark ? const Color(0xFF9A9EA8) : const Color(0xFF5A5D66);
     final border = isDark ? const Color(0x17FFFFFF) : const Color(0x1417181C);
-    final primary = isDark ? lime : ink;
+    final primary = accentColor;
     final onPrimary = isDark ? ink : Colors.white;
 
     final scheme = ColorScheme(
       brightness: brightness,
       primary: primary,
       onPrimary: onPrimary,
-      primaryContainer: isDark ? const Color(0xFF2A3315) : lime,
-      onPrimaryContainer: isDark ? lime : ink,
-      secondary: pink,
+      primaryContainer: accentColor.withValues(alpha: 0.18),
+      onPrimaryContainer: isDark ? Colors.white : accentColor,
+      secondary: accentColor.withValues(alpha: 0.72),
       onSecondary: ink,
-      secondaryContainer: isDark ? const Color(0xFF3A2430) : pink,
-      onSecondaryContainer: isDark ? pink : ink,
+      secondaryContainer: accentColor.withValues(alpha: 0.16),
+      onSecondaryContainer: isDark ? Colors.white : accentColor,
       tertiary: lime,
       onTertiary: ink,
       error: isDark ? const Color(0xFFFFB4AB) : const Color(0xFFB3261E),
@@ -53,7 +59,7 @@ class AppTheme {
       surfaceContainerHighest: isDark ? const Color(0xFF30333A) : const Color(0xFFEAECF0),
       inverseSurface: isDark ? const Color(0xFFF2F3F5) : ink,
       onInverseSurface: isDark ? ink : Colors.white,
-      inversePrimary: isDark ? ink : lime,
+      inversePrimary: accentColor,
       surfaceTint: Colors.transparent,
     );
 
