@@ -7,20 +7,26 @@ final themeStyleProvider = NotifierProvider<ThemeStyleNotifier, String>(ThemeSty
 final accentColorProvider = NotifierProvider<AccentColorNotifier, String>(AccentColorNotifier.new);
 
 class ThemeModeNotifier extends Notifier<ThemeMode> {
- static const _key='daksh.themeMode';
+ static const _key='daksha.themeMode';
  @override ThemeMode build(){_load();return ThemeMode.system;}
  Future<void> _load() async {try{final v=(await SharedPreferences.getInstance()).getString(_key);state=switch(v){'light'=>ThemeMode.light,'dark'=>ThemeMode.dark,_=>ThemeMode.system};}catch(_){}}
  Future<void> set(ThemeMode mode) async {state=mode;try{await(await SharedPreferences.getInstance()).setString(_key,mode.name);}catch(_){}}
 }
 class ThemeStyleNotifier extends Notifier<String> {
- static const _key='daksh.themeStyle';
+ static const _key='daksha.themeStyle';
  @override String build(){_load();return 'bento';}
  Future<void> _load() async {try{final v=(await SharedPreferences.getInstance()).getString(_key);state=v=='neural'||v=='aurora'?v!:'bento';}catch(_){}}
  Future<void> set(String value) async {if(!['bento','neural','aurora'].contains(value))return;state=value;try{await(await SharedPreferences.getInstance()).setString(_key,value);}catch(_){}}
 }
 class AccentColorNotifier extends Notifier<String> {
- static const _key='daksh.accentColor';
+ static const _key='daksha.accentColor';
  @override String build(){_load();return 'violet';}
- Future<void> _load() async {try{final v=(await SharedPreferences.getInstance()).getString(_key);state=['blue','emerald','rose','amber'].contains(v)?v!:'violet';}catch(_){}}
- Future<void> set(String value) async {if(!['violet','blue','emerald','rose','amber'].contains(value))return;state=value;try{await(await SharedPreferences.getInstance()).setString(_key,value);}catch(_){}}
+ Future<void> _load() async {try{final v=(await SharedPreferences.getInstance()).getString(_key);state=v??'violet';}catch(_){}}
+ Future<void> set(String value) async {
+  final preset=['violet','blue','emerald','rose','amber'].contains(value);
+  final custom=RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value);
+  if(!preset&&!custom)return;
+  state=custom?value.toUpperCase():value;
+  try{await(await SharedPreferences.getInstance()).setString(_key,state);}catch(_){}
+ }
 }
