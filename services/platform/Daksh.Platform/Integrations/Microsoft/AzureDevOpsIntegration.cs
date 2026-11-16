@@ -23,8 +23,8 @@ public sealed class AzureDevOpsIntegration(HttpClient http)
             $"_apis/projects?$top=1&api-version={ApiVersion}");
         using var response = await http.SendAsync(request, ct);
         await EnsureSuccess(response, ct);
-        var projects = await response.Content.ReadFromJsonAsync<AzureDevOpsPage<AzureDevOpsProject>>(Json, ct);
-        return new(true, organization, projects?.Count ?? 0);
+        var projects = await ReadPageAsync<AzureDevOpsProject>(response, ct);
+        return new(true, organization, projects.Count);
     }
 
     public async Task<AzureDevOpsPage<AzureDevOpsProject>> ListProjectsAsync(
@@ -38,8 +38,7 @@ public sealed class AzureDevOpsIntegration(HttpClient http)
         using var request = CreateRequest(organization, token, isPersonalAccessToken, HttpMethod.Get, path);
         using var response = await http.SendAsync(request, ct);
         await EnsureSuccess(response, ct);
-        return await response.Content.ReadFromJsonAsync<AzureDevOpsPage<AzureDevOpsProject>>(Json, ct)
-            ?? new([], 0, null);
+        return await ReadPageAsync<AzureDevOpsProject>(response, ct);
     }
 
     public async Task<IReadOnlyList<AzureDevOpsRepository>> ListRepositoriesAsync(
@@ -101,6 +100,14 @@ public sealed class AzureDevOpsIntegration(HttpClient http)
         await EnsureSuccess(response, ct);
         return await response.Content.ReadFromJsonAsync<AzureDevOpsWorkItem>(Json, ct)
             ?? throw new InvalidOperationException("Azure DevOps returned an empty work item.");
+    }
+
+    private static async Task<AzureDevOpsPage<T>> ReadPageAsync<T>(HttpResponseMessage response, CancellationToken ct)
+    {
+        var page = await response.Content.ReadFromJsonAsync<AzureDevOpsPage<T>>(Json, ct);
+        response.Headers.TryGetValues("x-ms-continuationtoken", out var values);
+        var continuationToken = values?.FirstOrDefault() ?? page?.ContinuationToken;
+        return new(page?.Value ?? [], page?.Count ?? 0, continuationToken);
     }
 
     private static HttpRequestMessage CreateRequest(
