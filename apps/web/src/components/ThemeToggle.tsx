@@ -1,6 +1,6 @@
 "use client";
-import { useSyncExternalStore } from "react";
-import { readAccentPref, readStylePref, readThemePref, setAccentPref, setStylePref, setThemePref, subscribeAppearance, type AccentPref, type StylePref, type ThemePref } from "@/lib/theme";
+import { useSyncExternalStore, useState } from "react";
+import { readAccentPref, readCustomAccent, readStylePref, readThemePref, setAccentPref, setCustomAccent, setStylePref, setThemePref, subscribeAppearance, type AccentPref, type StylePref, type ThemePref } from "@/lib/theme";
 const MODES:{value:ThemePref;label:string}[]=[{value:"light",label:"Day"},{value:"dark",label:"Night"},{value:"system",label:"Auto"}];
 const STYLES:{value:StylePref;label:string}[]=[{value:"bento",label:"Bento"},{value:"neural",label:"Neural"},{value:"aurora",label:"Aurora"}];
 const ACCENTS:{value:AccentPref;label:string;color:string}[]=[
@@ -9,14 +9,23 @@ const ACCENTS:{value:AccentPref;label:string;color:string}[]=[
  {value:"amber",label:"Amber",color:"#F59E0B"},
 ];
 function Segmented<T extends string>({label,options,value,onChange,className=""}:{label:string;options:{value:T;label:string}[];value:T;onChange:(v:T)=>void;className?:string}){
- return <div role="radiogroup" aria-label={label} className={`inline-flex rounded-full bg-surface-2 p-1 ${className}`}>{options.map(option=><button key={option.value} type="button" role="radio" aria-checked={value===option.value} onClick={()=>onChange(option.value)} className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${value===option.value?"bg-accent text-accent-contrast":"text-muted hover:text-text"}`}>{option.label}</button>)}</div>;
+ return <div role="radiogroup" aria-label={label} className={`inline-flex rounded-full bg-surface-2 p-1 ${className}`}>{options.map(o=><button key={o.value} type="button" role="radio" aria-checked={value===o.value} onClick={()=>onChange(o.value)} className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${value===o.value?"bg-accent text-accent-contrast":"text-muted hover:text-text"}`}>{o.label}</button>)}</div>;
 }
 function AccentPicker(){
  const accent=useSyncExternalStore(subscribeAppearance,readAccentPref,()=>"violet" as AccentPref);
- return <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label="Accent colour">
-  {ACCENTS.map(item=><button key={item.value} type="button" role="radio" aria-checked={accent===item.value} aria-label={item.label} title={item.label} onClick={()=>setAccentPref(item.value)} className={`flex h-8 items-center gap-2 rounded-full border px-2.5 text-xs font-semibold ${accent===item.value?"border-text bg-surface-2":"border-line"}`}>
+ const custom=useSyncExternalStore(subscribeAppearance,readCustomAccent,()=>" #8B5CF6".trim());
+ const [hex,setHex]=useState(custom);
+ return <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Accent colour">
+  {ACCENTS.map(item=><button key={item.value} type="button" aria-pressed={accent===item.value} aria-label={item.label} title={item.label} onClick={()=>setAccentPref(item.value)} className={`flex h-8 items-center gap-2 rounded-full border px-2.5 text-xs font-semibold ${accent===item.value?"border-text bg-surface-2":"border-line"}`}>
    <span className="h-3.5 w-3.5 rounded-full" style={{background:item.color}}/><span className="text-text">{item.label}</span>
   </button>)}
+  <label className="flex h-8 items-center gap-2 rounded-full border border-line bg-surface px-2.5 text-xs font-semibold text-text">
+   <input aria-label="Choose any accent colour" type="color" value={/^#[0-9a-fA-F]{6}$/.test(hex)?hex:"#8B5CF6"} onChange={e=>{setHex(e.target.value);setCustomAccent(e.target.value)}} className="h-5 w-5 cursor-pointer rounded border-0 bg-transparent p-0"/>
+   <span>Custom</span>
+  </label>
+  <label className="flex items-center gap-1 text-xs text-muted">HEX
+   <input aria-label="Custom accent HEX value" value={hex} onChange={e=>setHex(e.target.value)} onBlur={()=>{if(/^#[0-9a-fA-F]{6}$/.test(hex))setCustomAccent(hex)}} onKeyDown={e=>{if(e.key==="Enter"&&/^#[0-9a-fA-F]{6}$/.test(hex))setCustomAccent(hex)}} placeholder="#8B5CF6" maxLength={7} className="w-20 rounded-lg border border-line bg-surface px-2 py-1 font-mono text-text"/>
+  </label>
  </div>;
 }
 export function ThemeToggle({className=""}:{className?:string}){
