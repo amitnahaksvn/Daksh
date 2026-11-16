@@ -361,3 +361,18 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 [data-style="neural"][data-accent] { --accent:var(--palette); --accent-gradient:linear-gradient(120deg,var(--palette),#22D3EE); --orb-c:var(--palette); }
 [data-style="aurora"][data-accent] { --accent:var(--palette); --accent-gradient:linear-gradient(120deg,var(--palette),#6D28D9 55%,#A855F7); --orb-c:var(--palette); }
 [data-accent] :focus-visible { outline-color:var(--palette); }
+
+
+/* Custom user-selected accent colour (validated #RRGGBB by lib/theme.ts). */
+:root[style*="--custom-accent"] {
+  --palette: var(--custom-accent);
+  --accent: var(--custom-accent);
+  --orb-a: var(--custom-accent);
+  --orb-b: color-mix(in srgb, var(--custom-accent), white 28%);
+  --orb-glow: color-mix(in srgb, var(--custom-accent), transparent 55%);
+}
+:root[style*="--custom-accent"][data-style="neural"],
+:root[style*="--custom-accent"][data-style="aurora"] {
+  --accent-gradient: linear-gradient(120deg, var(--custom-accent), #6D28D9 58%, #A855F7);
+}
+:root[style*="--custom-accent"] .bg-accent { background: var(--accent-gradient, var(--custom-accent)); }
