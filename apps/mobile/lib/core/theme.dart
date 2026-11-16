@@ -28,7 +28,7 @@ class AppTheme {
     final text = isDark ? const Color(0xFFF2F3F5) : ink;
     final muted = isDark ? const Color(0xFF9A9EA8) : const Color(0xFF5A5D66);
     final border = isDark ? const Color(0x17FFFFFF) : const Color(0x1417181C);
-    final primary = style == 'bento' && !isDark ? ink : accentColor;
+    final primary = accentColor;
     final onPrimary = isDark ? ink : Colors.white;
 
     final scheme = ColorScheme(
