@@ -4,8 +4,9 @@
 .NET SDK 10 (`global.json` pins the feature band), Node.js 22+, Docker, Flutter stable (mobile). Copy `.env.example` to `.env`.
 
 ## Database
-`docker compose up -d postgres` then see `infrastructure/database/README.md` for migrations. Connection string:
-`ConnectionStrings__Daksh`.
+MongoDB (a remote Atlas cluster) -- nothing to run locally. Set `MONGO_CONNECTION_STRING` and `MONGO_DATABASE`
+in `.env`; `scripts/dev.sh` loads them into `Mongo__ConnectionString`/`Mongo__Database` for the API process.
+See `docs/POSTGRES_LEGACY.md` for the retired PostgreSQL/EF Core setup this replaced.
 
 ## API
 `./scripts/dev.sh` -> http://localhost:5080. Health: `/health/live`, `/health/ready`. OpenAPI: `/openapi/v1.json` (non-production).
@@ -13,7 +14,7 @@ Auth: `Auth__Mode=Development` (local only) or `Jwt` with `Auth__Authority`/`Aut
 Clients may send `X-Dev-User: <name>` in Development to act as different users.
 
 ## Worker
-`dotnet run --project services/worker/Daksh.Worker` (needs the same connection string; the API/migrations must have created the schema).
+`dotnet run --project services/worker/Daksh.Worker` (needs `Mongo__ConnectionString`/`Mongo__Database` set in its environment).
 
 ## Web
 ```bash
@@ -31,6 +32,5 @@ flutter run --dart-define=API_URL=http://10.0.2.2:5080 --dart-define=DEV_USER=de
 iOS builds need macOS + Xcode. Flutter is not run in Docker.
 
 ## Tests
-`./scripts/test.sh`, or `dotnet test Daksh.sln` (set `DAKSH_TEST_POSTGRES="Host=localhost;Database=daksh_test;Username=daksh;Password=change-me"`
-to include the real-PostgreSQL migration test, which drops and recreates the named database).
+`./scripts/test.sh`, or `dotnet test Daksh.sln`.
 `./scripts/validate.sh` checks for committed secrets and config validity.

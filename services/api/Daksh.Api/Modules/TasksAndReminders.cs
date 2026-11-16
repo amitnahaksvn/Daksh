@@ -1,9 +1,6 @@
-using System.Text.Json;
 using Daksh.Api.Auth;
 using Daksh.Api.Infrastructure;
-using Daksh.Domain;
 using FluentValidation;
-using Microsoft.EntityFrameworkCore;
 
 namespace Daksh.Api.Modules;
 
@@ -27,65 +24,29 @@ public sealed class CreateReminderValidator : AbstractValidator<CreateReminderRe
     }
 }
 
+// Pending MongoDB rebuild: previously persisted tasks/reminders/jobs via DakshDbContext.
 public static class TasksModule
 {
     public static void MapTasksAndReminders(this IEndpointRouteBuilder app)
     {
         var t = app.MapGroup("/api/v1/tasks").RequireAuthorization().WithTags("Tasks");
 
-        t.MapGet("/", async (HttpContext http, DakshDbContext db, CancellationToken ct) =>
-        {
-            var u = http.User.UserId();
-            return Results.Ok(await db.Tasks.Where(x => x.UserId == u).OrderBy(x => x.CreatedAt)
-                .Select(x => new TaskDto(x.Id, x.Title, x.DueAt, x.Completed)).ToListAsync(ct));
-        });
+        t.MapGet("/", (HttpContext http) =>
+            Results.Problem(statusCode: 501, title: "Tasks are unavailable: pending MongoDB rebuild."));
 
-        t.MapPost("/", async (CreateTaskRequest req, HttpContext http, DakshDbContext db, IAuditLog audit, CancellationToken ct) =>
-        {
-            var u = http.User.UserId();
-            var task = new TaskItem { UserId = u, Title = req.Title!, DueAt = req.DueAt };
-            db.Tasks.Add(task);
-            audit.Record(u, "task.create", nameof(TaskItem), task.Id.ToString());
-            await db.SaveChangesAsync(ct);
-            return Results.Created($"/api/v1/tasks/{task.Id}", new TaskDto(task.Id, task.Title, task.DueAt, task.Completed));
-        }).Validate<CreateTaskRequest>();
+        t.MapPost("/", (CreateTaskRequest req, HttpContext http) =>
+            Results.Problem(statusCode: 501, title: "Tasks are unavailable: pending MongoDB rebuild.")).Validate<CreateTaskRequest>();
 
-        t.MapPost("/{id:guid}/complete", async (Guid id, HttpContext http, DakshDbContext db, IAuditLog audit, CancellationToken ct) =>
-        {
-            var u = http.User.UserId();
-            var task = await db.Tasks.FirstOrDefaultAsync(x => x.Id == id && x.UserId == u, ct);
-            if (task is null) return Results.NotFound();
-            task.Completed = true;
-            audit.Record(u, "task.complete", nameof(TaskItem), id.ToString());
-            await db.SaveChangesAsync(ct);
-            return Results.Ok(new TaskDto(task.Id, task.Title, task.DueAt, task.Completed));
-        });
+        t.MapPost("/{id:guid}/complete", (Guid id, HttpContext http) =>
+            Results.Problem(statusCode: 501, title: "Tasks are unavailable: pending MongoDB rebuild."));
 
         var r = app.MapGroup("/api/v1/reminders").RequireAuthorization().WithTags("Reminders");
 
-        r.MapGet("/", async (HttpContext http, DakshDbContext db, CancellationToken ct) =>
-        {
-            var u = http.User.UserId();
-            return Results.Ok(await db.Reminders.Where(x => x.UserId == u).OrderBy(x => x.RemindAt)
-                .Select(x => new ReminderDto(x.Id, x.Text, x.RemindAt)).ToListAsync(ct));
-        });
+        r.MapGet("/", (HttpContext http) =>
+            Results.Problem(statusCode: 501, title: "Reminders are unavailable: pending MongoDB rebuild."));
 
         // Creating a reminder also enqueues a durable job; the worker delivers the notification at RemindAt.
-        r.MapPost("/", async (CreateReminderRequest req, HttpContext http, DakshDbContext db, IAuditLog audit, CancellationToken ct) =>
-        {
-            var u = http.User.UserId();
-            var reminder = new Reminder { UserId = u, Text = req.Text!, RemindAt = req.RemindAt };
-            db.Reminders.Add(reminder);
-            db.Jobs.Add(new Job
-            {
-                Type = JobTypes.ReminderDue,
-                IdempotencyKey = $"reminder:{reminder.Id}",
-                RunAt = req.RemindAt,
-                Payload = JsonSerializer.Serialize(new { reminderId = reminder.Id })
-            });
-            audit.Record(u, "reminder.create", nameof(Reminder), reminder.Id.ToString());
-            await db.SaveChangesAsync(ct);
-            return Results.Created($"/api/v1/reminders/{reminder.Id}", new ReminderDto(reminder.Id, reminder.Text, reminder.RemindAt));
-        }).Validate<CreateReminderRequest>();
+        r.MapPost("/", (CreateReminderRequest req, HttpContext http) =>
+            Results.Problem(statusCode: 501, title: "Reminders are unavailable: pending MongoDB rebuild.")).Validate<CreateReminderRequest>();
     }
 }

@@ -11,7 +11,7 @@ under the user's control. This monorepo holds every component.
 | Worker | `services/worker` | .NET Worker Service |
 | AI core (LLM/RAG/ML orchestration) | `services/ai` | .NET, Microsoft.Extensions.AI |
 | Integrations (adapters) | `services/integrations` | .NET |
-| Shared domain/data | `services/shared` | EF Core, PostgreSQL |
+| Shared domain/data | `services/shared` | MongoDB.Driver, MongoDB Atlas |
 
 Tests live in `tests/` (plus colocated web/mobile unit tests), infrastructure in `infrastructure/`, docs in `docs/`.
 
@@ -21,14 +21,13 @@ Tests live in `tests/` (plus colocated web/mobile unit tests), infrastructure in
 
 ## Prerequisites
 
-.NET SDK 10, Node.js 22+, Docker (for PostgreSQL), Flutter stable (mobile only).
+.NET SDK 10, Node.js 22+, Flutter stable (mobile only). MongoDB is a remote Atlas cluster -- nothing to install locally.
 
 ## Quick start
 
 ```bash
-cp .env.example .env
-docker compose up -d postgres
-./scripts/dev.sh                      # API on http://localhost:5080 (applies migrations in Development)
+cp .env.example .env   # fill in MONGO_CONNECTION_STRING / MONGO_DATABASE
+./scripts/dev.sh                      # API on http://localhost:5080
 dotnet run --project services/worker/Daksh.Worker   # in another terminal
 cd apps/web && cp .env.example .env.local && npm ci && npm run dev    # http://localhost:3000
 cd apps/mobile && flutter run --dart-define=API_URL=http://10.0.2.2:5080 --dart-define=DEV_USER=dev-user

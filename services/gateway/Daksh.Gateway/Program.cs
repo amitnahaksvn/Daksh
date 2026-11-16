@@ -2,13 +2,9 @@ using System.Text;
 using Daksh.Gateway.Auth;
 using Daksh.Gateway.Hubs;
 using Daksh.Gateway.Modules;
+using Daksh.Domain;
 using Daksh.Platform;
-using Daksh.Platform.Data;
-using Daksh.Platform.Identity;
-using Daksh.Platform.Runtime;
-using Daksh.Platform.Tools;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -65,7 +61,7 @@ builder.Services.AddSingleton<Daksh.Platform.Runtime.IExecutionEventSink, Signal
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks()
-    .AddDbContextCheck<PlatformDbContext>("postgres", tags: ["ready"]);
+    .AddCheck<MongoHealthCheck>("mongodb", tags: ["ready"]);
 
 builder.Services.AddOpenTelemetry()
     .ConfigureResource(r => r.AddService("daksh-gateway"))
@@ -107,20 +103,8 @@ app.MapDevices();
 app.MapHub<GatewayHub>("/hubs/gateway");
 app.MapHub<Daksh.Gateway.Hubs.NodeHub>("/hubs/node");
 
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<PlatformDbContext>();
-    db.Tenant.SetSystem();
-    if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup")) await db.Database.MigrateAsync();
-
-    // Seed the permission catalog: RolePermissions has a foreign key to this table, so every permission a
-    // built-in role template grants (see Daksh.Platform.Identity.Permissions) must exist here first.
-    var existingPermissions = await db.Permissions.Select(p => p.Key).ToListAsync();
-    foreach (var key in Daksh.Platform.Identity.Permissions.All.Keys.Except(existingPermissions))
-        db.Permissions.Add(new Daksh.Platform.Domain.Permission { Key = key, Description = Daksh.Platform.Identity.Permissions.All[key] });
-    await db.SaveChangesAsync();
-    await scope.ServiceProvider.GetRequiredService<ToolRegistry>().SyncDefinitionsAsync(db, scope.ServiceProvider, CancellationToken.None);
-}
+// Permission-catalog seeding and tool-definition sync are pending MongoDB rebuild (previously ran
+// against PlatformDbContext here).
 
 app.Run();
 

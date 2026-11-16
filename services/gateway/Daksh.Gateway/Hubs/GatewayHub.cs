@@ -1,4 +1,3 @@
-using Daksh.Platform.Data;
 using Daksh.Platform.Runtime;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
@@ -7,14 +6,10 @@ namespace Daksh.Gateway.Hubs;
 
 /// <summary>Real-time surface: clients join a session group to receive its run events (text, tool activity, approvals).</summary>
 [Authorize]
-public sealed class GatewayHub(PlatformDbContext db) : Hub
+public sealed class GatewayHub : Hub
 {
-    public async Task JoinSession(Guid sessionId)
-    {
-        var session = await db.Sessions.FindAsync(sessionId);
-        if (session is null) throw new HubException("Session not found or not accessible.");
-        await Groups.AddToGroupAsync(Context.ConnectionId, GroupName(session.WorkspaceId, sessionId));
-    }
+    // Pending MongoDB rebuild: previously looked up the session via PlatformDbContext.Sessions.
+    public Task JoinSession(Guid sessionId) => throw new HubException("Sessions are unavailable: pending MongoDB rebuild.");
 
     public Task LeaveSession(Guid workspaceId, Guid sessionId) => Groups.RemoveFromGroupAsync(Context.ConnectionId, GroupName(workspaceId, sessionId));
 

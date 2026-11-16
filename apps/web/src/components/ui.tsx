@@ -56,3 +56,32 @@ export const secondaryButtonClass =
   "inline-flex items-center justify-center rounded-full border border-line bg-surface px-5 py-2.5 text-sm font-semibold text-text transition-colors hover:bg-surface-2";
 export const inputClass =
   "w-full rounded-2xl border border-line bg-surface-2 px-4 py-2.5 text-sm text-text placeholder:text-muted";
+/** Appended to `inputClass` (or `selectClass`) to flag an invalid field with a red border. */
+export const errorInputClass = "!border-danger";
+
+/** A `<select>` styled to match `inputClass`, with its own chevron (native dropdown arrows don't follow the theme). */
+export function Select({
+  invalid,
+  className = "",
+  children,
+  ...props
+}: React.SelectHTMLAttributes<HTMLSelectElement> & { invalid?: boolean }) {
+  return (
+    <div className="relative">
+      <select
+        {...props}
+        className={`${inputClass} appearance-none pr-10 ${props.value ? "" : "text-muted"} ${invalid ? errorInputClass : ""} ${className}`}
+      >
+        {children}
+      </select>
+      <svg
+        aria-hidden
+        viewBox="0 0 16 16"
+        fill="none"
+        className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
+      >
+        <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </div>
+  );
+}

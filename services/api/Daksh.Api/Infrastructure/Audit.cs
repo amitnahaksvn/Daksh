@@ -1,18 +1,12 @@
-using Daksh.Domain;
-
 namespace Daksh.Api.Infrastructure;
 
 public interface IAuditLog
 {
-    /// <summary>Stages an audit event on the current DbContext; persisted by the caller's SaveChanges so it commits atomically with the change.</summary>
+    /// <summary>Records an audit event. Pending MongoDB rebuild: previously staged on DakshDbContext.AuditEvents.</summary>
     void Record(string userId, string action, string? entityType = null, string? entityId = null, string? detail = null);
 }
 
-public sealed class AuditLog(DakshDbContext db) : IAuditLog
+public sealed class AuditLog : IAuditLog
 {
-    public void Record(string userId, string action, string? entityType = null, string? entityId = null, string? detail = null) =>
-        db.AuditEvents.Add(new AuditEvent
-        {
-            UserId = userId, Action = action, EntityType = entityType, EntityId = entityId, Detail = detail
-        });
+    public void Record(string userId, string action, string? entityType = null, string? entityId = null, string? detail = null) { }
 }

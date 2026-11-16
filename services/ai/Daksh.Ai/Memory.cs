@@ -13,7 +13,7 @@ public interface IMemoryStore
 }
 
 /// <summary>
-/// Reference implementation: embeddings + cosine similarity in process. Production target is PostgreSQL + pgvector
+/// Reference implementation: embeddings + cosine similarity in process. Production target is MongoDB
 /// behind the same interface (see docs/AI_ARCHITECTURE.md).
 /// </summary>
 public sealed class InMemoryVectorMemoryStore(IEmbeddingGenerator<string, Embedding<float>> embedder) : IMemoryStore

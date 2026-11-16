@@ -1,3 +1,4 @@
+using Daksh.Domain;
 using Daksh.Platform.Automation;
 using Daksh.Platform.Channels;
 using Daksh.Platform.Data;
@@ -24,8 +25,9 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddDakshPlatform(this IServiceCollection services, IConfiguration config)
     {
         services.AddScoped<TenantContext>();
-        services.AddDbContext<PlatformDbContext>((sp, o) =>
-            DesignTimeFactory.Configure(o, config.GetConnectionString("Platform") ?? throw new InvalidOperationException("ConnectionStrings:Platform is required.")));
+        services.AddSingleton(_ => MongoConnection.CreateDatabase(
+            config["Mongo:ConnectionString"] ?? throw new InvalidOperationException("Mongo:ConnectionString (Mongo__ConnectionString) is required."),
+            config["Mongo:Database"] ?? throw new InvalidOperationException("Mongo:Database (Mongo__Database) is required.")));
 
         services.Configure<SecretProtectorOptions>(config.GetSection("Security:Encryption"));
         services.Configure<StorageOptions>(config.GetSection("Storage"));

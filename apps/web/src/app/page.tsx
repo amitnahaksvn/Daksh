@@ -25,7 +25,7 @@ export default function Home() {
         </p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <Link href="/login" className={`${buttonClass} px-6 py-3 text-base`}>Sign in</Link>
-          <Link href="/dashboard" className={`${secondaryButtonClass} px-6 py-3 text-base`}>Open dashboard</Link>
+          <Link href="/register" className={`${secondaryButtonClass} px-6 py-3 text-base`}>Create account</Link>
         </div>
       </section>
       <ul className="mt-3 grid gap-3 sm:grid-cols-2">

@@ -1,30 +1,40 @@
 using Daksh.Api.Auth;
+using Daksh.Api.Hubs;
 using Daksh.Api.Infrastructure;
 using Daksh.Api.Modules;
 using Daksh.Domain;
 using Daksh.Integrations;
 using FluentValidation;
-using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Logging.AddJsonConsole(o => { o.IncludeScopes = true; o.UseUtcTimestamp = true; });
 
-builder.Services.AddDbContext<DakshDbContext>(o =>
-    o.UseNpgsql(builder.Configuration.GetConnectionString("Daksh")));
+builder.Services.AddSingleton(_ => MongoConnection.CreateDatabase(
+    builder.Configuration["Mongo:ConnectionString"] ?? throw new InvalidOperationException("Mongo:ConnectionString (Mongo__ConnectionString) is required."),
+    builder.Configuration["Mongo:Database"] ?? throw new InvalidOperationException("Mongo:Database (Mongo__Database) is required.")));
 builder.Services.AddScoped<IAuditLog, AuditLog>();
+builder.Services.AddSingleton<IEmailSender, GmailEmailSender>();
+builder.Services.AddSingleton<UserTokenService>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ClaimsPrincipalAccessor>();
 builder.Services.AddDakshIntegrations();
+builder.Services.AddDakshWhatsAppIntegration(builder.Configuration);
+builder.Services.AddSignalR();
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 builder.Services.AddDakshAuth(builder.Configuration, builder.Environment);
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddOpenApi();
-builder.Services.AddHealthChecks().AddDbContextCheck<DakshDbContext>("postgres", tags: ["ready"]);
+builder.Services.AddHealthChecks().AddCheck<MongoHealthCheck>("mongodb", tags: ["ready"]);
 builder.Services.AddCors(o => o.AddDefaultPolicy(p => p
     .WithOrigins(builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [])
     .AllowAnyHeader().AllowAnyMethod()));
 
 var app = builder.Build();
+
+await AccountModule.EnsureAccountIndexesAsync(app.Services.GetRequiredService<MongoDB.Driver.IMongoDatabase>());
+await IntegrationsModule.EnsureIntegrationIndexesAndCatalogAsync(app.Services.GetRequiredService<MongoDB.Driver.IMongoDatabase>());
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
@@ -40,12 +50,10 @@ app.MapHealthChecks("/health/ready", new() { Predicate = r => r.Tags.Contains("r
 app.MapAssistant();
 app.MapTasksAndReminders();
 app.MapPlatform();
-
-if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup") && app.Environment.IsDevelopment())
-{
-    using var scope = app.Services.CreateScope();
-    scope.ServiceProvider.GetRequiredService<DakshDbContext>().Database.Migrate();
-}
+app.MapAccount();
+app.MapIntegrations();
+app.MapDashboardApps();
+app.MapHub<IntegrationsHub>("/hubs/integrations").RequireAuthorization(Daksh.Api.Auth.AuthSetup.UserScheme);
 
 app.Run();
 

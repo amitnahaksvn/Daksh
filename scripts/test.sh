@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run all test suites available on this machine. Set DAKSH_TEST_POSTGRES to also run the real-PostgreSQL migration test.
+# Run all test suites available on this machine.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 dotnet test Daksh.sln

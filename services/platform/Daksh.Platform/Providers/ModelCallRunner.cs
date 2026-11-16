@@ -1,8 +1,6 @@
-using Daksh.Platform.Data;
 using Daksh.Platform.Domain;
 using Daksh.Platform.Providers;
 using Daksh.Platform.Security;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace Daksh.Platform.Providers;
@@ -15,8 +13,10 @@ public sealed class NoEligibleModelException(string message) : Exception(message
 /// Resolves "provider/model" references to a configured provider + model + live credential, runs the streaming
 /// call with credential rotation and retry, and records usage/cost. This is the one place every caller (agent
 /// runtime, memory embeddings, media tools) goes through, so usage tracking and failover are never duplicated.
+/// Provider/credential lookup (<see cref="ResolveAsync"/>) is pending MongoDB rebuild — previously queried
+/// PlatformDbContext.ModelProviders.
 /// </summary>
-public sealed class ModelCallRunner(PlatformDbContext db, ProviderRegistry registry, ISecretProtector secrets, Redactor redactor, ILogger<ModelCallRunner> logger)
+public sealed class ModelCallRunner(ISecretProtector secrets, Redactor redactor, ILogger<ModelCallRunner> logger)
 {
     public static (string Provider, string Model) Split(string modelRef)
     {
@@ -25,19 +25,8 @@ public sealed class ModelCallRunner(PlatformDbContext db, ProviderRegistry regis
         return (modelRef[..i], modelRef[(i + 1)..]);
     }
 
-    public async Task<ResolvedModel> ResolveAsync(Guid workspaceId, string modelRef, CancellationToken ct)
-    {
-        var (providerName, modelId) = Split(modelRef);
-        var provider = await db.ModelProviders.Include(p => p.Credentials).Include(p => p.Models)
-            .FirstOrDefaultAsync(p => p.WorkspaceId == workspaceId && p.Name == providerName && p.Enabled, ct)
-            ?? throw new NoEligibleModelException($"Provider '{providerName}' is not configured or is disabled.");
-        var model = provider.Models.FirstOrDefault(m => m.ModelId == modelId && m.Enabled)
-            ?? throw new NoEligibleModelException($"Model '{modelId}' is not configured on provider '{providerName}'.");
-        if (!registry.Supports(provider.Kind))
-            throw new NoEligibleModelException($"No adapter is registered for provider kind '{provider.Kind}'.");
-        var credential = PickCredential(provider.Credentials);
-        return new ResolvedModel(provider, model, credential, registry.Get(provider.Kind));
-    }
+    public Task<ResolvedModel> ResolveAsync(Guid workspaceId, string modelRef, CancellationToken ct) =>
+        throw new NotImplementedException("Model provider resolution is unavailable: pending MongoDB rebuild.");
 
     private static ProviderCredential? PickCredential(IReadOnlyList<ProviderCredential> credentials)
     {
@@ -123,7 +112,7 @@ public sealed class ModelCallRunner(PlatformDbContext db, ProviderRegistry regis
             }
             if (current is ChatCompleted completed)
             {
-                if (credential is not null) { credential.LastUsedAt = DateTimeOffset.UtcNow; credential.ErrorCount = 0; await db.SaveChangesAsync(ct); }
+                if (credential is not null) { credential.LastUsedAt = DateTimeOffset.UtcNow; credential.ErrorCount = 0; }
                 yield return completed;
                 yield break;
             }
@@ -131,7 +120,7 @@ public sealed class ModelCallRunner(PlatformDbContext db, ProviderRegistry regis
         }
     }
 
-    private async Task RecordFailureAsync(ModelProvider provider, ProviderCredential? credential, ProviderException ex, CancellationToken ct)
+    private Task RecordFailureAsync(ModelProvider provider, ProviderCredential? credential, ProviderException ex, CancellationToken ct)
     {
         logger.LogWarning(ex, "Provider {Provider} call failed ({Kind})", provider.Name, ex.Kind);
         provider.HealthStatus = ex.Kind is ProviderErrorKind.Auth or ProviderErrorKind.Billing ? "down" : "degraded";
@@ -150,7 +139,7 @@ public sealed class ModelCallRunner(PlatformDbContext db, ProviderRegistry regis
             credential.CooldownUntil = DateTimeOffset.UtcNow.Add(cooldown);
             credential.DisabledReason = ex.Message;
         }
-        await db.SaveChangesAsync(ct);
+        return Task.CompletedTask;
     }
 
     public async Task<(IReadOnlyList<float[]> Vectors, Usage Usage)> EmbedAsync(Guid workspaceId, string modelRef, IReadOnlyList<string> inputs, CancellationToken ct)

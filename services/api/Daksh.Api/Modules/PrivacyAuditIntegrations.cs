@@ -1,9 +1,6 @@
-using Daksh.Api.Auth;
 using Daksh.Api.Infrastructure;
-using Daksh.Domain;
 using Daksh.Integrations;
 using FluentValidation;
-using Microsoft.EntityFrameworkCore;
 
 namespace Daksh.Api.Modules;
 
@@ -20,41 +17,18 @@ public static class PlatformModules
 {
     public static void MapPlatform(this IEndpointRouteBuilder app)
     {
-        // Privacy and memory are opt-in: defaults are everything off.
+        // Privacy and audit-events: pending MongoDB rebuild (previously backed by DakshDbContext).
         var p = app.MapGroup("/api/v1/privacy").RequireAuthorization().WithTags("Privacy");
 
-        p.MapGet("/", async (HttpContext http, DakshDbContext db, CancellationToken ct) =>
-        {
-            var u = http.User.UserId();
-            var s = await db.PrivacySettings.FindAsync([u], ct);
-            return Results.Ok(s is null ? new PrivacySettingsDto(false, false, 90)
-                : new PrivacySettingsDto(s.MemoryEnabled, s.AllowProviderDataSharing, s.RetentionDays));
-        });
+        p.MapGet("/", (HttpContext http) =>
+            Results.Problem(statusCode: 501, title: "Privacy settings are unavailable: pending MongoDB rebuild."));
 
-        p.MapPut("/", async (PrivacySettingsDto req, HttpContext http, DakshDbContext db, IAuditLog audit, CancellationToken ct) =>
-        {
-            var u = http.User.UserId();
-            var s = await db.PrivacySettings.FindAsync([u], ct);
-            if (s is null) db.PrivacySettings.Add(s = new PrivacySettings { UserId = u });
-            s.MemoryEnabled = req.MemoryEnabled;
-            s.AllowProviderDataSharing = req.AllowProviderDataSharing;
-            s.RetentionDays = req.RetentionDays;
-            s.UpdatedAt = DateTimeOffset.UtcNow;
-            audit.Record(u, "privacy.update", nameof(PrivacySettings), u,
-                $"memory={req.MemoryEnabled};share={req.AllowProviderDataSharing};retention={req.RetentionDays}");
-            await db.SaveChangesAsync(ct);
-            return Results.Ok(req);
-        }).Validate<PrivacySettingsDto>();
+        p.MapPut("/", (PrivacySettingsDto req, HttpContext http) =>
+            Results.Problem(statusCode: 501, title: "Privacy settings are unavailable: pending MongoDB rebuild.")).Validate<PrivacySettingsDto>();
 
-        app.MapGet("/api/v1/audit-events", async (HttpContext http, DakshDbContext db, int? take, CancellationToken ct) =>
-        {
-            var u = http.User.UserId();
-            var n = Math.Clamp(take ?? 50, 1, 200);
-            return Results.Ok(await db.AuditEvents.Where(a => a.UserId == u)
-                .OrderByDescending(a => a.OccurredAt).Take(n)
-                .Select(a => new AuditEventDto(a.Id, a.Action, a.EntityType, a.EntityId, a.Detail, a.OccurredAt))
-                .ToListAsync(ct));
-        }).RequireAuthorization().WithTags("Audit");
+        app.MapGet("/api/v1/audit-events", (HttpContext http, int? take) =>
+            Results.Problem(statusCode: 501, title: "Audit events are unavailable: pending MongoDB rebuild."))
+            .RequireAuthorization().WithTags("Audit");
 
         app.MapGet("/api/v1/integrations", (IServiceProvider sp) =>
                 Results.Ok(sp.DescribeIntegrations()

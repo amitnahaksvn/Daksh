@@ -4,14 +4,7 @@ import { usePathname } from "next/navigation";
 
 export const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard" },
-  { href: "/assistant", label: "Assistant" },
-  { href: "/tasks", label: "Tasks" },
-  { href: "/reminders", label: "Reminders" },
-  { href: "/email", label: "Email" },
-  { href: "/calendar", label: "Calendar" },
-  { href: "/integrations", label: "Integrations" },
-  { href: "/privacy", label: "Privacy & memory" },
-  { href: "/activity", label: "Activity" },
+  { href: "/apps", label: "Apps" },
 ];
 
 export function AppNav() {

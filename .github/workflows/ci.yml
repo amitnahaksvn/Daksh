@@ -10,15 +10,6 @@ permissions:
 jobs:
   dotnet:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:17
-        env: { POSTGRES_USER: daksh, POSTGRES_PASSWORD: ci-only-password, POSTGRES_DB: daksh }
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U daksh" --health-interval 5s --health-retries 10
-    env:
-      DAKSH_TEST_POSTGRES: Host=localhost;Database=daksh_test;Username=daksh;Password=ci-only-password
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
