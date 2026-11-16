@@ -6,7 +6,7 @@ This register covers every requested provider plus the 13 additional messaging p
 
 - Telegram and Slack have adapter source files in this PR.
 - The other 13 messaging providers currently have configuration scaffolding only; they do not yet have complete provider adapters.
-- Partial connector clients now also exist for GitHub, GitLab.com, Google Calendar, Microsoft Graph, Notion, Jira Cloud, Stripe, Sentry, Linear, Trello, Dropbox, Asana, Box, Zoom, Google Drive, Calendly, Azure DevOps, Confluence and Airtable. These are not production-complete; see each provider entry below.
+- Partial connector clients now also exist for GitHub, GitLab.com, Google Calendar, Google Sheets, Microsoft Graph, Notion, Jira Cloud, Stripe, Sentry, Linear, Trello, Dropbox, Asana, Box, Zoom, Google Drive, Calendly, Azure DevOps, Confluence, Airtable and Bitbucket Cloud. These are not production-complete; see each provider entry below.
 - Existing channel persistence/session routing is still blocked by the MongoDB channel-service/outbox TODOs. Live credentials and provider sandbox accounts have not been supplied, so no live connection is claimed.
 - All credentials must be stored in a secret store or encrypted database fields. Never commit live secrets or echo them in management APIs.
 
@@ -632,3 +632,11 @@ Some providers require app review, partner onboarding, paid plans, organization 
 - **Integration surface:** Confluence Cloud REST API v2.
 - **Implemented / remaining:** Atlassian email/API-token Basic authentication supplied per call; connection probe; cursor-aware space listing; page listing filtered by space/title; page creation using storage-format body content. Remaining: Atlassian OAuth 2.0 authorization/refresh and secure credential storage, pagination-link continuation helper, CQL search, page get/update/delete, attachments/comments, webhooks/event strategy, rate-limit/retry handling, API/UI and automated tests.
 - **Code status:** Partial client; `services/platform/Daksh.Platform/Integrations/Atlassian/ConfluenceIntegration.cs`. Not production-complete.
+
+
+### Google Sheets
+
+- **Integration surface:** Google Sheets API v4.
+- **Required setup / access:** Google Cloud OAuth client, consent screen, Sheets scopes and user consent.
+- **Implemented / remaining:** Spreadsheet metadata/probe, read values, update values, append rows and create spreadsheets are implemented. Remaining: OAuth consent/refresh-token lifecycle, batch operations, formatting/structure APIs, Drive file permissions/sharing, change notifications, encrypted account storage, API/UI and automated tests.
+- **Code status:** Partial implementation; `services/platform/Daksh.Platform/Integrations/Google/GoogleSheetsIntegration.cs`. Registered with the platform HTTP client factory; not production-complete.
