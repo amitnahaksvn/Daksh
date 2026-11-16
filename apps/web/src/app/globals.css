@@ -61,7 +61,10 @@
   --color-pink: var(--pink);
   --color-on-tint: var(--on-tint);
   --color-danger: var(--danger);
-  --color-danger-bg: var(--danger-bg);\n  --color-card: var(--card, var(--surface));\n  --color-success: var(--success, #22c55e);\n  --color-warning: var(--warning, #f59e0b);
+  --color-danger-bg: var(--danger-bg);
+  --color-card: var(--card, var(--surface));
+  --color-success: var(--success, #22c55e);
+  --color-warning: var(--warning, #f59e0b);
 }
 
 body {
