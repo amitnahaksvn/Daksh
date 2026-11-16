@@ -6,7 +6,7 @@ This register covers every requested provider plus the 13 additional messaging p
 
 - Telegram and Slack have adapter source files in this PR.
 - The other 13 messaging providers currently have configuration scaffolding only; they do not yet have complete provider adapters.
-- Partial connector clients now also exist for GitHub, GitLab.com, Google Calendar, Microsoft Graph, Notion, Jira Cloud, Stripe, Sentry, Linear, Trello, Dropbox, Asana, Box, Zoom, Google Drive, Calendly and Azure DevOps. These are not production-complete; see each provider entry below.
+- Partial connector clients now also exist for GitHub, GitLab.com, Google Calendar, Microsoft Graph, Notion, Jira Cloud, Stripe, Sentry, Linear, Trello, Dropbox, Asana, Box, Zoom, Google Drive, Calendly, Azure DevOps and Confluence. These are not production-complete; see each provider entry below.
 - Existing channel persistence/session routing is still blocked by the MongoDB channel-service/outbox TODOs. Live credentials and provider sandbox accounts have not been supplied, so no live connection is claimed.
 - All credentials must be stored in a secret store or encrypted database fields. Never commit live secrets or echo them in management APIs.
 
@@ -628,3 +628,10 @@ Some providers require app review, partner onboarding, paid plans, organization 
 - **Integration surface:** Azure DevOps Services REST API 7.1 (Core Projects, Git Repositories and Work Item Tracking).
 - **Implemented / remaining:** PAT Basic authentication or caller-supplied Entra bearer token; connection probe; project listing with continuation-token support; repository listing; WIQL work-item query; work-item retrieval; work-item creation using JSON Patch. Remaining: Entra OAuth acquisition/refresh and consent flow, secure credential storage, builds/pipelines/releases, pull-request and branch operations, work-item updates/comments/attachments, service-hook registration and validation, retry/rate-limit policy, API/UI and automated tests.
 - **Code status:** Partial client; `services/platform/Daksh.Platform/Integrations/Microsoft/AzureDevOpsIntegration.cs`. Tokens are passed per call and are not persisted by this client. Not production-complete.
+
+
+### Confluence Cloud
+
+- **Integration surface:** Confluence Cloud REST API v2.
+- **Implemented / remaining:** Atlassian email/API-token Basic authentication supplied per call; connection probe; cursor-aware space listing; page listing filtered by space/title; page creation using storage-format body content. Remaining: Atlassian OAuth 2.0 authorization/refresh and secure credential storage, pagination-link continuation helper, CQL search, page get/update/delete, attachments/comments, webhooks/event strategy, rate-limit/retry handling, API/UI and automated tests.
+- **Code status:** Partial client; `services/platform/Daksh.Platform/Integrations/Atlassian/ConfluenceIntegration.cs`. Not production-complete.
