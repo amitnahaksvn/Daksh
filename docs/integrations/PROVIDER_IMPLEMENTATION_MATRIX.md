@@ -87,7 +87,13 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 - **Implemented / remaining:** Bearer-token user probe, scheduled-meeting listing with page-token support, and meeting creation are implemented. Remaining: OAuth/Server-to-Server OAuth token lifecycle, webhook signature validation and event processing, meeting update/delete/registrants/recordings, durable credential storage, API/UI and automated tests.
 - **Code status:** Partial client; `services/platform/Daksh.Platform/Integrations/Meetings/ZoomIntegration.cs`. Not production-complete.
 
+
 ### Calendly
+
+- **Integration surface:** Calendly API v2.
+- **Implemented / remaining:** Bearer-token user probe, event-type listing, scheduled-event listing with page-token support and time/status filters, and scheduled-event cancellation are implemented. Remaining: OAuth authorization/refresh lifecycle, webhook subscription and signature verification/event routing, invitee lookup and Scheduling API booking, durable credential storage, API/UI and automated tests.
+- **Code status:** Partial client; `services/platform/Daksh.Platform/Integrations/Meetings/CalendlyIntegration.cs`. Not production-complete.
+
 
 - **Integration surface:** Calendly API and webhooks.
 - **Required setup / access:** OAuth/personal access token, event and user scopes, webhook subscription.
