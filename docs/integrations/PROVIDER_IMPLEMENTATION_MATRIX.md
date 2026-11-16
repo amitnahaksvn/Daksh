@@ -134,6 +134,19 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 - **Required setup / access:** Entra app registration, Sites/Files permissions and tenant admin consent.
 - **Implemented / remaining:** SharePoint site search is implemented. Remaining: list/document operations, permissions, delta sync, OAuth lifecycle, endpoints/UI and tests.
 - **Code status:** Partial implementation; `services/platform/Daksh.Platform/Integrations/Microsoft/MicrosoftGraphIntegration.cs`. Not production-complete.
+
+### Asana
+
+- **Integration surface:** Asana REST API.
+- **Implemented / remaining:** Bearer-token account probe, task listing with offset support, and task creation are implemented. Remaining: OAuth authorization/refresh lifecycle, webhook registration and validation, task update/completion/comments, pagination metadata, durable credential storage, API/UI and automated tests.
+- **Code status:** Partial client; `services/platform/Daksh.Platform/Integrations/ProjectManagement/AsanaIntegration.cs`. Not production-complete.
+
+### Box
+
+- **Integration surface:** Box API v2.
+- **Implemented / remaining:** Account probe, folder item listing with offset pagination, and folder creation are implemented. Remaining: OAuth lifecycle, file upload/download, file/folder operations and permissions, webhook/delta sync, durable credential storage, API/UI and automated tests.
+- **Code status:** Partial client; `services/platform/Daksh.Platform/Integrations/Storage/BoxIntegration.cs`. Not production-complete.
+
 ### Dropbox
 
 - **Integration surface:** Dropbox API v2.
