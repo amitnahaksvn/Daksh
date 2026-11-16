@@ -111,6 +111,7 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<Daksh.Platform.Integrations.Meetings.CalendlyIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
         services.AddHttpClient<Daksh.Platform.Integrations.Microsoft.AzureDevOpsIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
         services.AddHttpClient<Daksh.Platform.Integrations.Atlassian.ConfluenceIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<Daksh.Platform.Integrations.Data.AirtableIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
 
         services.AddSingleton<Channels.Core.MockChannelAdapter>();
         services.AddSingleton<IChannelAdapter>(sp => sp.GetRequiredService<Channels.Core.MockChannelAdapter>());
