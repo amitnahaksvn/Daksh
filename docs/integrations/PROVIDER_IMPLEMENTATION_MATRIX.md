@@ -80,6 +80,13 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 - **Missing implementation:** Choose supported device-side vs CalDAV architecture; permission UX; event CRUD/sync; recurrence/timezone tests.
 - **Code status:** Not implemented; this section is a gap register, not a working connector.
 
+
+### Zoom
+
+- **Integration surface:** Zoom REST API v2.
+- **Implemented / remaining:** Bearer-token user probe, scheduled-meeting listing with page-token support, and meeting creation are implemented. Remaining: OAuth/Server-to-Server OAuth token lifecycle, webhook signature validation and event processing, meeting update/delete/registrants/recordings, durable credential storage, API/UI and automated tests.
+- **Code status:** Partial client; `services/platform/Daksh.Platform/Integrations/Meetings/ZoomIntegration.cs`. Not production-complete.
+
 ### Calendly
 
 - **Integration surface:** Calendly API and webhooks.
