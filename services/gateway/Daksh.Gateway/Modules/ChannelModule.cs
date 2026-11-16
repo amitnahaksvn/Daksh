@@ -38,14 +38,15 @@ public static class ChannelModule
     /// <summary>Public provider webhooks. Message persistence/agent routing is handled by ChannelService once its MongoDB implementation is restored.</summary>
     public static void MapProviderChannelWebhooks(this IEndpointRouteBuilder app)
     {
-        MapProviderWebhook(app, "telegram", "/api/v1/webhooks/telegram", "Channels:Telegram", "BotToken", "WebhookSecretToken", "telegram");
-        MapProviderWebhook(app, "slack", "/api/v1/webhooks/slack", "Channels:Slack", "BotToken", "SigningSecret", "slack");
+        var config = app.ServiceProvider.GetRequiredService<IConfiguration>();
+        MapProviderWebhook(app, config["Channels:Telegram:WebhookPath"] ?? "/api/v1/webhooks/telegram", "telegram", "Channels:Telegram", "BotToken", "WebhookSecretToken", "telegram");
+        MapProviderWebhook(app, config["Channels:Slack:WebhookPath"] ?? "/api/v1/webhooks/slack", "slack", "Channels:Slack", "BotToken", "SigningSecret", "slack");
     }
 
-    private static void MapProviderWebhook(IEndpointRouteBuilder app, string kind, string defaultPath, string section,
+    private static void MapProviderWebhook(IEndpointRouteBuilder app, string path, string kind, string section,
         string tokenKey, string secretKey, string adapterKind)
     {
-        app.MapPost(defaultPath, async (HttpContext http, IConfiguration config, IHttpClientFactory clients,
+        app.MapPost(path, async (HttpContext http, IConfiguration config, IHttpClientFactory clients,
             IEnumerable<Daksh.Platform.Channels.IChannelAdapter> adapters, ILoggerFactory logs) =>
         {
             var settings = config.GetSection(section);
