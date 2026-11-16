@@ -40,7 +40,7 @@ class _AppearanceMenu extends ConsumerWidget {
     switch(parts[0]){
      case 'mode': ref.read(themeModeProvider.notifier).set(ThemeMode.values.firstWhere((m)=>m.name==parts[1],orElse:()=>ThemeMode.system));
      case 'style': ref.read(themeStyleProvider.notifier).set(parts[1]);
-     case 'accent': ref.read(accentColorProvider.notifier).set(parts[1]);
+     case 'accent': if(parts[1]=='custom'){_pickCustom(context,ref);}else{ref.read(accentColorProvider.notifier).set(parts[1]);}
     }
    },
    itemBuilder:(_)=>[
