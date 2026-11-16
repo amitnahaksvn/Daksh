@@ -6,7 +6,7 @@ This register covers every requested provider plus the 13 additional messaging p
 
 - Telegram and Slack have adapter source files in this PR.
 - The other 13 messaging providers currently have configuration scaffolding only; they do not yet have complete provider adapters.
-- Partial connector clients now also exist for GitHub, GitLab.com, Google Calendar, Microsoft Graph, Notion, Jira Cloud, Stripe, Sentry, Linear, Trello, Dropbox, Asana, Box, Zoom, Google Drive, Calendly, Azure DevOps and Confluence. These are not production-complete; see each provider entry below.
+- Partial connector clients now also exist for GitHub, GitLab.com, Google Calendar, Microsoft Graph, Notion, Jira Cloud, Stripe, Sentry, Linear, Trello, Dropbox, Asana, Box, Zoom, Google Drive, Calendly, Azure DevOps, Confluence and Airtable. These are not production-complete; see each provider entry below.
 - Existing channel persistence/session routing is still blocked by the MongoDB channel-service/outbox TODOs. Live credentials and provider sandbox accounts have not been supplied, so no live connection is claimed.
 - All credentials must be stored in a secret store or encrypted database fields. Never commit live secrets or echo them in management APIs.
 
@@ -196,10 +196,9 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 
 ### Airtable
 
-- **Integration surface:** Airtable Web API.
-- **Required setup / access:** Personal access token or OAuth app; base/table scopes.
-- **Missing implementation:** OAuth/PAT; schema discovery; records CRUD; pagination; rate limits; webhook creation/refresh; tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Integration surface:** Airtable Web API and Metadata API.
+- **Implemented / remaining:** PAT supplied per call; connection probe; accessible-base listing; record listing with offset pagination and formula/view filters; record create, patch/replace update and delete. Remaining: table/schema metadata, batch operations, webhook creation/renewal and payload processing, retry/rate-limit handling, API/UI and automated tests.
+- **Code status:** Partial client; `services/platform/Daksh.Platform/Integrations/Data/AirtableIntegration.cs`. Not production-complete.
 
 ### Facebook Pages
 
