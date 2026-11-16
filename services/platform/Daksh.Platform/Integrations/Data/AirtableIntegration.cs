@@ -29,7 +29,7 @@ public sealed class AirtableIntegration(HttpClient http)
         using var request = CreateRequest(token, HttpMethod.Get, uri);
         using var response = await http.SendAsync(request, ct);
         await EnsureSuccess(response, ct);
-        return await response.Content.ReadFromJsonAsync<AirtablePage<AirtableBase>>(Json, ct) ?? new([], null);
+        return await response.Content.ReadFromJsonAsync<AirtableBasePage>(Json, ct) ?? new([], null);
     }
 
     public async Task<AirtablePage<AirtableRecord>> ListRecordsAsync(
@@ -49,7 +49,7 @@ public sealed class AirtableIntegration(HttpClient http)
         using var request = CreateRequest(token, HttpMethod.Get, uri);
         using var response = await http.SendAsync(request, ct);
         await EnsureSuccess(response, ct);
-        return await response.Content.ReadFromJsonAsync<AirtablePage<AirtableRecord>>(Json, ct) ?? new([], null);
+        return await response.Content.ReadFromJsonAsync<AirtableRecordPage>(Json, ct) ?? new([], null);
     }
 
     public async Task<AirtableRecord> CreateRecordAsync(
@@ -131,8 +131,11 @@ public sealed class AirtableIntegration(HttpClient http)
 
 public sealed record AirtableConnection(bool Connected, string? UserId, IReadOnlyList<string> Scopes);
 public sealed record AirtableWhoAmI(string? Id, IReadOnlyList<string>? Scopes);
-public sealed record AirtablePage<T>(
-    [property: JsonPropertyName("records")] IReadOnlyList<T>? Records,
+public sealed record AirtableBasePage(
+    [property: JsonPropertyName("bases")] IReadOnlyList<AirtableBase>? Bases,
+    [property: JsonPropertyName("offset")] string? Offset);
+public sealed record AirtableRecordPage(
+    [property: JsonPropertyName("records")] IReadOnlyList<AirtableRecord>? Records,
     [property: JsonPropertyName("offset")] string? Offset);
 public sealed record AirtableBase(string Id, string Name, string PermissionLevel);
 public sealed record AirtableRecord(
