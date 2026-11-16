@@ -33,8 +33,7 @@ class _AppearanceMenu extends ConsumerWidget {
   final selected=await showDialog<String>(context:context,builder:(context)=>AlertDialog(
    title:const Text('Custom accent colour'),
    content:TextField(controller:controller,autocorrect:false,enableSuggestions:false,maxLength:7,
-    decoration:const InputDecoration(labelText:'HEX colour',hintText:'#8B5CF6',prefixText:'# is included'),
-    onChanged:(value){},
+    decoration:const InputDecoration(labelText:'HEX colour',hintText:'#8B5CF6',helperText:'Enter a six-digit value such as #8B5CF6'),
    ),
    actions:[TextButton(onPressed:()=>Navigator.pop(context),child:const Text('Cancel')),
     FilledButton(onPressed:(){final value=controller.text.trim();if(RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)){Navigator.pop(context,value);}else{ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Enter a valid HEX value such as #8B5CF6')));}},child:const Text('Apply'))],
