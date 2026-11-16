@@ -286,19 +286,17 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 - **Missing implementation:** OAuth install flow, token storage/rotation, self-managed host support, merge-request and pipeline operations, webhook signature validation/event routing, cursor pagination, rate-limit handling, API endpoints/UI, and automated tests.
 - **Code status:** Partial implementation. See `services/platform/Daksh.Platform/Integrations/DeveloperPlatforms/GitLabIntegration.cs`. Not production-complete.
 
-### Bitbucket
+### Bitbucket Cloud
 
-- **Integration surface:** Bitbucket Cloud REST API and webhooks.
-- **Required setup / access:** Atlassian OAuth consumer or supported workspace/repository token.
-- **Missing implementation:** OAuth; repos/PRs/issues/pipelines; webhook verification; workspace permissions; tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Integration surface:** Bitbucket Cloud REST API 2.0.
+- **Implemented / remaining:** Username/token Basic authentication supplied per call; connection probe; repository listing; pull-request listing by state; issue listing and issue creation; pagination via provider next URLs with host/path validation. Remaining: OAuth/token lifecycle, branch/commit operations, pull-request creation/review/merge, pipelines, webhook verification/event processing, rate-limit/retry handling, API/UI and automated tests.
+- **Code status:** Partial client; `services/platform/Daksh.Platform/Integrations/DeveloperPlatforms/BitbucketIntegration.cs`. Not production-complete.
 
 ### Azure DevOps
 
-- **Integration surface:** Azure DevOps REST APIs and service hooks.
-- **Required setup / access:** Microsoft Entra OAuth app or supported PAT; organization and scopes.
-- **Missing implementation:** OAuth; projects/repos/work items/pipelines; service hook validation; pagination/API versioning/tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Integration surface:** Azure DevOps Services REST API 7.1.
+- **Implemented / remaining:** PAT Basic authentication or caller-supplied Entra bearer token; connection probe; project listing with continuation-token support; repository listing; WIQL work-item query; work-item retrieval and creation. Remaining: Entra token acquisition/refresh, builds/pipelines/releases, pull-request/branch operations, work-item updates/comments/attachments, service-hook validation/event processing, retry/rate-limit handling, API/UI and automated tests.
+- **Code status:** Partial client; `services/platform/Daksh.Platform/Integrations/Microsoft/AzureDevOpsIntegration.cs`. Not production-complete.
 
 ### Jira
 
