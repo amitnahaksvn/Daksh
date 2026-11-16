@@ -6,7 +6,7 @@ This register covers every requested provider plus the 13 additional messaging p
 
 - Telegram and Slack have adapter source files in this PR.
 - The other 13 messaging providers currently have configuration scaffolding only; they do not yet have complete provider adapters.
-- The requested productivity, storage, social, developer, cloud, commerce, finance, maps/travel, smart-home and automation providers below are not implemented in code by this register.
+- Partial connector clients now also exist for GitHub, GitLab.com, Google Calendar, Microsoft Graph, Notion, Jira Cloud, Stripe, Sentry, Linear, Trello and Dropbox. These are not production-complete; see each provider entry below.
 - Existing channel persistence/session routing is still blocked by the MongoDB channel-service/outbox TODOs. Live credentials and provider sandbox accounts have not been supplied, so no live connection is claimed.
 - All credentials must be stored in a secret store or encrypted database fields. Never commit live secrets or echo them in management APIs.
 
@@ -274,6 +274,25 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 - **Required setup / access:** Atlassian OAuth 2.0 (3LO), scopes and Atlassian cloud ID.
 - **Implemented / remaining:** Connection probe, JQL issue search and issue creation are implemented. Remaining: OAuth/token refresh, pagination, issue updates/transitions/comments, webhook registration, endpoints/UI and tests.
 - **Code status:** Partial implementation; `services/platform/Daksh.Platform/Integrations/Atlassian/JiraIntegration.cs`. Not production-complete.
+
+### Linear
+
+- **Integration surface:** Linear GraphQL API.
+- **Implemented / remaining:** OAuth bearer-token connection probe, issue listing with cursor metadata and issue creation are implemented. Remaining: OAuth authorization/refresh lifecycle, webhook registration and signature verification, richer issue/team/project operations, durable credential storage, API/UI and automated tests.
+- **Code status:** Partial client; `services/platform/Daksh.Platform/Integrations/DeveloperPlatforms/LinearIntegration.cs`. Not production-complete.
+
+### Trello
+
+- **Integration surface:** Trello REST API.
+- **Implemented / remaining:** OAuth bearer-token connection probe, board/list/card listing and card creation are implemented. Remaining: OAuth authorization lifecycle, webhooks, card updates/comments/moves, pagination/rate-limit handling, durable credential storage, API/UI and automated tests.
+- **Code status:** Partial client; `services/platform/Daksh.Platform/Integrations/ProjectManagement/TrelloIntegration.cs`. Not production-complete.
+
+### Dropbox
+
+- **Integration surface:** Dropbox API v2.
+- **Implemented / remaining:** Current-account probe, folder listing with cursor continuation, folder creation and streaming file upload are implemented. Remaining: OAuth PKCE/refresh-token lifecycle, download/share/move/delete, upload sessions for large files, webhook/delta sync, durable credential storage, API/UI and automated tests.
+- **Code status:** Partial client; `services/platform/Daksh.Platform/Integrations/Storage/DropboxIntegration.cs`. Not production-complete.
+
 ### Sentry
 
 - **Integration surface:** Sentry API and webhooks.
