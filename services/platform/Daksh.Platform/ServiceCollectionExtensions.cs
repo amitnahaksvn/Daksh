@@ -84,6 +84,10 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<Channels.Core.MockChannelAdapter>();
         services.AddSingleton<IChannelAdapter>(sp => sp.GetRequiredService<Channels.Core.MockChannelAdapter>());
+        services.AddSingleton<Channels.Core.TelegramChannelAdapter>();
+        services.AddSingleton<IChannelAdapter>(sp => sp.GetRequiredService<Channels.Core.TelegramChannelAdapter>());
+        services.AddSingleton<Channels.Core.SlackChannelAdapter>();
+        services.AddSingleton<IChannelAdapter>(sp => sp.GetRequiredService<Channels.Core.SlackChannelAdapter>());
         services.AddScoped<ChannelService>();
         services.AddHostedService<ChannelOutboxWorker>();
 
