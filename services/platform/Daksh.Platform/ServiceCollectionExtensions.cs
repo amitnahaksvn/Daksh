@@ -108,6 +108,7 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<Daksh.Platform.Integrations.Automation.N8nIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
         services.AddHttpClient<Daksh.Platform.Integrations.Cloud.CloudflareIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
         services.AddHttpClient<Daksh.Platform.Integrations.Cloud.VercelIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<Daksh.Platform.Integrations.Cloud.SupabaseIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
         services.AddHttpClient<Daksh.Platform.Integrations.Payments.StripeIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
         services.AddHttpClient<Daksh.Platform.Integrations.Observability.SentryIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
         services.AddHttpClient<Daksh.Platform.Integrations.DeveloperPlatforms.LinearIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
