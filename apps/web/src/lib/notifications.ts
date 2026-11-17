@@ -9,7 +9,7 @@ import { getIntegrationsHub } from "@/lib/signalr";
 export type AppNotification = {
   id: string;
   connectionId: string;
-  integrationKey: "whatsapp";
+  integrationKey: "whatsapp" | "telegram";
   isGroup: boolean;
   tags?: string[];
   priority?: boolean;
@@ -19,7 +19,7 @@ export type AppNotification = {
   read: boolean;
 };
 
-const MAX_NOTIFICATIONS = 30;
+const MAX_NOTIFICATIONS = 200;
 let notifications: AppNotification[] = [];
 let started = false;
 const startedAt = Date.now();
@@ -91,6 +91,24 @@ export function startNotifications(): void {
       if (payload.desktop) showDesktop(title, payload.preview ?? "New message");
     },
   );
+  hub.on("TelegramMessageReceived", (payload: { connectionId: string; chatName?: string; isGroup?: boolean; preview?: string; timestamp?: string; notify?: boolean; tags?: string[]; priority?: boolean; sound?: boolean; desktop?: boolean }) => {
+    if (payload.notify === false) return;
+    const who = payload.chatName ?? "a contact";
+    addNotification({
+      id: `tg:${payload.connectionId}:${payload.timestamp ?? Date.now()}`,
+      connectionId: payload.connectionId,
+      integrationKey: "telegram",
+      isGroup: payload.isGroup ?? false,
+      tags: payload.tags,
+      priority: payload.priority,
+      title: payload.isGroup ? `Telegram group — ${who}` : `Telegram — ${who}`,
+      body: payload.preview ?? "",
+      createdAt: payload.timestamp ?? new Date().toISOString(),
+      read: false,
+    });
+    if (payload.sound) playChime();
+    if (payload.desktop) showDesktop(payload.isGroup ? `Telegram group — ${who}` : `Telegram — ${who}`, payload.preview ?? "New message");
+  });
   hub.on("WhatsAppReminderDue", (payload: { connectionId: string; chatName?: string; text: string; dueAt?: string }) => {
     addNotification({
       id: `reminder:${payload.connectionId}:${payload.dueAt ?? Date.now()}:${payload.text}`,

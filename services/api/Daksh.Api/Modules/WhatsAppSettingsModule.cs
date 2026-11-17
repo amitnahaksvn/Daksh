@@ -20,6 +20,9 @@ public sealed class WhatsAppSettings
     public string ActiveHoursStart { get; set; } = "09:00";
     public string ActiveHoursEnd { get; set; } = "18:00";
     public string Timezone { get; set; } = "UTC";
+    /// <summary>Days of the week (0 = Sunday … 6 = Saturday) the active-hours window applies to. Auto-reply is
+    /// skipped (or answered with the out-of-hours message) on any other day. Defaults to every day.</summary>
+    public List<int> ActiveDays { get; set; } = [0, 1, 2, 3, 4, 5, 6];
     /// <summary>Separate from IntegrationConnection.NotificationsEnabled (incoming) — stored for now but not
     /// yet wired into a live push; see docs/integrations/whatsapp/limitations.md.</summary>
     public bool OutgoingNotificationsEnabled { get; set; }
@@ -54,6 +57,9 @@ public sealed class WhatsAppSettings
     public string? CustomMessage { get; set; }
     public int ResponseDelaySeconds { get; set; }
     public int CooldownSeconds { get; set; }
+    /// <summary>When several messages arrive in a chat within this many seconds of each other, wait for them to
+    /// stop and send one reply covering all of them. 0 = reply to every message separately.</summary>
+    public int BatchWindowSeconds { get; set; } = 5;
     public bool RequireApproval { get; set; }
 
     // AI Behaviour
@@ -118,18 +124,18 @@ public sealed class WhatsAppPendingReply
     public DateTime CreatedAt { get; set; }
 }
 
-public sealed record GeneralSettingsDto(bool Paused, bool OperateContinuously, string ActiveHoursStart, string ActiveHoursEnd, string Timezone, bool IncomingNotificationsEnabled, bool OutgoingNotificationsEnabled);
+public sealed record GeneralSettingsDto(bool Paused, bool OperateContinuously, string ActiveHoursStart, string ActiveHoursEnd, string Timezone, IReadOnlyList<int> ActiveDays, bool IncomingNotificationsEnabled, bool OutgoingNotificationsEnabled);
 public sealed record MonitoringSettingsDto(bool MonitorPersonal, bool MonitorGroups, bool MonitorImages, bool MonitorDocuments, bool MonitorAudio, bool MonitorVideos, bool MonitorLinks, bool MonitorLocation, bool MonitorCalls, bool MonitorSavedContacts, bool MonitorUnknownNumbers, bool MonitorBusiness);
-public sealed record AutoReplySettingsDto(bool Enabled, bool InGroups, string Scope, bool CustomMessageEnabled, string? CustomMessage, int ResponseDelaySeconds, int CooldownSeconds, bool RequireApproval, IReadOnlyList<string> AllowedChats, IReadOnlyList<string> BlockedChats, string? OutsideHoursMessage, string? BusinessMessage);
+public sealed record AutoReplySettingsDto(bool Enabled, bool InGroups, string Scope, bool CustomMessageEnabled, string? CustomMessage, int ResponseDelaySeconds, int CooldownSeconds, bool RequireApproval, IReadOnlyList<string> AllowedChats, IReadOnlyList<string> BlockedChats, string? OutsideHoursMessage, string? BusinessMessage, int BatchWindowSeconds);
 public sealed record AiBehaviourSettingsDto(string Personality, string? CustomPersonality, string ResponseLength, string? CustomInstructions, string? NeverRespondTopics, bool UseConversationContext, int ContextRetentionMessages, bool ReplyInSenderLanguage, bool SummarizeLongConversations, bool AiSignatureEnabled, string? AiSignatureText);
 public sealed record PrivacySectionDto(bool HideMessagePreviews, int MessageRetentionDays, bool AllowMessageContentAsAiContext, IReadOnlyList<string> AiExcludedChats);
 public sealed record NotificationSettingsDto(string Scope, IReadOnlyList<string> Tags, bool Email, bool WhatsAppSelf, bool Desktop, bool Sound);
 public sealed record IntelligenceSettingsDto(IReadOnlyList<string> DisabledTags);
 public sealed record WhatsAppFullSettingsDto(string ConnectionId, string AccountIdentifier, string Status, GeneralSettingsDto General, MonitoringSettingsDto Monitoring, AutoReplySettingsDto AutoReply, AiBehaviourSettingsDto AiBehaviour, PrivacySectionDto Privacy, NotificationSettingsDto Notifications, IntelligenceSettingsDto Intelligence);
 
-public sealed record UpdateGeneralSettingsRequest(bool? Paused, bool? OperateContinuously, string? ActiveHoursStart, string? ActiveHoursEnd, string? Timezone, bool? IncomingNotificationsEnabled, bool? OutgoingNotificationsEnabled);
+public sealed record UpdateGeneralSettingsRequest(bool? Paused, bool? OperateContinuously, string? ActiveHoursStart, string? ActiveHoursEnd, string? Timezone, List<int>? ActiveDays, bool? IncomingNotificationsEnabled, bool? OutgoingNotificationsEnabled);
 public sealed record UpdateMonitoringSettingsRequest(bool? MonitorPersonal, bool? MonitorGroups, bool? MonitorImages, bool? MonitorDocuments, bool? MonitorAudio, bool? MonitorVideos, bool? MonitorLinks, bool? MonitorLocation, bool? MonitorCalls, bool? MonitorSavedContacts, bool? MonitorUnknownNumbers, bool? MonitorBusiness);
-public sealed record UpdateAutoReplySettingsRequest(bool? Enabled, bool? InGroups, string? Scope, bool? CustomMessageEnabled, string? CustomMessage, int? ResponseDelaySeconds, int? CooldownSeconds, bool? RequireApproval, List<string>? AllowedChats, List<string>? BlockedChats, string? OutsideHoursMessage, string? BusinessMessage);
+public sealed record UpdateAutoReplySettingsRequest(bool? Enabled, bool? InGroups, string? Scope, bool? CustomMessageEnabled, string? CustomMessage, int? ResponseDelaySeconds, int? CooldownSeconds, bool? RequireApproval, List<string>? AllowedChats, List<string>? BlockedChats, string? OutsideHoursMessage, string? BusinessMessage, int? BatchWindowSeconds = null);
 public sealed record UpdateAiBehaviourSettingsRequest(string? Personality, string? CustomPersonality, string? ResponseLength, string? CustomInstructions, string? NeverRespondTopics, bool? UseConversationContext, int? ContextRetentionMessages, bool? ReplyInSenderLanguage, bool? SummarizeLongConversations, bool? AiSignatureEnabled, string? AiSignatureText);
 public sealed record UpdatePrivacySectionRequest(bool? HideMessagePreviews, int? MessageRetentionDays, bool? AllowMessageContentAsAiContext, List<string>? AiExcludedChats);
 public sealed record UpdateNotificationSettingsRequest(string? Scope, List<string>? Tags, bool? Email, bool? WhatsAppSelf, bool? Desktop, bool? Sound);
@@ -227,6 +233,7 @@ public static class WhatsAppSettingsModule
             if (general.OperateContinuously is { } v2) { update = update.Set(s => s.OperateContinuously, v2); changed = true; }
             if (general.ActiveHoursStart is { } v3) { update = update.Set(s => s.ActiveHoursStart, v3); changed = true; }
             if (general.ActiveHoursEnd is { } v4) { update = update.Set(s => s.ActiveHoursEnd, v4); changed = true; }
+            if (general.ActiveDays is { } days) { update = update.Set(s => s.ActiveDays, days.Where(d => d is >= 0 and <= 6).Distinct().Order().ToList()); changed = true; }
             if (general.Timezone is { } v5) { update = update.Set(s => s.Timezone, v5); changed = true; }
             if (general.OutgoingNotificationsEnabled is { } v5b) { update = update.Set(s => s.OutgoingNotificationsEnabled, v5b); changed = true; }
             if (general.IncomingNotificationsEnabled is { } v6)
@@ -254,6 +261,7 @@ public static class WhatsAppSettingsModule
             if (autoReply.CustomMessage is { } v3) { update = update.Set(s => s.CustomMessage, v3); changed = true; }
             if (autoReply.ResponseDelaySeconds is { } v4) { update = update.Set(s => s.ResponseDelaySeconds, v4); changed = true; }
             if (autoReply.CooldownSeconds is { } v5) { update = update.Set(s => s.CooldownSeconds, v5); changed = true; }
+            if (autoReply.BatchWindowSeconds is { } bw) { update = update.Set(s => s.BatchWindowSeconds, Math.Clamp(bw, 0, 60)); changed = true; }
             if (autoReply.RequireApproval is { } v6) { update = update.Set(s => s.RequireApproval, v6); changed = true; }
             if (autoReply.AllowedChats is { } a1) { update = update.Set(s => s.AutoReplyAllowedChats, a1); changed = true; }
             if (autoReply.BlockedChats is { } a2) { update = update.Set(s => s.AutoReplyBlockedChats, a2); changed = true; }
@@ -315,7 +323,7 @@ public static class WhatsAppSettingsModule
         return Results.Ok(replies.Select(r => new PendingReplyDto(r.Id, r.ChatId, r.ChatName, r.Text, r.CreatedAt)));
     }
 
-    private static async Task<IResult> ApprovePendingReplyAsync(string connectionId, string replyId, IMongoDatabase db, ClaimsPrincipalAccessor who, WhatsAppIntegrationProvider whatsApp, CancellationToken ct)
+    private static async Task<IResult> ApprovePendingReplyAsync(string connectionId, string replyId, IMongoDatabase db, ClaimsPrincipalAccessor who, WhatsAppIntegrationProvider whatsApp, TelegramIntegrationProvider telegram, CancellationToken ct)
     {
         var connection = await OwnedConnectionAsync(db, connectionId, who.UserId, ct);
         if (connection is null) return Results.NotFound();
@@ -326,7 +334,13 @@ public static class WhatsAppSettingsModule
 
         try
         {
-            await whatsApp.SendMessageAsync(connectionId, reply.ChatId, reply.Text, quotedMessageId: null, ct, isAiGenerated: true);
+            if (connection.IntegrationKey == TelegramIntegrationModule.IntegrationKey)
+            {
+                var wire = await TelegramAutoReply.WithSignatureAsync(db, connectionId, reply.Text, ct);
+                await TelegramIntegrationModule.SendAndStoreAsync(db, telegram, connectionId, reply.ChatId, wire, isAiGenerated: true, ct);
+            }
+            else
+                await whatsApp.SendMessageAsync(connectionId, reply.ChatId, reply.Text, quotedMessageId: null, ct, isAiGenerated: true);
         }
         catch (Exception ex)
         {
@@ -351,6 +365,7 @@ public static class WhatsAppSettingsModule
         var connection = await OwnedConnectionAsync(db, connectionId, who.UserId, ct);
         if (connection is null) return Results.NotFound();
         await db.GetCollection<WhatsAppMessage>("whatsappMessages").DeleteManyAsync(m => m.ConnectionId == connectionId, ct);
+        await db.GetCollection<TelegramMessage>("telegramMessages").DeleteManyAsync(m => m.ConnectionId == connectionId, ct);
         return Results.NoContent();
     }
 
@@ -361,9 +376,9 @@ public static class WhatsAppSettingsModule
 
     private static WhatsAppFullSettingsDto ToFullDto(WhatsAppSettings s, IntegrationConnection c) => new(
         c.Id, c.AccountIdentifier ?? "unknown", c.Status.ToString(),
-        new GeneralSettingsDto(s.Paused, s.OperateContinuously, s.ActiveHoursStart, s.ActiveHoursEnd, s.Timezone, c.NotificationsEnabled, s.OutgoingNotificationsEnabled),
+        new GeneralSettingsDto(s.Paused, s.OperateContinuously, s.ActiveHoursStart, s.ActiveHoursEnd, s.Timezone, s.ActiveDays, c.NotificationsEnabled, s.OutgoingNotificationsEnabled),
         new MonitoringSettingsDto(s.MonitorPersonal, s.MonitorGroups, s.MonitorImages, s.MonitorDocuments, s.MonitorAudio, s.MonitorVideos, s.MonitorLinks, s.MonitorLocation, s.MonitorCalls, s.MonitorSavedContacts, s.MonitorUnknownNumbers, s.MonitorBusiness),
-        new AutoReplySettingsDto(c.AutoReplyEnabled, c.AutoReplyInGroups, s.AutoReplyScope, s.CustomMessageEnabled, s.CustomMessage, s.ResponseDelaySeconds, s.CooldownSeconds, s.RequireApproval, s.AutoReplyAllowedChats, s.AutoReplyBlockedChats, s.OutsideHoursMessage, s.BusinessMessage),
+        new AutoReplySettingsDto(c.AutoReplyEnabled, c.AutoReplyInGroups, s.AutoReplyScope, s.CustomMessageEnabled, s.CustomMessage, s.ResponseDelaySeconds, s.CooldownSeconds, s.RequireApproval, s.AutoReplyAllowedChats, s.AutoReplyBlockedChats, s.OutsideHoursMessage, s.BusinessMessage, s.BatchWindowSeconds),
         new AiBehaviourSettingsDto(s.Personality, s.CustomPersonality, s.ResponseLength, s.CustomInstructions, s.NeverRespondTopics, s.UseConversationContext, s.ContextRetentionMessages, s.ReplyInSenderLanguage, s.SummarizeLongConversations, s.AiSignatureEnabled, s.AiSignatureText),
         new PrivacySectionDto(s.HideMessagePreviews, s.MessageRetentionDays, s.AllowMessageContentAsAiContext, s.AiExcludedChats),
         new NotificationSettingsDto(s.NotifyScope, s.NotifyTags, s.DeliverEmail, s.DeliverWhatsAppSelf, s.DeliverDesktop, s.NotificationSound),

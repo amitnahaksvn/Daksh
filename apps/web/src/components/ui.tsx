@@ -1,3 +1,5 @@
+"use client";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 /** The Bento building blocks: one corner radius, soft white tiles on the grey canvas, lime and pink accent tiles. */
@@ -59,29 +61,107 @@ export const inputClass =
 /** Appended to `inputClass` (or `selectClass`) to flag an invalid field with a red border. */
 export const errorInputClass = "!border-danger";
 
-/** A `<select>` styled to match `inputClass`, with its own chevron (native dropdown arrows don't follow the theme). */
-export function Select({
-  invalid,
-  className = "",
-  children,
-  ...props
-}: React.SelectHTMLAttributes<HTMLSelectElement> & { invalid?: boolean }) {
+export type DropdownOption = { value: string; label: string };
+
+/** The app's one dropdown. Native `<select>` popups ignore the theme, so this renders its own list in the
+ *  palette's colours. Long lists (more than 8 options) get a search box; pass `searchable` to force either. */
+export function Dropdown({
+  value,
+  options,
+  onChange,
+  className = "w-full",
+  placeholder = "Select…",
+  searchPlaceholder = "Search…",
+  searchable,
+  disabled = false,
+  invalid = false,
+}: {
+  value: string;
+  options: DropdownOption[];
+  onChange: (v: string) => void;
+  className?: string;
+  placeholder?: string;
+  searchPlaceholder?: string;
+  searchable?: boolean;
+  disabled?: boolean;
+  invalid?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const rootRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const showSearch = searchable ?? options.length > 8;
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (open) listRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "center" });
+  }, [open]);
+
+  const q = query.trim().toLowerCase();
+  const shown = q ? options.filter((o) => o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q)) : options;
+  const currentLabel = options.find((o) => o.value === value)?.label;
+
   return (
-    <div className="relative">
-      <select
-        {...props}
-        className={`${inputClass} appearance-none pr-10 ${props.value ? "" : "text-muted"} ${invalid ? errorInputClass : ""} ${className}`}
+    <div ref={rootRef} className={`relative ${className}`}>
+      <button
+        type="button"
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => { setQuery(""); setOpen((o) => !o); }}
+        className={`${inputClass} flex items-center justify-between gap-2 text-left focus-visible:outline-2 focus-visible:outline-accent disabled:cursor-not-allowed ${invalid ? errorInputClass : ""}`}
       >
-        {children}
-      </select>
-      <svg
-        aria-hidden
-        viewBox="0 0 16 16"
-        fill="none"
-        className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
-      >
-        <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
+        <span className={`truncate ${currentLabel ? "" : "text-muted"}`}>{currentLabel ?? (value || placeholder)}</span>
+        <svg aria-hidden viewBox="0 0 16 16" fill="none" className={`h-4 w-4 shrink-0 text-muted transition-transform ${open ? "rotate-180" : ""}`}>
+          <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open && !disabled && (
+        <div className="absolute left-0 z-30 mt-1 w-full min-w-44 rounded-2xl border border-line bg-surface p-2 shadow-lg">
+          {showSearch && (
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && shown[0]) { onChange(shown[0].value); setOpen(false); }
+              }}
+              placeholder={searchPlaceholder}
+              className="mb-2 w-full rounded-xl border border-line bg-surface-2 px-3 py-2 text-sm text-text placeholder:text-muted"
+            />
+          )}
+          <ul ref={listRef} role="listbox" className="max-h-60 overflow-y-auto">
+            {shown.length === 0 && <li className="px-3 py-2 text-xs text-muted">No matches</li>}
+            {shown.map((o) => {
+              const selected = o.value === value;
+              return (
+                <li
+                  key={o.value}
+                  role="option"
+                  aria-selected={selected}
+                  onClick={() => { onChange(o.value); setOpen(false); }}
+                  className={`cursor-pointer rounded-lg px-3 py-1.5 text-sm ${selected ? "bg-accent text-accent-contrast" : "hover:bg-surface-2"}`}
+                >
+                  {o.label}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

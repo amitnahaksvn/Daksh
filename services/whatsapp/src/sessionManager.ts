@@ -25,6 +25,9 @@ type SessionEntry = {
   lastError?: string;
   reconnectAttempts: number;
   reconnectTimer?: NodeJS.Timeout;
+  /** When WhatsApp recently told us this login was replaced by another connection (another copy of the service,
+   *  or a stray session). Used to stop fighting over the login instead of reconnecting forever. */
+  replacedAt?: number[];
   /** True while a socket is actively being created, so a second concurrent connect/reconnect call for
    *  the same connectionId waits on this instead of opening a second WhatsApp session. */
   starting: Promise<void> | null;
@@ -32,6 +35,8 @@ type SessionEntry = {
 
 const QR_LIFETIME_MS = 20_000; // Baileys reissues a fresh QR roughly this often until it's scanned.
 const MAX_RECONNECT_ATTEMPTS = 10;
+const REPLACED_WINDOW_MS = 120_000;
+const REPLACED_LIMIT = 3;
 const logger = pino({ level: process.env.BAILEYS_LOG_LEVEL ?? "warn" });
 
 const sessions = new Map<string, SessionEntry>();
@@ -204,6 +209,23 @@ async function onConnectionUpdate(
       await removeAllCredentials(db, connectionId);
       await reportEvent(connectionId, "WhatsAppDisconnected", { status: "Disconnected" });
       return;
+    }
+
+    // "Replaced" = another client is using this same WhatsApp login right now. Reconnecting just kicks it off and
+    // gets kicked back, so neither side is ever stable. After a few in a row, stop and say so clearly.
+    if (statusCode === DisconnectReason.connectionReplaced) {
+      const now = Date.now();
+      entry.replacedAt = [...(entry.replacedAt ?? []).filter((t) => now - t < REPLACED_WINDOW_MS), now];
+      if (entry.replacedAt.length >= REPLACED_LIMIT) {
+        entry.status = "Error";
+        entry.sock = null;
+        entry.lastError =
+          "Another copy of Daksh (or another service) is using this WhatsApp login, so the two keep disconnecting each other. " +
+          "Stop the other copy, then press Reconnect.";
+        logger.error({ connectionId }, entry.lastError);
+        await reportEvent(connectionId, "WhatsAppConnectionFailed", { status: "Error", error: entry.lastError });
+        return;
+      }
     }
 
     entry.reconnectAttempts += 1;
@@ -428,6 +450,8 @@ export function getStatus(connectionId: string): { status: ConnectionStatus; acc
 export async function reconnect(db: Db, connectionId: string): Promise<void> {
   const entry = entryFor(connectionId);
   entry.reconnectAttempts = 0;
+  entry.replacedAt = [];
+  if (entry.reconnectTimer) clearTimeout(entry.reconnectTimer);
   if (entry.sock) {
     try {
       entry.sock.end(undefined);

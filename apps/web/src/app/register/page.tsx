@@ -2,9 +2,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { DatePicker } from "@/components/DatePicker";
 import { AppearanceControls } from "@/components/ThemeToggle";
 import { Orb } from "@/components/Orb";
-import { buttonClass, errorInputClass, inputClass, Notice, Select, tileClass } from "@/components/ui";
+import { buttonClass, errorInputClass, inputClass, Dropdown, Notice, tileClass } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 
 const GENDER_OPTIONS = ["Female", "Male", "Non-binary", "Prefer not to say"];
@@ -142,29 +143,19 @@ export default function RegisterPage() {
           </div>
 
           <div>
-            <Select invalid={!!fieldErrors.gender} value={values.gender} onChange={(e) => handleChange("gender", e.target.value)}>
-              <option value="" disabled>
-                Select gender
-              </option>
-              {GENDER_OPTIONS.map((g) => (
-                <option key={g} value={g}>
-                  {g}
-                </option>
-              ))}
-            </Select>
+            <Dropdown invalid={!!fieldErrors.gender} value={values.gender} onChange={(v) => handleChange("gender", v)} placeholder="Select gender" options={GENDER_OPTIONS.map((g) => ({ value: g, label: g }))} />
             <FieldError message={fieldErrors.gender} />
           </div>
 
           <div>
-            <label className="block text-sm text-muted">
-              Date of birth
-              <input
-                type="date"
-                className={`${inputClass} mt-1 ${fieldErrors.dateOfBirth ? errorInputClass : ""}`}
+            <div className="text-sm text-muted">
+              <span className="mb-1 block">Date of birth</span>
+              <DatePicker
+                invalid={!!fieldErrors.dateOfBirth}
                 value={values.dateOfBirth}
-                onChange={(e) => handleChange("dateOfBirth", e.target.value)}
+                onChange={(v) => handleChange("dateOfBirth", v)}
               />
-            </label>
+            </div>
             <FieldError message={fieldErrors.dateOfBirth} />
           </div>
 

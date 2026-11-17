@@ -4,6 +4,7 @@ import { AppCard, BrandTile } from "@/components/integrations";
 import { Modal } from "@/components/Modal";
 import { ErrorState, Loading, inputClass, tileClass } from "@/components/ui";
 import { WhatsAppConnectPanel } from "@/components/WhatsAppConnectPanel";
+import { TelegramConnectPanel } from "@/components/TelegramConnectPanel";
 import { api, type AppCatalogEntry, type ConnectionStatusValue } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 
@@ -321,6 +322,7 @@ function AppsPageContent({ apps }: { apps: AppCatalogEntry[] }) {
   const [category, setCategory] = useState("All");
   const [query, setQuery] = useState("");
   const [whatsAppOpen, setWhatsAppOpen] = useState(false);
+  const [telegramOpen, setTelegramOpen] = useState(false);
   // The catalogue list has no per-user connection data (it's not personalized) — fetch WhatsApp's real
   // status separately so its tile shows "Connected"/"Connecting"/etc. instead of always falling back to
   // the "Coming soon" badge every unbuilt integration gets.
@@ -329,6 +331,11 @@ function AppsPageContent({ apps }: { apps: AppCatalogEntry[] }) {
   const { state: gmailDetail } = useApi(() => api.appDetail("gmail"));
   const gmailStatus: ConnectionStatusValue | undefined = gmailDetail.status === "ready"
     ? gmailDetail.data.connection?.status ?? "NotConnected"
+    : undefined;
+
+  const { state: telegramDetail, reload: reloadTelegramDetail } = useApi(() => api.appDetail("telegram"));
+  const telegramStatus: ConnectionStatusValue | undefined = telegramDetail.status === "ready"
+    ? telegramDetail.data.connection?.status ?? "NotConnected"
     : undefined;
 
   const filtered = apps.filter((a) => {
@@ -419,8 +426,8 @@ function AppsPageContent({ apps }: { apps: AppCatalogEntry[] }) {
                       app={app}
                       priority={APP_META[app.integrationKey]?.priority ?? "Low"}
                       description={APP_META[app.integrationKey]?.description ?? app.description}
-                      status={app.integrationKey === "whatsapp" ? whatsAppStatus : app.integrationKey === "gmail" ? gmailStatus : undefined}
-                      onConfigure={app.integrationKey === "whatsapp" ? () => setWhatsAppOpen(true) : undefined}
+                      status={app.integrationKey === "whatsapp" ? whatsAppStatus : app.integrationKey === "gmail" ? gmailStatus : app.integrationKey === "telegram" ? telegramStatus : undefined}
+                      onConfigure={app.integrationKey === "whatsapp" ? () => setWhatsAppOpen(true) : app.integrationKey === "telegram" ? () => setTelegramOpen(true) : undefined}
                     />
                   ))}
                 </ul>
@@ -439,6 +446,17 @@ function AppsPageContent({ apps }: { apps: AppCatalogEntry[] }) {
       >
         <WhatsAppConnectPanel />
       </Modal>
+
+      <Modal
+        wide
+        open={telegramOpen}
+        onClose={() => {
+          setTelegramOpen(false);
+          reloadTelegramDetail();
+        }}
+      >
+        <TelegramConnectPanel />
+      </Modal>
     </>
   );
 }
@@ -446,7 +464,7 @@ function AppsPageContent({ apps }: { apps: AppCatalogEntry[] }) {
 export default function AppsPage() {
   const { state, reload } = useApi(() => api.appCatalog());
   return (
-    <main className="mx-auto w-full max-w-6xl p-3 md:p-4">
+    <main className="w-full p-3 md:p-4">
       {state.status === "loading" && <Loading label="Loading apps" />}
       {state.status === "error" && <ErrorState error={state.error} onRetry={reload} />}
       {state.status === "ready" && <AppsPageContent apps={state.data} />}

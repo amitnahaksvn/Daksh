@@ -58,6 +58,33 @@ public sealed record VerifyOtpRequest(string? Email, string? Otp);
 public sealed record AccountLoginRequest(string? Email, string? Password);
 public sealed record AccountProfile(string Id, string FirstName, string LastName, string Email, string AccessToken, DateTimeOffset ExpiresAt);
 public sealed record MessageResponse(string Message);
+public sealed record UserDetails(string Id, string FirstName, string LastName, string Gender, DateTime DateOfBirth, string Email, DateTime CreatedAtUtc);
+public sealed record UpdateProfileRequest(string? FirstName, string? LastName, string? Gender, DateTime? DateOfBirth);
+public sealed record ChangePasswordRequest(string? CurrentPassword, string? NewPassword);
+
+public sealed class UpdateProfileRequestValidator : AbstractValidator<UpdateProfileRequest>
+{
+    public UpdateProfileRequestValidator()
+    {
+        RuleFor(x => x.FirstName).NotEmpty().MaximumLength(100);
+        RuleFor(x => x.LastName).NotEmpty().MaximumLength(100);
+        RuleFor(x => x.Gender).NotEmpty().MaximumLength(50);
+        RuleFor(x => x.DateOfBirth).NotNull()
+            .Must(d => d is null || d < DateTime.UtcNow.Date).WithMessage("DateOfBirth must be in the past.")
+            .Must(d => d is null || d <= DateTime.UtcNow.AddYears(-13)).WithMessage("You must be at least 13 years old.");
+    }
+}
+
+public sealed class ChangePasswordRequestValidator : AbstractValidator<ChangePasswordRequest>
+{
+    public ChangePasswordRequestValidator()
+    {
+        RuleFor(x => x.CurrentPassword).NotEmpty();
+        RuleFor(x => x.NewPassword).NotEmpty().MinimumLength(10).MaximumLength(200)
+            .Matches("[A-Za-z]").WithMessage("Password must contain at least one letter.")
+            .Matches("[0-9]").WithMessage("Password must contain at least one digit.");
+    }
+}
 
 public sealed class RegisterRequestValidator : AbstractValidator<RegisterRequest>
 {
@@ -155,6 +182,49 @@ public static class AccountModule
         g.MapPost("/register", RegisterAsync).Validate<RegisterRequest>();
         g.MapPost("/verify-otp", VerifyOtpAsync).Validate<VerifyOtpRequest>();
         g.MapPost("/login", LoginAsync).Validate<AccountLoginRequest>();
+
+        var me = app.MapGroup("/api/v1/account/me").WithTags("Account").RequireAuthorization(AuthSetup.UserScheme);
+        me.MapGet("", GetMeAsync);
+        me.MapPut("", UpdateMeAsync).Validate<UpdateProfileRequest>();
+        me.MapPost("/password", ChangePasswordAsync).Validate<ChangePasswordRequest>();
+    }
+
+    private static UserDetails ToDetails(ApplicationUser u) =>
+        new(u.Id, u.FirstName, u.LastName, u.Gender, DateTime.SpecifyKind(u.DateOfBirth, DateTimeKind.Utc), u.Email, u.CreatedAtUtc);
+
+    private static async Task<IResult> GetMeAsync(IMongoDatabase db, ClaimsPrincipalAccessor who, CancellationToken ct)
+    {
+        var user = await db.GetCollection<ApplicationUser>("users").Find(u => u.Id == who.UserId).FirstOrDefaultAsync(ct);
+        return user is null ? Results.NotFound() : Results.Ok(ToDetails(user));
+    }
+
+    private static async Task<IResult> UpdateMeAsync(UpdateProfileRequest req, IMongoDatabase db, ClaimsPrincipalAccessor who, CancellationToken ct)
+    {
+        var users = db.GetCollection<ApplicationUser>("users");
+        var update = Builders<ApplicationUser>.Update
+            .Set(u => u.FirstName, req.FirstName!.Trim())
+            .Set(u => u.LastName, req.LastName!.Trim())
+            .Set(u => u.Gender, req.Gender!.Trim())
+            .Set(u => u.DateOfBirth, DateTime.SpecifyKind(req.DateOfBirth!.Value.Date, DateTimeKind.Utc));
+        var user = await users.FindOneAndUpdateAsync(u => u.Id == who.UserId, update,
+            new FindOneAndUpdateOptions<ApplicationUser> { ReturnDocument = ReturnDocument.After }, ct);
+        return user is null ? Results.NotFound() : Results.Ok(ToDetails(user));
+    }
+
+    private static async Task<IResult> ChangePasswordAsync(ChangePasswordRequest req, IMongoDatabase db, ClaimsPrincipalAccessor who, CancellationToken ct)
+    {
+        var users = db.GetCollection<ApplicationUser>("users");
+        var user = await users.Find(u => u.Id == who.UserId).FirstOrDefaultAsync(ct);
+        if (user is null) return Results.NotFound();
+
+        var hasher = new PasswordHasher<ApplicationUser>();
+        if (hasher.VerifyHashedPassword(user, user.PasswordHash, req.CurrentPassword!) == PasswordVerificationResult.Failed)
+            return Results.Problem(statusCode: 400, title: "Current password is incorrect.");
+
+        await users.UpdateOneAsync(u => u.Id == user.Id, Builders<ApplicationUser>.Update
+            .Set(u => u.PasswordHash, hasher.HashPassword(user, req.NewPassword!))
+            .Set(u => u.SecurityStamp, Guid.NewGuid().ToString("N")), cancellationToken: ct);
+        return Results.Ok(new MessageResponse("Password updated."));
     }
 
     /// <summary>Creates the unique/TTL indexes this module depends on. Idempotent — safe to call on every startup.</summary>

@@ -20,6 +20,7 @@ jobs:
         include:
           - { name: api, file: infrastructure/docker/api.Dockerfile }
           - { name: whatsapp, file: infrastructure/docker/whatsapp.Dockerfile }
+          - { name: telegram, file: infrastructure/docker/telegram.Dockerfile }
           - { name: web, file: infrastructure/docker/web.Dockerfile }
     steps:
       - uses: actions/checkout@v4

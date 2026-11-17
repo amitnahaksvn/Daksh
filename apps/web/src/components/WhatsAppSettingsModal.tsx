@@ -4,8 +4,8 @@ import { StatusChip } from "@/components/integrations";
 import { WhatsAppAutomationTab } from "@/components/WhatsAppAutomationTab";
 import { WhatsAppContactsTab } from "@/components/WhatsAppContactsTab";
 import { WhatsAppIntelligenceTab } from "@/components/WhatsAppIntelligenceTab";
-import { Card, PickerRow, Row, Toggle } from "@/components/WhatsAppSettingsParts";
-import { buttonClass, inputClass, Loading, secondaryButtonClass } from "@/components/ui";
+import { Card, PickerRow, Row, SearchSelect, Toggle } from "@/components/WhatsAppSettingsParts";
+import { buttonClass, Dropdown, inputClass, Loading, secondaryButtonClass } from "@/components/ui";
 import {
   api,
   ApiError,
@@ -42,6 +42,30 @@ const NOTIFY_TRIGGERS: { tag: string; label: string }[] = [
   { tag: "priority-contact", label: "Messages from priority contacts" },
 ];
 
+const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, "0")}:${i % 2 ? "30" : "00"}`);
+
+function formatTime(v: string): string {
+  const [h, m] = v.split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return v;
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+}
+
+function TimeSelect({ value, onChange, disabled }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
+  const times = TIME_OPTIONS.includes(value) ? TIME_OPTIONS : [value, ...TIME_OPTIONS].sort();
+  return <SearchSelect value={value} onChange={onChange} disabled={disabled} className="w-36" options={times.map((t) => ({ value: t, label: formatTime(t) }))} />;
+}
+
+function systemTimezone(): string {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch { return "UTC"; }
+}
+
+function timezoneOptions(current: string): string[] {
+  let zones: string[] = [];
+  try { zones = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf?.("timeZone") ?? []; } catch { /* older runtime */ }
+  const set = new Set(["UTC", ...zones, current, systemTimezone()]);
+  return [...set].sort();
+}
+
 function diffSection<T extends Record<string, unknown>>(baseline: T, draft: T): Partial<T> | undefined {
   const diff: Partial<T> = {};
   let changed = false;
@@ -54,7 +78,10 @@ function diffSection<T extends Record<string, unknown>>(baseline: T, draft: T): 
   return changed ? diff : undefined;
 }
 
-export function WhatsAppSettingsModal({ connectionId, onClose, inline = false }: { connectionId: string; onClose?: () => void; inline?: boolean }) {
+/** The same settings screen serves WhatsApp and Telegram — both keep their settings, rules and insights keyed by connection id. */
+export function WhatsAppSettingsModal({ connectionId, onClose, inline = false, provider = "whatsapp" }: { connectionId: string; onClose?: () => void; inline?: boolean; provider?: "whatsapp" | "telegram" }) {
+  const isTelegram = provider === "telegram";
+  const brand = isTelegram ? "Telegram" : "WhatsApp";
   const [tab, setTab] = useState<TabId>("general");
   const [search, setSearch] = useState("");
   const [baseline, setBaseline] = useState<WhatsAppFullSettings | null>(null);
@@ -70,16 +97,21 @@ export function WhatsAppSettingsModal({ connectionId, onClose, inline = false }:
       .whatsAppFullSettings(connectionId)
       .then((s) => {
         setBaseline(s);
-        setDraft(s);
+        // Still on the server default (UTC)? Preselect this device's timezone — it shows as an unsaved change.
+        const system = systemTimezone();
+        setDraft(s.general.timezone === "UTC" && system !== "UTC" ? { ...s, general: { ...s.general, timezone: system } } : s);
         setStatus("ready");
       })
       .catch((err) => {
-        setError(err instanceof ApiError ? err.message : "Could not load WhatsApp settings.");
+        setError(err instanceof ApiError ? err.message : `Could not load ${brand} settings.`);
         setStatus("error");
       });
     void api.whatsAppPendingReplies(connectionId).then(setPending).catch(() => setPending([]));
-    void api.whatsAppChats(connectionId).then(setChats).catch(() => setChats([]));
-  }, [connectionId]);
+    const loadChats = isTelegram
+      ? api.telegramChats(connectionId).then((list): WhatsAppChat[] => list.map((c) => ({ chatId: c.chatId, chatName: c.name, isGroup: c.isGroup, lastMessagePreview: c.lastMessagePreview ?? "", lastMessageAt: c.lastMessageAt ?? "", unreadCount: c.unreadCount })))
+      : api.whatsAppChats(connectionId);
+    void loadChats.then(setChats).catch(() => setChats([]));
+  }, [connectionId, isTelegram, brand]);
 
   const dirty = useMemo(() => JSON.stringify(baseline) !== JSON.stringify(draft), [baseline, draft]);
 
@@ -123,13 +155,13 @@ export function WhatsAppSettingsModal({ connectionId, onClose, inline = false }:
     if (!draft) return;
     setDraft({
       ...draft,
-      general: { ...draft.general, paused: false, operateContinuously: true, activeHoursStart: "09:00", activeHoursEnd: "18:00", timezone: "UTC" },
+      general: { ...draft.general, paused: false, operateContinuously: true, activeHoursStart: "09:00", activeHoursEnd: "18:00", timezone: "UTC", activeDays: [0, 1, 2, 3, 4, 5, 6] },
       monitoring: {
         monitorPersonal: true, monitorGroups: true, monitorImages: true, monitorDocuments: true,
         monitorAudio: true, monitorVideos: true, monitorLinks: true, monitorLocation: true,
         monitorCalls: true, monitorSavedContacts: true, monitorUnknownNumbers: true, monitorBusiness: true,
       },
-      autoReply: { ...draft.autoReply, scope: "All", customMessageEnabled: false, customMessage: null, responseDelaySeconds: 0, cooldownSeconds: 0, requireApproval: false, allowedChats: [], blockedChats: [], outsideHoursMessage: null, businessMessage: null },
+      autoReply: { ...draft.autoReply, scope: "All", customMessageEnabled: false, customMessage: null, responseDelaySeconds: 0, cooldownSeconds: 0, batchWindowSeconds: 5, requireApproval: false, allowedChats: [], blockedChats: [], outsideHoursMessage: null, businessMessage: null },
       aiBehaviour: {
         personality: "Friendly", customPersonality: null, responseLength: "Balanced",
         customInstructions: null, neverRespondTopics: null, useConversationContext: true, contextRetentionMessages: 5,
@@ -155,7 +187,7 @@ export function WhatsAppSettingsModal({ connectionId, onClose, inline = false }:
   }
 
   async function purgeMessages() {
-    if (!confirm("Delete all stored WhatsApp message content for this connection? This can't be undone.")) return;
+    if (!confirm(`Delete all stored ${brand} message content for this connection? This can't be undone.`)) return;
     await api.purgeWhatsAppMessages(connectionId);
   }
 
@@ -192,8 +224,8 @@ export function WhatsAppSettingsModal({ connectionId, onClose, inline = false }:
       >
         {!inline && <div className="flex items-start justify-between gap-4 border-b border-line p-5">
           <div>
-            <h1 className="text-xl font-extrabold">WhatsApp Settings</h1>
-            <p className="mt-0.5 text-sm text-muted">Control how Daksha interacts with your WhatsApp account.</p>
+            <h1 className="text-xl font-extrabold">{brand} Settings</h1>
+            <p className="mt-0.5 text-sm text-muted">Control how Daksha interacts with your {brand} account.</p>
             {draft && (
               <div className="mt-2 flex items-center gap-2 text-sm">
                 <StatusChip status={draft.status as ConnectionStatusValue} />
@@ -244,7 +276,7 @@ export function WhatsAppSettingsModal({ connectionId, onClose, inline = false }:
                     <Row label="Pause all automation" hint="A quick kill-switch — stays connected, but Daksha won't auto-reply or react to anything." search={search}>
                       <Toggle checked={draft.general.paused} onChange={(v) => update("general", { paused: v })} />
                     </Row>
-                    <Row label="Incoming message notifications" hint="Bell and toast when a new WhatsApp message arrives." search={search}>
+                    <Row label="Incoming message notifications" hint={`Bell and toast when a new ${brand} message arrives.`} search={search}>
                       <Toggle checked={draft.general.incomingNotificationsEnabled} onChange={(v) => update("general", { incomingNotificationsEnabled: v })} />
                     </Row>
                     <Row
@@ -254,36 +286,49 @@ export function WhatsAppSettingsModal({ connectionId, onClose, inline = false }:
                     >
                       <Toggle checked={draft.general.outgoingNotificationsEnabled} onChange={(v) => update("general", { outgoingNotificationsEnabled: v })} />
                     </Row>
-                    <Row label="Operate continuously" hint="Off to restrict automation (auto-reply) to the active hours below." search={search}>
+                    <Row label="Operate continuously" hint="Off to apply the schedule below (days, hours, timezone); while on, auto-reply runs around the clock. Outside them it stays silent, or sends your out-of-hours message (Auto Reply tab)." search={search}>
                       <Toggle checked={draft.general.operateContinuously} onChange={(v) => update("general", { operateContinuously: v })} />
                     </Row>
-                    {!draft.general.operateContinuously && (
+                    <div className={draft.general.operateContinuously ? "pointer-events-none select-none opacity-50" : undefined} aria-disabled={draft.general.operateContinuously}>
                       <>
                         <Row label="Active hours start" search={search}>
-                          <input
-                            type="time"
-                            value={draft.general.activeHoursStart}
-                            onChange={(e) => update("general", { activeHoursStart: e.target.value })}
-                            className={`${inputClass} w-32`}
-                          />
+                          <TimeSelect disabled={draft.general.operateContinuously} value={draft.general.activeHoursStart} onChange={(v) => update("general", { activeHoursStart: v })} />
                         </Row>
                         <Row label="Active hours end" search={search}>
-                          <input
-                            type="time"
-                            value={draft.general.activeHoursEnd}
-                            onChange={(e) => update("general", { activeHoursEnd: e.target.value })}
-                            className={`${inputClass} w-32`}
-                          />
+                          <TimeSelect disabled={draft.general.operateContinuously} value={draft.general.activeHoursEnd} onChange={(v) => update("general", { activeHoursEnd: v })} />
+                        </Row>
+                        <Row label="Active days" hint="Daksha auto-replies only on the selected days." search={search}>
+                          <div className="flex gap-1">
+                            {["S", "M", "T", "W", "T", "F", "S"].map((label, i) => {
+                              const on = draft.general.activeDays.includes(i);
+                              return (
+                                <button
+                                  key={i}
+                                  type="button"
+                                  disabled={draft.general.operateContinuously}
+                                  aria-pressed={on}
+                                  aria-label={["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][i]}
+                                  onClick={() => update("general", { activeDays: on ? draft.general.activeDays.filter((d) => d !== i) : [...draft.general.activeDays, i].sort() })}
+                                  className={`h-8 w-8 rounded-full text-xs font-semibold disabled:cursor-not-allowed ${on ? "bg-accent text-white" : "bg-surface-2 text-muted"}`}
+                                >
+                                  {label}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </Row>
                         <Row label="Timezone" hint="IANA timezone id, e.g. Asia/Kolkata or UTC." search={search}>
-                          <input
+                          <SearchSelect
                             value={draft.general.timezone}
-                            onChange={(e) => update("general", { timezone: e.target.value })}
-                            className={`${inputClass} w-40`}
+                            disabled={draft.general.operateContinuously}
+                            onChange={(v) => update("general", { timezone: v })}
+                            className="w-64"
+                            placeholder="Search timezone…"
+                            options={timezoneOptions(draft.general.timezone).map((tz) => ({ value: tz, label: tz.replace(/_/g, " ") }))}
                           />
                         </Row>
                       </>
-                    )}
+                    </div>
                   </Card>
                 )}
 
@@ -295,36 +340,54 @@ export function WhatsAppSettingsModal({ connectionId, onClose, inline = false }:
                     <Row label="Group messages" search={search}>
                       <Toggle checked={draft.monitoring.monitorGroups} onChange={(v) => update("monitoring", { monitorGroups: v })} />
                     </Row>
-                    <Row label="Messages from saved contacts" hint="People with a name saved in your phone's address book." search={search}>
+                    {!isTelegram && (
+<Row label="Messages from saved contacts" hint="People with a name saved in your phone's address book." search={search}>
                       <Toggle checked={draft.monitoring.monitorSavedContacts} onChange={(v) => update("monitoring", { monitorSavedContacts: v })} />
                     </Row>
-                    <Row label="Messages from unknown numbers" hint="Anyone WhatsApp has no saved name for." search={search}>
+)}
+                    {!isTelegram && (
+<Row label="Messages from unknown numbers" hint="Anyone WhatsApp has no saved name for." search={search}>
                       <Toggle checked={draft.monitoring.monitorUnknownNumbers} onChange={(v) => update("monitoring", { monitorUnknownNumbers: v })} />
                     </Row>
-                    <Row label="Business messages" hint="Contacts WhatsApp reports a business profile for." search={search}>
+)}
+                    {!isTelegram && (
+<Row label="Business messages" hint="Contacts WhatsApp reports a business profile for." search={search}>
                       <Toggle checked={draft.monitoring.monitorBusiness} onChange={(v) => update("monitoring", { monitorBusiness: v })} />
                     </Row>
-                    <Row label="Messages containing images" search={search}>
+)}
+                    {!isTelegram && (
+<Row label="Messages containing images" search={search}>
                       <Toggle checked={draft.monitoring.monitorImages} onChange={(v) => update("monitoring", { monitorImages: v })} />
                     </Row>
-                    <Row label="Messages containing documents" search={search}>
+)}
+                    {!isTelegram && (
+<Row label="Messages containing documents" search={search}>
                       <Toggle checked={draft.monitoring.monitorDocuments} onChange={(v) => update("monitoring", { monitorDocuments: v })} />
                     </Row>
-                    <Row label="Messages containing audio or voice notes" search={search}>
+)}
+                    {!isTelegram && (
+<Row label="Messages containing audio or voice notes" search={search}>
                       <Toggle checked={draft.monitoring.monitorAudio} onChange={(v) => update("monitoring", { monitorAudio: v })} />
                     </Row>
-                    <Row label="Messages containing videos" search={search}>
+)}
+                    {!isTelegram && (
+<Row label="Messages containing videos" search={search}>
                       <Toggle checked={draft.monitoring.monitorVideos} onChange={(v) => update("monitoring", { monitorVideos: v })} />
                     </Row>
+)}
                     <Row label="Messages containing links" search={search}>
                       <Toggle checked={draft.monitoring.monitorLinks} onChange={(v) => update("monitoring", { monitorLinks: v })} />
                     </Row>
-                    <Row label="Messages containing location information" search={search}>
+                    {!isTelegram && (
+<Row label="Messages containing location information" search={search}>
                       <Toggle checked={draft.monitoring.monitorLocation} onChange={(v) => update("monitoring", { monitorLocation: v })} />
                     </Row>
-                    <Row label="Missed calls" hint="Voice and video calls nobody picked up while Daksha was connected." search={search}>
+)}
+                    {!isTelegram && (
+<Row label="Missed calls" hint="Voice and video calls nobody picked up while Daksha was connected." search={search}>
                       <Toggle checked={draft.monitoring.monitorCalls} onChange={(v) => update("monitoring", { monitorCalls: v })} />
                     </Row>
+)}
                   </Card>
                 )}
 
@@ -338,15 +401,7 @@ export function WhatsAppSettingsModal({ connectionId, onClose, inline = false }:
                         <Toggle checked={draft.autoReply.inGroups} onChange={(v) => update("autoReply", { inGroups: v })} />
                       </Row>
                       <Row label="Reply scope" search={search}>
-                        <select
-                          value={draft.autoReply.scope}
-                          onChange={(e) => update("autoReply", { scope: e.target.value as "All" | "UnknownOnly" | "SelectedOnly" })}
-                          className={`${inputClass} w-44`}
-                        >
-                          <option value="All">All contacts</option>
-                          <option value="UnknownOnly">Unknown contacts only</option>
-                          <option value="SelectedOnly">Selected chats only</option>
-                        </select>
+                        <Dropdown value={draft.autoReply.scope} onChange={(v) => update("autoReply", { scope: v as "All" | "UnknownOnly" | "SelectedOnly" })} className="w-44" options={[{ value: "All", label: "All contacts" }, { value: "UnknownOnly", label: "Unknown contacts only" }, { value: "SelectedOnly", label: "Selected chats only" }]} />
                       </Row>
                       {draft.autoReply.scope === "SelectedOnly" && (
                         <PickerRow
@@ -391,7 +446,8 @@ export function WhatsAppSettingsModal({ connectionId, onClose, inline = false }:
                           className={`${inputClass} w-64`}
                         />
                       </Row>
-                      <Row
+                      {!isTelegram && (
+<Row
                         label="Message for business contacts"
                         hint="Sent instead of the AI reply when the sender has a WhatsApp Business profile. Leave empty to treat them like anyone else."
                         search={search}
@@ -403,12 +459,23 @@ export function WhatsAppSettingsModal({ connectionId, onClose, inline = false }:
                           className={`${inputClass} w-64`}
                         />
                       </Row>
+)}
                       <Row label="Response delay (seconds)" hint="Wait this long before sending the reply." search={search}>
                         <input
                           type="number"
                           min={0}
                           value={draft.autoReply.responseDelaySeconds}
                           onChange={(e) => update("autoReply", { responseDelaySeconds: Number(e.target.value) })}
+                          className={`${inputClass} w-24`}
+                        />
+                      </Row>
+                      <Row label="Group quick messages (seconds)" hint="When several messages arrive close together, wait this long after the last one, read them all and send a single reply. 0 replies to each message separately." search={search}>
+                        <input
+                          type="number"
+                          min={0}
+                          max={60}
+                          value={draft.autoReply.batchWindowSeconds}
+                          onChange={(e) => update("autoReply", { batchWindowSeconds: Math.min(60, Math.max(0, Number(e.target.value))) })}
                           className={`${inputClass} w-24`}
                         />
                       </Row>
@@ -453,17 +520,7 @@ export function WhatsAppSettingsModal({ connectionId, onClose, inline = false }:
                 {tab === "aiBehaviour" && (
                   <Card>
                     <Row label="Response personality" search={search}>
-                      <select
-                        value={draft.aiBehaviour.personality}
-                        onChange={(e) => update("aiBehaviour", { personality: e.target.value as WhatsAppFullSettings["aiBehaviour"]["personality"] })}
-                        className={`${inputClass} w-40`}
-                      >
-                        <option value="Professional">Professional</option>
-                        <option value="Friendly">Friendly</option>
-                        <option value="Casual">Casual</option>
-                        <option value="Formal">Formal</option>
-                        <option value="Custom">Custom</option>
-                      </select>
+                      <Dropdown value={draft.aiBehaviour.personality} onChange={(v) => update("aiBehaviour", { personality: v as WhatsAppFullSettings["aiBehaviour"]["personality"] })} className="w-40" options={[{ value: "Professional", label: "Professional" }, { value: "Friendly", label: "Friendly" }, { value: "Casual", label: "Casual" }, { value: "Formal", label: "Formal" }, { value: "Custom", label: "Custom" }]} />
                     </Row>
                     {draft.aiBehaviour.personality === "Custom" && (
                       <Row label="Custom personality" search={search}>
@@ -475,15 +532,7 @@ export function WhatsAppSettingsModal({ connectionId, onClose, inline = false }:
                       </Row>
                     )}
                     <Row label="Response length" search={search}>
-                      <select
-                        value={draft.aiBehaviour.responseLength}
-                        onChange={(e) => update("aiBehaviour", { responseLength: e.target.value as WhatsAppFullSettings["aiBehaviour"]["responseLength"] })}
-                        className={`${inputClass} w-36`}
-                      >
-                        <option value="Short">Short</option>
-                        <option value="Balanced">Balanced</option>
-                        <option value="Detailed">Detailed</option>
-                      </select>
+                      <Dropdown value={draft.aiBehaviour.responseLength} onChange={(v) => update("aiBehaviour", { responseLength: v as WhatsAppFullSettings["aiBehaviour"]["responseLength"] })} className="w-36" options={[{ value: "Short", label: "Short" }, { value: "Balanced", label: "Balanced" }, { value: "Detailed", label: "Detailed" }]} />
                     </Row>
                     <Row label="Reply in the sender's language" hint="Detects the language and script of the incoming message and answers in the same one." search={search}>
                       <Toggle checked={draft.aiBehaviour.replyInSenderLanguage} onChange={(v) => update("aiBehaviour", { replyInSenderLanguage: v })} />
@@ -520,7 +569,7 @@ export function WhatsAppSettingsModal({ connectionId, onClose, inline = false }:
                         />
                       </Row>
                     )}
-                    <Row label="Custom instructions" hint="Tell Daksha how you want it to communicate on WhatsApp." search={search}>
+                    <Row label="Custom instructions" hint={`Tell Daksha how you want it to communicate on ${brand}.`} search={search}>
                       <textarea
                         value={draft.aiBehaviour.customInstructions ?? ""}
                         onChange={(e) => update("aiBehaviour", { customInstructions: e.target.value })}
@@ -542,7 +591,7 @@ export function WhatsAppSettingsModal({ connectionId, onClose, inline = false }:
                 {tab === "privacy" && (
                   <div className="space-y-4">
                     <Card>
-                      <Row label="Hide message previews in notifications" hint="Shows just 'New WhatsApp message' without the text." search={search}>
+                      <Row label="Hide message previews in notifications" hint={`Shows just 'New ${brand} message' without the text.`} search={search}>
                         <Toggle checked={draft.privacy.hideMessagePreviews} onChange={(v) => update("privacy", { hideMessagePreviews: v })} />
                       </Row>
                       <Row label="Allow message content to be used as AI context" hint="Off disables conversation history in auto-reply, regardless of the AI Behaviour setting." search={search}>
@@ -573,7 +622,7 @@ export function WhatsAppSettingsModal({ connectionId, onClose, inline = false }:
                     <div className="rounded-[1.25rem] border border-line p-4">
                       <p className="text-sm font-semibold">Delete stored message content</p>
                       <p className="mt-0.5 text-xs text-muted">
-                        Permanently deletes every message Daksha has stored for this WhatsApp connection. This can&rsquo;t be undone.
+                        Permanently deletes every message Daksha has stored for this {brand} connection. This can&rsquo;t be undone.
                       </p>
                       <button onClick={() => void purgeMessages()} className={`${secondaryButtonClass} mt-3 px-4 py-2 text-sm`}>
                         Delete stored messages now
@@ -582,7 +631,7 @@ export function WhatsAppSettingsModal({ connectionId, onClose, inline = false }:
                     <div className="rounded-[1.25rem] border border-line p-4 text-xs text-muted">
                       <p className="font-semibold text-text">What Daksha stores</p>
                       <p className="mt-1">
-                        Message text, sender/chat identifiers, and reactions for this WhatsApp connection, kept so the chat view and
+                        Message text, sender/chat identifiers, and reactions for this {brand} connection, kept so the chat view and
                         auto-reply context can work. Connection credentials are encrypted separately. See
                         docs/integrations/whatsapp/limitations.md for the full picture.
                       </p>
@@ -596,14 +645,7 @@ export function WhatsAppSettingsModal({ connectionId, onClose, inline = false }:
                   <div className="space-y-4">
                     <Card>
                       <Row label="Notify me about" hint="Everything, or only messages matching the triggers below." search={search}>
-                        <select
-                          value={draft.notifications.scope}
-                          onChange={(e) => update("notifications", { scope: e.target.value as "All" | "Filtered" })}
-                          className={`${inputClass} w-44`}
-                        >
-                          <option value="All">Every incoming message</option>
-                          <option value="Filtered">Only selected types</option>
-                        </select>
+                        <Dropdown value={draft.notifications.scope} onChange={(v) => update("notifications", { scope: v as "All" | "Filtered" })} className="w-44" options={[{ value: "All", label: "Every incoming message" }, { value: "Filtered", label: "Only selected types" }]} />
                       </Row>
                     </Card>
                     {draft.notifications.scope === "Filtered" && (
@@ -633,9 +675,11 @@ export function WhatsAppSettingsModal({ connectionId, onClose, inline = false }:
                       <Row label="Email" hint="Also email each notification to your account's address." search={search}>
                         <Toggle checked={draft.notifications.email} onChange={(v) => update("notifications", { email: v })} />
                       </Row>
-                      <Row label="WhatsApp (message yourself)" hint="Also send each notification to your own WhatsApp number's &ldquo;Message yourself&rdquo; chat." search={search}>
+                      {!isTelegram && (
+<Row label="WhatsApp (message yourself)" hint="Also send each notification to your own WhatsApp number's &ldquo;Message yourself&rdquo; chat." search={search}>
                         <Toggle checked={draft.notifications.whatsAppSelf} onChange={(v) => update("notifications", { whatsAppSelf: v })} />
                       </Row>
+)}
                       <Row label="Notification sound" search={search}>
                         <Toggle checked={draft.notifications.sound} onChange={(v) => update("notifications", { sound: v })} />
                       </Row>

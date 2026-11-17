@@ -701,6 +701,7 @@ public static class IntegrationsModule
         {
             // `force` is an automation rule asking for a reply: it bypasses scope, hours and cooldown (the rule
             // is the user's explicit instruction) but never the pause switch or a chat set to "Never".
+            var receivedAt = DateTime.UtcNow.AddSeconds(-2); // the webhook fires within moments of the message
             if (settings.Paused) return;
             if (settings.AutoReplyBlockedChats.Contains(chatId) || chatRule?.AutoReply == "Never") return;
             var forcedIn = force || chatRule?.AutoReply == "Always";
@@ -724,6 +725,18 @@ public static class IntegrationsModule
                 var state = await autoReplyState.Find(s => s.ConnectionId == connection.Id && s.ChatId == chatId).FirstOrDefaultAsync(ct);
                 if (state is not null && (DateTime.UtcNow - state.LastRepliedAt).TotalSeconds < settings.CooldownSeconds) return;
             }
+
+            // Several messages in a row → one reply. Each message takes a ticket for its chat and waits out the
+            // batch window; only the newest ticket carries on, and it answers everything unanswered so far.
+            var batchKey = $"{connection.Id}:{chatId}";
+            var ticket = BatchTickets.AddOrUpdate(batchKey, 1, (_, t) => t + 1);
+            if (settings.BatchWindowSeconds > 0)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(settings.BatchWindowSeconds), ct);
+                if (BatchTickets.TryGetValue(batchKey, out var latest) && latest != ticket) return; // a newer message will answer
+            }
+            var batchText = await UnansweredMessagesTextAsync(messages, connection.Id, chatId, messageText, ct);
+            messageText = batchText;
 
             string replyText;
             if (!force && !string.IsNullOrWhiteSpace(chatRule?.CustomReply))
@@ -765,6 +778,13 @@ public static class IntegrationsModule
 
             if (settings.ResponseDelaySeconds > 0) await Task.Delay(TimeSpan.FromSeconds(settings.ResponseDelaySeconds), ct);
 
+            // If you answered this chat yourself (from your phone or Daksha's chat view) while the reply was
+            // being generated or delayed, don't talk over you. Daksha's own sends are flagged IsAiGenerated.
+            var repliedByUser = await messages.Find(m =>
+                m.ConnectionId == connection.Id && m.ChatId == chatId && m.FromMe && !m.IsAiGenerated && m.Timestamp >= receivedAt)
+                .AnyAsync(ct);
+            if (repliedByUser) return;
+
             if (settings.RequireApproval)
             {
                 await db.GetCollection<WhatsAppPendingReply>("whatsappPendingReplies").InsertOneAsync(new WhatsAppPendingReply
@@ -778,7 +798,12 @@ public static class IntegrationsModule
                 return;
             }
 
-            await whatsApp.SendMessageAsync(connection.Id, chatId, replyText, quotedMessageId: null, CancellationToken.None, isAiGenerated: true);
+            // A brief WhatsApp disconnect shouldn't throw away a reply that was already written: retry a few times.
+            for (var attempt = 1; ; attempt++)
+            {
+                try { await whatsApp.SendMessageAsync(connection.Id, chatId, replyText, quotedMessageId: null, CancellationToken.None, isAiGenerated: true); break; }
+                catch (InvalidOperationException) when (attempt < 4) { await Task.Delay(TimeSpan.FromSeconds(6 * attempt)); }
+            }
             await autoReplyState.UpdateOneAsync(
                 s => s.ConnectionId == connection.Id && s.ChatId == chatId,
                 Builders<WhatsAppAutoReplyState>.Update.Set(s => s.LastRepliedAt, DateTime.UtcNow).SetOnInsert(s => s.ConnectionId, connection.Id).SetOnInsert(s => s.ChatId, chatId),
@@ -790,16 +815,42 @@ public static class IntegrationsModule
         }
     }
 
-    private static bool IsWithinActiveHours(WhatsAppSettings settings)
+    /// <summary>Latest batch ticket per (connection, chat); in-memory, so it assumes a single API instance.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, long> BatchTickets = new();
+
+    /// <summary>The incoming messages since the last time anyone replied in this chat, oldest first, as one text.
+    /// Falls back to the triggering message when none are found.</summary>
+    private static async Task<string> UnansweredMessagesTextAsync(IMongoCollection<WhatsAppMessage> messages, string connectionId, string chatId, string fallback, CancellationToken ct)
+    {
+        var lastReply = await messages.Find(m => m.ConnectionId == connectionId && m.ChatId == chatId && m.FromMe)
+            .SortByDescending(m => m.Timestamp).Limit(1).FirstOrDefaultAsync(ct);
+        var since = lastReply?.Timestamp ?? DateTime.MinValue;
+        var pending = await messages.Find(m => m.ConnectionId == connectionId && m.ChatId == chatId && !m.FromMe && m.Timestamp > since)
+            .SortByDescending(m => m.Timestamp).Limit(10).ToListAsync(ct);
+        if (pending.Count <= 1) return fallback;
+        pending.Reverse();
+        return string.Join("\n", pending.Select(m => m.Text));
+    }
+
+    internal static bool IsWithinActiveHours(WhatsAppSettings settings) => IsWithinActiveHours(settings, DateTime.UtcNow);
+
+    internal static bool IsWithinActiveHours(WhatsAppSettings settings, DateTime utcNow)
     {
         TimeZoneInfo tz;
         try { tz = TimeZoneInfo.FindSystemTimeZoneById(settings.Timezone); }
         catch { tz = TimeZoneInfo.Utc; }
-        var now = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz).TimeOfDay;
+        var local = TimeZoneInfo.ConvertTimeFromUtc(utcNow, tz);
+        var now = local.TimeOfDay;
+        var day = (int)local.DayOfWeek;
 
         if (!TimeSpan.TryParse(settings.ActiveHoursStart, out var start) || !TimeSpan.TryParse(settings.ActiveHoursEnd, out var end))
             return true; // malformed config shouldn't silently block every reply
-        return start <= end ? now >= start && now <= end : now >= start || now <= end; // handles an overnight window
+
+        // The selected day is the one the window *starts* on, so an overnight Mon 22:00–06:00 shift still
+        // covers Tuesday's small hours.
+        bool DayOn(int d) => settings.ActiveDays.Contains(((d % 7) + 7) % 7);
+        if (start <= end) return DayOn(day) && now >= start && now <= end;
+        return (now >= start && DayOn(day)) || (now <= end && DayOn(day - 1));
     }
 
     private static bool IsCallNotice(string? text) =>
@@ -879,7 +930,7 @@ public static class IntegrationsModule
         }
     }
 
-    private static string BuildAutoReplyPrompt(WhatsAppSettings settings, string chatId, string? chatName, string messageText, bool isGroup, string? summary = null)
+    internal static string BuildAutoReplyPrompt(WhatsAppSettings settings, string chatId, string? chatName, string messageText, bool isGroup, string? summary = null, string channel = "WhatsApp")
     {
         var who = chatName ?? chatId;
         // Explicit about point of view and output format: without this, a model asked to "reply on someone's
@@ -906,7 +957,7 @@ public static class IntegrationsModule
         };
 
         var instructions =
-            $"You ARE the owner of this WhatsApp account, personally replying {scope}. Write only the exact " +
+            $"You ARE the owner of this {channel} account, personally replying {scope}. Write only the exact " +
             "message text to send, in first person, as a real person casually texting — never a list of " +
             "options, never meta-commentary about the message, never asking the user to pick a scenario, " +
             "never explaining your reasoning. If asked something you can't know for certain (e.g. confirming " +
@@ -923,7 +974,9 @@ public static class IntegrationsModule
         if (!string.IsNullOrWhiteSpace(summary))
             instructions += $" Background on the earlier conversation (older than the messages shown to you): {summary}";
 
-        return $"{instructions} The message you're replying to: \"{messageText}\"";
+        return messageText.Contains('\n')
+            ? $"{instructions} They sent several messages in a row (oldest first, one per line). Read them all and answer them together in a single reply:\n{messageText}"
+            : $"{instructions} The message you're replying to: \"{messageText}\"";
     }
 
     private static async Task<IReadOnlyList<(string Role, string Content)>?> BuildAutoReplyHistoryAsync(

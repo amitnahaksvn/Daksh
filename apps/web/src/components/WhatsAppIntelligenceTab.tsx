@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { inputClass } from "@/components/ui";
+import { Dropdown } from "@/components/ui";
 import { Card, Row, Toggle } from "@/components/WhatsAppSettingsParts";
 import { api, type WhatsAppInsight } from "@/lib/api";
 
@@ -62,11 +62,7 @@ function InsightsList({ connectionId }: { connectionId: string }) {
     <div>
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold">What Daksha has picked up</h2>
-        <select value={kind} onChange={(e) => setKind(e.target.value)} className={`${inputClass} w-44`}>
-          {KIND_FILTERS.map((f) => (
-            <option key={f.value} value={f.value}>{f.label}</option>
-          ))}
-        </select>
+        <Dropdown value={kind} onChange={setKind} className="w-44" options={KIND_FILTERS} />
       </div>
       {!items ? (
         <p className="mt-2 text-sm text-muted">Loading…</p>

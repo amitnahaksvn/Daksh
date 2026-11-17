@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { inputClass } from "@/components/ui";
+import { Dropdown, inputClass } from "@/components/ui";
 import { chatDisplayName } from "@/components/WhatsAppChatsPanel";
 import { Toggle } from "@/components/WhatsAppSettingsParts";
 import { api, ApiError, type WhatsAppChat, type WhatsAppChatRule } from "@/lib/api";
@@ -75,29 +75,24 @@ export function WhatsAppContactsTab({ connectionId, chats, search }: { connectio
                       <span className="block font-semibold">Auto-reply</span>
                       <span className="block text-xs text-muted">Default follows your Auto Reply settings; Always / Never override them for this chat.</span>
                     </span>
-                    <select
+                    <Dropdown
                       value={rule.autoReply}
-                      onChange={(e) => void change(c.chatId, { autoReply: e.target.value as WhatsAppChatRule["autoReply"] })}
-                      className={`${inputClass} w-32`}
-                    >
-                      <option value="Default">Default</option>
-                      <option value="Always">Always</option>
-                      <option value="Never">Never</option>
-                    </select>
+                      onChange={(v) => void change(c.chatId, { autoReply: v as WhatsAppChatRule["autoReply"] })}
+                      className="w-32"
+                      options={[{ value: "Default", label: "Default" }, { value: "Always", label: "Always" }, { value: "Never", label: "Never" }]}
+                    />
                   </label>
                   <label className="flex items-center justify-between gap-3">
                     <span>
                       <span className="block font-semibold">Priority</span>
                       <span className="block text-xs text-muted">High-priority chats always notify, even under filtered notifications.</span>
                     </span>
-                    <select
+                    <Dropdown
                       value={rule.priority}
-                      onChange={(e) => void change(c.chatId, { priority: e.target.value as WhatsAppChatRule["priority"] })}
-                      className={`${inputClass} w-32`}
-                    >
-                      <option value="Normal">Normal</option>
-                      <option value="High">High</option>
-                    </select>
+                      onChange={(v) => void change(c.chatId, { priority: v as WhatsAppChatRule["priority"] })}
+                      className="w-32"
+                      options={[{ value: "Normal", label: "Normal" }, { value: "High", label: "High" }]}
+                    />
                   </label>
                   <label className="flex items-center justify-between gap-3">
                     <span>

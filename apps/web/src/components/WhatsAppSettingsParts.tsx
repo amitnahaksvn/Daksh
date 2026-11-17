@@ -4,15 +4,28 @@ import type { WhatsAppChat } from "@/lib/api";
 
 export function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
-    <input
-      type="checkbox"
-      role="switch"
-      aria-checked={checked}
-      checked={checked}
-      disabled={disabled}
-      onChange={(e) => onChange(e.target.checked)}
-      className="h-5 w-9 shrink-0 cursor-pointer appearance-none rounded-full bg-surface-2 transition-colors checked:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
-    />
+    <label className={`relative inline-flex h-6 w-11 shrink-0 items-center ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}>
+      <input
+        type="checkbox"
+        role="switch"
+        aria-checked={checked}
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+        className="peer sr-only"
+      />
+      <span aria-hidden className="absolute inset-0 rounded-full border border-line bg-surface-2 transition-colors peer-checked:border-transparent peer-checked:bg-accent peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent" />
+      <span
+        aria-hidden
+        className={`absolute left-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-muted shadow transition-transform ${checked ? "translate-x-5 bg-accent-contrast" : ""}`}
+      >
+        {checked && (
+          <svg viewBox="0 0 16 16" className="h-3 w-3 text-accent" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3.5 8.5l3 3 6-6.5" />
+          </svg>
+        )}
+      </span>
+    </label>
   );
 }
 
@@ -93,3 +106,4 @@ export function Card({ children }: { children: React.ReactNode }) {
   return <div className="grid gap-x-10 rounded-[1.25rem] border border-line px-4 lg:grid-cols-2">{children}</div>;
 }
 
+export { Dropdown as SearchSelect } from "@/components/ui";

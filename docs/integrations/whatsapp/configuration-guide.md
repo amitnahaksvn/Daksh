@@ -22,7 +22,8 @@ is currently connected or not.
 - **Outgoing message notifications** — when on, messages you send (including from your phone) also appear in the bell.
 - **Operate continuously / Active hours / Timezone** — when "operate continuously" is off, auto-reply only
   fires within the configured local time window (timezone as an IANA id, e.g. `Asia/Kolkata`). An overnight
-  window (start > end) is handled as wrapping past midnight.
+  window (start > end) is handled as wrapping past midnight. **Active days** (Sun–Sat) restrict the window to
+  chosen weekdays; for an overnight window the day is the one it starts on.
 
 ### Monitoring
 Each toggle gates whether a message of that kind is (a) reported as a live notification and (b) eligible

@@ -6,6 +6,7 @@ import { buttonClass, ErrorState, Loading, Notice } from "@/components/ui";
 import { WhatsAppSettingsModal } from "@/components/WhatsAppSettingsModal";
 import { api, ApiError, type AppDetail, type ConnectionStatusValue } from "@/lib/api";
 import { getIntegrationsHub } from "@/lib/signalr";
+import { setChatShown, useHiddenChatConnections } from "@/lib/chatVisibility";
 import { useApi } from "@/lib/useApi";
 
 const PAIRING_STEPS = [
@@ -22,7 +23,7 @@ function ConnectPanel({ detail, onChanged }: { detail: AppDetail; onChanged: () 
   const [accountIdentifier, setAccountIdentifier] = useState<string | null>(detail.connection?.accountIdentifier ?? null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [dashboardAppId, setDashboardAppId] = useState<string | null>(null);
+  const hiddenChats = useHiddenChatConnections();
   const subscribedConnectionId = useRef<string | null>(null);
 
   const refreshQr = useCallback(async (id: string) => {
@@ -33,19 +34,6 @@ function ConnectPanel({ detail, onChanged }: { detail: AppDetail; onChanged: () 
       /* QR not ready yet — the next poll or a SignalR push will deliver it */
     }
   }, []);
-
-  // "Add to Dashboard" should reflect whether this connection is already pinned, not just this component's
-  // own in-memory state — otherwise reopening Manage after adding it shows the button again every time.
-  useEffect(() => {
-    if (!connectionId || status !== "Connected") return;
-    const timer = setTimeout(() => {
-      void api
-        .dashboardApps()
-        .then((apps) => setDashboardAppId(apps.find((a) => a.connectionId === connectionId)?.id ?? null))
-        .catch(() => void 0);
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [connectionId, status]);
 
   // SignalR delivers both the QR and the eventual "Connected" transition the moment they happen, but
   // this poll is the fallback for either one if that push is ever missed or the hub can't connect —
@@ -161,22 +149,6 @@ function ConnectPanel({ detail, onChanged }: { detail: AppDetail; onChanged: () 
     }
   }
 
-  async function toggleDashboard() {
-    if (!connectionId) return;
-    setError(null);
-    try {
-      if (dashboardAppId) {
-        await api.removeFromDashboard(dashboardAppId);
-        setDashboardAppId(null);
-      } else {
-        const result = await api.addToDashboard(connectionId);
-        setDashboardAppId(result.id);
-      }
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not update the dashboard.");
-    }
-  }
-
   return (
     <div>
       <div className="flex flex-wrap items-center gap-4">
@@ -198,13 +170,13 @@ function ConnectPanel({ detail, onChanged }: { detail: AppDetail; onChanged: () 
             <button
               type="button"
               role="switch"
-              aria-checked={dashboardAppId !== null}
-              onClick={() => void toggleDashboard()}
+              aria-checked={!hiddenChats.has(connectionId)}
+              onClick={() => setChatShown(connectionId, hiddenChats.has(connectionId))}
               className={`whitespace-nowrap rounded-full px-3 py-1 text-sm font-semibold transition-opacity hover:opacity-90 ${
-                dashboardAppId !== null ? "bg-accent text-accent-contrast" : "border border-line bg-surface text-text"
+                !hiddenChats.has(connectionId) ? "bg-accent text-accent-contrast" : "border border-line bg-surface text-text"
               }`}
             >
-              {dashboardAppId !== null ? "On Dashboard ✓" : "Show on Dashboard"}
+              {!hiddenChats.has(connectionId) ? "In Chats ✓" : "Show in Chats"}
             </button>
             <button
               onClick={disconnect}

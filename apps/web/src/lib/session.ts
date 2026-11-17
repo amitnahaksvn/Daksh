@@ -1,6 +1,7 @@
 import { setAccessToken, type AccountProfile } from "@/lib/api";
 
 export const SESSION_STORAGE_KEY = "daksh.session";
+export const SESSION_CHANGED_EVENT = "daksh:session-changed";
 const KEY = SESSION_STORAGE_KEY;
 
 /** The signed-in user's profile, persisted so a page refresh doesn't lose the session. Includes the
@@ -21,6 +22,8 @@ export function setSession(profile: AccountProfile) {
     /* ignore (private browsing, storage disabled, etc.) */
   }
   setAccessToken(profile.accessToken);
+  // The `storage` event only fires in *other* tabs, so tell this tab's listeners (e.g. the header badge).
+  window.dispatchEvent(new Event(SESSION_CHANGED_EVENT));
 }
 
 export function clearSession() {

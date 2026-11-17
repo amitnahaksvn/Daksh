@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { buttonClass, inputClass, secondaryButtonClass } from "@/components/ui";
+import { Dropdown, buttonClass, inputClass, secondaryButtonClass } from "@/components/ui";
 import { chatDisplayName } from "@/components/WhatsAppChatsPanel";
 import { INTEL_TAGS } from "@/components/WhatsAppIntelligenceTab";
 import { Toggle } from "@/components/WhatsAppSettingsParts";
@@ -64,11 +64,7 @@ function RuleEditor({ draft, chats, saving, error, onChange, onSave, onCancel }:
 
       <section>
         <p className="text-xs font-bold uppercase tracking-wide text-muted">When</p>
-        <select value={draft.trigger} onChange={(e) => onChange({ ...draft, trigger: e.target.value, chatIds: [] })} className={`${inputClass} mt-1.5`}>
-          {TRIGGERS.map((t) => (
-            <option key={t.value} value={t.value}>{t.label}</option>
-          ))}
-        </select>
+        <div className="mt-1.5"><Dropdown value={draft.trigger} onChange={(v) => onChange({ ...draft, trigger: v, chatIds: [] })} options={TRIGGERS} /></div>
       </section>
 
       <section className="space-y-2">
@@ -105,16 +101,18 @@ function RuleEditor({ draft, chats, saving, error, onChange, onSave, onCancel }:
           className={inputClass}
         />
         <div className="flex gap-2">
-          <select value={draft.category} onChange={(e) => onChange({ ...draft, category: e.target.value })} className={inputClass}>
-            <option value="">Any category</option>
-            {INTEL_TAGS.map((t) => (
-              <option key={t.tag} value={t.tag}>Category: {t.label}</option>
-            ))}
-          </select>
-          <select value={draft.priority} onChange={(e) => onChange({ ...draft, priority: e.target.value as "Any" | "High" })} className={`${inputClass} w-48`}>
-            <option value="Any">Any priority</option>
-            <option value="High">High-priority chats only</option>
-          </select>
+          <Dropdown
+            value={draft.category}
+            onChange={(v) => onChange({ ...draft, category: v })}
+            className="w-64"
+            options={[{ value: "", label: "Any category" }, ...INTEL_TAGS.map((t) => ({ value: t.tag, label: `Category: ${t.label}` }))]}
+          />
+          <Dropdown
+            value={draft.priority}
+            onChange={(v) => onChange({ ...draft, priority: v as "Any" | "High" })}
+            className="w-56"
+            options={[{ value: "Any", label: "Any priority" }, { value: "High", label: "High-priority chats only" }]}
+          />
         </div>
       </section>
 

@@ -159,18 +159,21 @@ function MessageBubble({
   );
 }
 
-function ChatThread({
+export function ChatThread({
   connectionId,
   chat,
   onClose,
   onSent,
   bodyHeightClass = "max-h-80",
+  embedded = false,
 }: {
   connectionId: string;
   chat: WhatsAppChat;
   onClose: () => void;
   onSent: () => void;
   bodyHeightClass?: string;
+  /** Inside a floating chat window: no outer border and no header of its own. */
+  embedded?: boolean;
 }) {
   const [messages, setMessages] = useState<WhatsAppMessage[] | null>(null);
   const [text, setText] = useState("");
@@ -260,14 +263,16 @@ function ChatThread({
   }
 
   return (
-    <div className="rounded-[1.25rem] border border-line">
-      <div className="flex items-center justify-between gap-2 border-b border-line p-3">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold">{chatDisplayName(chat)}</span>
-          {chat.isGroup && <GroupBadge />}
+    <div className={embedded ? "" : "rounded-[1.25rem] border border-line"}>
+      {!embedded && (
+        <div className="flex items-center justify-between gap-2 border-b border-line p-3">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold">{chatDisplayName(chat)}</span>
+            {chat.isGroup && <GroupBadge />}
+          </div>
+          <button onClick={onClose} className="text-sm text-muted hover:text-text">Close</button>
         </div>
-        <button onClick={onClose} className="text-sm text-muted hover:text-text">Close</button>
-      </div>
+      )}
       <div ref={scrollRef} className={`${bodyHeightClass} space-y-2 overflow-y-auto p-3`}>
         {!messages ? (
           <p className="text-sm text-muted">Loading…</p>

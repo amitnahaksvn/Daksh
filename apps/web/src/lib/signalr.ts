@@ -8,7 +8,12 @@ let connection: signalR.HubConnection | null = null;
 export function getIntegrationsHub(): signalR.HubConnection {
   if (connection) return connection;
   connection = new signalR.HubConnectionBuilder()
-    .withUrl(`${API_URL}/hubs/integrations`, { accessTokenFactory: () => getSession()?.accessToken ?? "" })
+    .withUrl(`${API_URL}/hubs/integrations`, {
+      accessTokenFactory: () => getSession()?.accessToken ?? "",
+      // Auth is a bearer token, not cookies. The default (withCredentials: true) makes the browser demand
+      // Access-Control-Allow-Credentials, which the API's CORS policy doesn't send, so negotiate fails.
+      withCredentials: false,
+    })
     // Default withAutomaticReconnect() gives up for good after ~4 attempts (0/2s/10s/30s) and never retries
     // again — fine for a network blip, not for the API being down longer than that (a deploy, a crash
     // restart). Retry forever instead, capped at 30s between attempts, so a live page recovers on its own

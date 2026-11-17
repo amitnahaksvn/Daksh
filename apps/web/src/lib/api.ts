@@ -102,6 +102,8 @@ export type RegisterRequest = {
   email: string;
   password: string;
 };
+export type UserDetails = { id: string; firstName: string; lastName: string; gender: string; dateOfBirth: string; email: string; createdAtUtc: string };
+export type UpdateProfileRequest = { firstName: string; lastName: string; gender: string; dateOfBirth: string };
 export type MessageResponse = { message: string };
 export type AccountProfile = { id: string; firstName: string; lastName: string; email: string; accessToken: string; expiresAt: string };
 
@@ -127,6 +129,9 @@ export type ConnectionStatusDto = {
   autoReplyEnabled: boolean;
   autoReplyInGroups: boolean;
 };
+export type TelegramLoginState = { status: ConnectionStatusValue; qr: string | null; expiresAt: string | null; passwordRequired: boolean; error: string | null };
+export type TelegramChat = { chatId: string; name: string; isGroup: boolean; lastMessagePreview: string | null; lastMessageAt: string | null; unreadCount: number };
+export type TelegramMessage = { messageId: string; chatId: string; fromMe: boolean; isAiGenerated: boolean; senderName: string | null; text: string; timestamp: string };
 export type WhatsAppReaction = { by: string; emoji: string };
 export type WhatsAppMessage = {
   messageId: string;
@@ -199,6 +204,7 @@ export type WhatsAppGeneralSettings = {
   activeHoursStart: string;
   activeHoursEnd: string;
   timezone: string;
+  activeDays: number[];
   incomingNotificationsEnabled: boolean;
   outgoingNotificationsEnabled: boolean;
 };
@@ -224,6 +230,7 @@ export type WhatsAppAutoReplySettings = {
   customMessage: string | null;
   responseDelaySeconds: number;
   cooldownSeconds: number;
+  batchWindowSeconds: number;
   requireApproval: boolean;
   allowedChats: string[];
   blockedChats: string[];
@@ -331,6 +338,10 @@ export const api = {
   integrations: () => apiFetch<Integration[]>("/api/v1/integrations"),
   register: (req: RegisterRequest) => apiFetch<MessageResponse>("/api/v1/account/register", json(req)),
   verifyOtp: (email: string, otp: string) => apiFetch<AccountProfile>("/api/v1/account/verify-otp", json({ email, otp })),
+  me: () => apiFetch<UserDetails>("/api/v1/account/me"),
+  updateMe: (req: UpdateProfileRequest) => apiFetch<UserDetails>("/api/v1/account/me", { method: "PUT", body: JSON.stringify(req) }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    apiFetch<MessageResponse>("/api/v1/account/me/password", json({ currentPassword, newPassword })),
   login: (email: string, password: string) => apiFetch<AccountProfile>("/api/v1/account/login", json({ email, password })),
 
   // App catalogue + per-user connection lifecycle (distinct from the mock-adapter `integrations()` above).
@@ -346,6 +357,14 @@ export const api = {
   gmailMessage: (id: string) => apiFetch<GmailMessage>(`/api/integrations/gmail/messages/${encodeURIComponent(id)}`),
   sendGmailMessage: (message: { to: string; subject: string; body: string }) =>
     apiFetch<{ messageId: string | null }>("/api/integrations/gmail/messages", json(message)),
+  connectTelegram: () => apiFetch<ConnectResponse>("/api/integrations/telegram/connect", { method: "POST" }),
+  telegramState: (connectionId: string) => apiFetch<TelegramLoginState>(`/api/integrations/telegram/${connectionId}/state`),
+  telegramPassword: (connectionId: string, password: string) => apiFetch<unknown>(`/api/integrations/telegram/${connectionId}/password`, json({ password })),
+  telegramChats: (connectionId: string) => apiFetch<TelegramChat[]>(`/api/integrations/telegram/${connectionId}/chats`),
+  telegramMessages: (connectionId: string, chatId: string) =>
+    apiFetch<TelegramMessage[]>(`/api/integrations/telegram/${connectionId}/chats/${encodeURIComponent(chatId)}/messages`),
+  sendTelegramMessage: (connectionId: string, chatId: string, text: string) =>
+    apiFetch<TelegramMessage>(`/api/integrations/telegram/${connectionId}/chats/${encodeURIComponent(chatId)}/messages`, json({ text })),
   disconnectGmail: () => apiFetch<{ status: string }>("/api/integrations/gmail/disconnect", { method: "POST" }),
   getQr: (connectionId: string) => apiFetch<QrResponse>(`/api/integrations/${connectionId}/qr`),
   getConnectionStatus: (connectionId: string) => apiFetch<ConnectionStatusDto>(`/api/integrations/${connectionId}/status`),

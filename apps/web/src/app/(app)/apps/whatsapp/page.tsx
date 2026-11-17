@@ -3,7 +3,7 @@ import { PageHeader, tileClass } from "@/components/ui";
 
 export default function WhatsAppConfigPage() {
   return (
-    <main className="mx-auto w-full max-w-lg p-3 md:p-4">
+    <main className="w-full p-3 md:p-4">
       <PageHeader title="WhatsApp" />
       <div className={`p-6 ${tileClass}`}>
         <WhatsAppConnectPanel />
