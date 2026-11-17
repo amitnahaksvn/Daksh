@@ -2,7 +2,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { BrandTile, StatusChip } from "@/components/integrations";
-import { buttonClass, ErrorState, Loading, Notice, secondaryButtonClass } from "@/components/ui";
+import { buttonClass, ErrorState, Loading, Notice } from "@/components/ui";
+import { WhatsAppSettingsModal } from "@/components/WhatsAppSettingsModal";
 import { api, ApiError, type AppDetail, type ConnectionStatusValue } from "@/lib/api";
 import { getIntegrationsHub } from "@/lib/signalr";
 import { useApi } from "@/lib/useApi";
@@ -21,7 +22,7 @@ function ConnectPanel({ detail, onChanged }: { detail: AppDetail; onChanged: () 
   const [accountIdentifier, setAccountIdentifier] = useState<string | null>(detail.connection?.accountIdentifier ?? null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [addedToDashboard, setAddedToDashboard] = useState(false);
+  const [dashboardAppId, setDashboardAppId] = useState<string | null>(null);
   const subscribedConnectionId = useRef<string | null>(null);
 
   const refreshQr = useCallback(async (id: string) => {
@@ -32,6 +33,19 @@ function ConnectPanel({ detail, onChanged }: { detail: AppDetail; onChanged: () 
       /* QR not ready yet — the next poll or a SignalR push will deliver it */
     }
   }, []);
+
+  // "Add to Dashboard" should reflect whether this connection is already pinned, not just this component's
+  // own in-memory state — otherwise reopening Manage after adding it shows the button again every time.
+  useEffect(() => {
+    if (!connectionId || status !== "Connected") return;
+    const timer = setTimeout(() => {
+      void api
+        .dashboardApps()
+        .then((apps) => setDashboardAppId(apps.find((a) => a.connectionId === connectionId)?.id ?? null))
+        .catch(() => void 0);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [connectionId, status]);
 
   // SignalR delivers both the QR and the eventual "Connected" transition the moment they happen, but
   // this poll is the fallback for either one if that push is ever missed or the hub can't connect —
@@ -147,30 +161,60 @@ function ConnectPanel({ detail, onChanged }: { detail: AppDetail; onChanged: () 
     }
   }
 
-  async function addToDashboard() {
+  async function toggleDashboard() {
     if (!connectionId) return;
     setError(null);
     try {
-      await api.addToDashboard(connectionId);
-      setAddedToDashboard(true);
+      if (dashboardAppId) {
+        await api.removeFromDashboard(dashboardAppId);
+        setDashboardAppId(null);
+      } else {
+        const result = await api.addToDashboard(connectionId);
+        setDashboardAppId(result.id);
+      }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not add to dashboard.");
+      setError(err instanceof ApiError ? err.message : "Could not update the dashboard.");
     }
   }
 
   return (
     <div>
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-4">
         <BrandTile icon={detail.catalog.icon} color={detail.catalog.color} size={56} />
-        <div>
-          <h1 className="text-2xl font-extrabold">{detail.catalog.name}</h1>
+        <div className="flex-1">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-extrabold">{detail.catalog.name}</h1>
+            <StatusChip status={status} />
+          </div>
           <p className="text-sm text-muted">{detail.catalog.description}</p>
         </div>
-      </div>
-
-      <div className="mt-4 flex items-center gap-2">
-        <span className="text-sm font-semibold text-muted">Status:</span>
-        <StatusChip status={status} />
+        {status === "Connected" && connectionId && (
+          <div className="flex shrink-0 flex-nowrap items-center gap-2 rounded-full border border-line bg-surface-2 py-1 pl-3 pr-1">
+            <span className="flex items-center gap-1.5 whitespace-nowrap text-sm font-semibold">
+              <span aria-hidden>📱</span>
+              {accountIdentifier?.split(/[:@]/)[0] || "unknown"}
+            </span>
+            <span aria-hidden className="h-5 w-px shrink-0 bg-line" />
+            <button
+              type="button"
+              role="switch"
+              aria-checked={dashboardAppId !== null}
+              onClick={() => void toggleDashboard()}
+              className={`whitespace-nowrap rounded-full px-3 py-1 text-sm font-semibold transition-opacity hover:opacity-90 ${
+                dashboardAppId !== null ? "bg-accent text-accent-contrast" : "border border-line bg-surface text-text"
+              }`}
+            >
+              {dashboardAppId !== null ? "On Dashboard ✓" : "Show on Dashboard"}
+            </button>
+            <button
+              onClick={disconnect}
+              disabled={busy}
+              className="whitespace-nowrap rounded-full bg-danger-bg px-3 py-1 text-sm font-semibold text-danger transition-opacity hover:opacity-80 disabled:opacity-50"
+            >
+              Disconnect
+            </button>
+          </div>
+        )}
       </div>
 
       {error && <p role="alert" className="mt-4 rounded-[1.25rem] bg-danger-bg p-4 text-sm text-danger">{error}</p>}
@@ -207,17 +251,9 @@ function ConnectPanel({ detail, onChanged }: { detail: AppDetail; onChanged: () 
         </div>
       )}
 
-      {status === "Connected" && (
-        <div className="mt-5 space-y-4">
-          <p className="text-sm text-muted">Connected account: <span className="font-semibold text-text">{accountIdentifier ?? "unknown"}</span></p>
-          <div className="flex flex-wrap gap-2">
-            {!addedToDashboard ? (
-              <button onClick={addToDashboard} className={`${buttonClass} px-5 py-2.5`}>Add to Dashboard</button>
-            ) : (
-              <span className="inline-flex items-center rounded-full bg-lime px-4 py-2 text-sm font-semibold text-on-tint">Added to Dashboard ✓</span>
-            )}
-            <button onClick={disconnect} disabled={busy} className={`${secondaryButtonClass} px-5 py-2.5`}>Disconnect</button>
-          </div>
+      {status === "Connected" && connectionId && (
+        <div className="mt-4">
+          <WhatsAppSettingsModal connectionId={connectionId} inline />
         </div>
       )}
 

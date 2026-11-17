@@ -3,7 +3,7 @@ import { useEffect, type ReactNode } from "react";
 import { tileClass } from "@/components/ui";
 
 /** A large centered overlay dialog. Closes on Escape or a click outside the panel. */
-export function Modal({ open, onClose, children }: { open: boolean; onClose: () => void; children: ReactNode }) {
+export function Modal({ open, onClose, children, wide = false }: { open: boolean; onClose: () => void; children: ReactNode; wide?: boolean }) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -28,7 +28,7 @@ export function Modal({ open, onClose, children }: { open: boolean; onClose: () 
       onClick={onClose}
     >
       <div
-        className={`max-h-[90vh] w-full max-w-2xl overflow-y-auto p-6 sm:p-8 ${tileClass}`}
+        className={`max-h-[96vh] w-full overflow-y-auto ${wide ? "max-w-[96rem] p-4 sm:p-6" : "max-w-2xl p-6 sm:p-8"} ${tileClass}`}
         onClick={(e) => e.stopPropagation()}
       >
         <button

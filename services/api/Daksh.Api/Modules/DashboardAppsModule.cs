@@ -5,7 +5,8 @@ using MongoDB.Driver;
 
 namespace Daksh.Api.Modules;
 
-public sealed record DashboardAppDto(string Id, string ConnectionId, string IntegrationKey, string Name, string Icon, string Color, string Status, string? AccountIdentifier, DateTime? LastActiveAt, int DisplayOrder);
+public sealed record DashboardAppDto(string Id, string ConnectionId, string IntegrationKey, string Name, string Icon, string Color, string Status, string? AccountIdentifier, DateTime? LastActiveAt, int DisplayOrder, int UnreadCount, string? LastMessagePreview, DateTime? LastMessageAt, bool LastMessageIsGroup);
+public sealed record ActivityItemDto(string IntegrationKey, string ConnectionId, string Icon, string Color, string ChatId, string? ChatName, bool IsGroup, bool FromMe, string Text, DateTime Timestamp);
 public sealed record AddDashboardAppRequest(string? ConnectionId);
 public sealed record PatchDashboardAppRequest(bool? IsVisible, int? DisplayOrder);
 
@@ -28,6 +29,29 @@ public static class DashboardAppsModule
         g.MapPost("/", AddAsync).Validate<AddDashboardAppRequest>();
         g.MapDelete("/{id}", RemoveAsync);
         g.MapPatch("/{id}", PatchAsync);
+
+        app.MapGet("/api/dashboard/activity", GetActivityAsync).WithTags("Dashboard").RequireAuthorization(AuthSetup.UserScheme);
+    }
+
+    /// <summary>The dashboard's big activity feed: every recent message (individual or group, sent or
+    /// received) across every WhatsApp connection the user has — not just ones pinned to the dashboard.</summary>
+    private static async Task<IResult> GetActivityAsync(IMongoDatabase db, ClaimsPrincipalAccessor who, CancellationToken ct)
+    {
+        var connections = await db.GetCollection<IntegrationConnection>("integrationConnections")
+            .Find(c => c.UserId == who.UserId && c.IntegrationKey == "whatsapp").ToListAsync(ct);
+        if (connections.Count == 0) return Results.Ok(Array.Empty<ActivityItemDto>());
+
+        var catalog = await db.GetCollection<IntegrationCatalogEntry>("integrations").Find(c => c.IntegrationKey == "whatsapp").FirstOrDefaultAsync(ct);
+        var connectionIds = connections.Select(c => c.Id).ToList();
+
+        var messages = await db.GetCollection<WhatsAppMessage>("whatsappMessages")
+            .Find(m => connectionIds.Contains(m.ConnectionId))
+            .SortByDescending(m => m.Timestamp).Limit(50).ToListAsync(ct);
+
+        var items = messages.Select(m => new ActivityItemDto(
+            "whatsapp", m.ConnectionId, catalog?.Icon ?? "SiWhatsapp", catalog?.Color ?? "#25D366",
+            m.ChatId, m.ChatName, WhatsAppChat.IsGroup(m.ChatId), m.FromMe, m.Text, m.Timestamp));
+        return Results.Ok(items);
     }
 
     private static async Task<IResult> ListAsync(IMongoDatabase db, ClaimsPrincipalAccessor who, CancellationToken ct)
@@ -47,16 +71,38 @@ public static class DashboardAppsModule
             .Find(c => keys.Contains(c.IntegrationKey)).ToListAsync(ct);
         var catalogByKey = catalog.ToDictionary(c => c.IntegrationKey);
 
+        // WhatsApp is the only integration with a message feed today; fetch each connection's unread count
+        // and latest message in one grouped aggregation rather than a query per card.
+        var whatsAppConnectionIds = connections.Where(c => c.IntegrationKey == "whatsapp").Select(c => c.Id).ToList();
+        var latestByConnection = new Dictionary<string, WhatsAppMessage>();
+        var unreadByConnection = new Dictionary<string, int>();
+        if (whatsAppConnectionIds.Count > 0)
+        {
+            var messages = db.GetCollection<WhatsAppMessage>("whatsappMessages");
+            foreach (var connectionId in whatsAppConnectionIds)
+            {
+                var latest = await messages.Find(m => m.ConnectionId == connectionId).SortByDescending(m => m.Timestamp).Limit(1).FirstOrDefaultAsync(ct);
+                if (latest is not null) latestByConnection[connectionId] = latest;
+
+                var lastViewedAt = connectionsById[connectionId].LastViewedAt ?? DateTime.MinValue;
+                unreadByConnection[connectionId] = (int)await messages.CountDocumentsAsync(
+                    m => m.ConnectionId == connectionId && !m.FromMe && m.Timestamp > lastViewedAt, cancellationToken: ct);
+            }
+        }
+
         var dtos = apps
             .Where(a => connectionsById.ContainsKey(a.ConnectionId))
             .Select(a =>
             {
                 var connection = connectionsById[a.ConnectionId];
                 var entry = catalogByKey.GetValueOrDefault(connection.IntegrationKey);
+                var latest = latestByConnection.GetValueOrDefault(connection.Id);
                 return new DashboardAppDto(
                     a.Id, connection.Id, connection.IntegrationKey,
                     entry?.Name ?? connection.IntegrationKey, entry?.Icon ?? "", entry?.Color ?? "#888888",
-                    connection.Status.ToString(), connection.AccountIdentifier, connection.LastActiveAt, a.DisplayOrder);
+                    connection.Status.ToString(), connection.AccountIdentifier, connection.LastActiveAt, a.DisplayOrder,
+                    unreadByConnection.GetValueOrDefault(connection.Id), latest?.Text, latest?.Timestamp,
+                    latest is not null && WhatsAppChat.IsGroup(latest.ChatId));
             });
         return Results.Ok(dtos);
     }

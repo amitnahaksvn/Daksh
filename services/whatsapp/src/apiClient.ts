@@ -6,12 +6,26 @@ export type ConnectionEventType =
   | "WhatsAppQrExpired"
   | "WhatsAppConnected"
   | "WhatsAppDisconnected"
-  | "WhatsAppConnectionFailed";
+  | "WhatsAppConnectionFailed"
+  | "WhatsAppMessageReceived"
+  | "WhatsAppMessageSent"
+  | "WhatsAppMessageUpdated";
 
 export async function reportEvent(
   connectionId: string,
   eventType: ConnectionEventType,
-  fields: { status?: string; qr?: string; qrExpiresAt?: Date; accountIdentifier?: string; error?: string } = {},
+  fields: {
+    status?: string;
+    qr?: string;
+    qrExpiresAt?: Date;
+    accountIdentifier?: string;
+    error?: string;
+    messageId?: string;
+    chatId?: string;
+    chatName?: string;
+    preview?: string;
+    timestamp?: Date;
+  } = {},
 ): Promise<void> {
   try {
     await fetch(`${config.dakshApiBaseUrl}/api/integrations/whatsapp/internal/events`, {
@@ -25,6 +39,11 @@ export async function reportEvent(
         qrExpiresAt: fields.qrExpiresAt?.toISOString(),
         accountIdentifier: fields.accountIdentifier,
         error: fields.error,
+        messageId: fields.messageId,
+        chatId: fields.chatId,
+        chatName: fields.chatName,
+        preview: fields.preview,
+        timestamp: fields.timestamp?.toISOString(),
       }),
     });
   } catch (err) {

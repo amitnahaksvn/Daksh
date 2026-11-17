@@ -51,6 +51,42 @@ app.post("/sessions/:connectionId/disconnect", async (req, res) => {
   res.json({ status: "Disconnected" });
 });
 
+app.post("/sessions/:connectionId/send", async (req, res) => {
+  const { chatId, text, quotedMessageId, isAiGenerated, signature } = req.body as {
+    signature?: string | null;
+    chatId?: string;
+    text?: string;
+    quotedMessageId?: string;
+    isAiGenerated?: boolean;
+  };
+  if (!chatId || !text) {
+    res.status(400).json({ error: "chatId and text are required" });
+    return;
+  }
+  try {
+    const db = await getDb();
+    await sessions.sendMessage(db, req.params.connectionId, chatId, text, quotedMessageId, isAiGenerated ?? false, signature ?? undefined);
+    res.json({ status: "sent" });
+  } catch (err) {
+    res.status(409).json({ error: err instanceof Error ? err.message : "Could not send the message." });
+  }
+});
+
+app.post("/sessions/:connectionId/react", async (req, res) => {
+  const { chatId, messageId, emoji } = req.body as { chatId?: string; messageId?: string; emoji?: string };
+  if (!chatId || !messageId || emoji === undefined) {
+    res.status(400).json({ error: "chatId, messageId and emoji are required" });
+    return;
+  }
+  try {
+    const db = await getDb();
+    await sessions.sendReaction(db, req.params.connectionId, chatId, messageId, emoji);
+    res.json({ status: "ok" });
+  } catch (err) {
+    res.status(409).json({ error: err instanceof Error ? err.message : "Could not react to the message." });
+  }
+});
+
 async function main(): Promise<void> {
   const db = await getDb();
   await sessions.restoreSessionsFromDatabase(db);

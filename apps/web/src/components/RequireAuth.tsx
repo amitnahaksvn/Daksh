@@ -16,7 +16,10 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
   const authed = useSyncExternalStore(subscribe, () => rehydrateAccessToken() !== null, () => null);
 
   useEffect(() => {
-    if (authed === false) router.replace("/login");
+    if (authed === false) {
+      const returnUrl = window.location.pathname + window.location.search;
+      router.replace(`/login?returnUrl=${encodeURIComponent(returnUrl)}`);
+    }
   }, [authed, router]);
 
   if (!authed) return null;

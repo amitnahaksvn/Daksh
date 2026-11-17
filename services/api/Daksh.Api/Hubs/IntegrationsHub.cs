@@ -27,6 +27,10 @@ public static class IntegrationEvents
     public const string Connected = "WhatsAppConnected";
     public const string Disconnected = "WhatsAppDisconnected";
     public const string ConnectionFailed = "WhatsAppConnectionFailed";
+    public const string MessageReceived = "WhatsAppMessageReceived";
+    public const string MessageSent = "WhatsAppMessageSent";
+    public const string MessageUpdated = "WhatsAppMessageUpdated";
+    public const string ReminderDue = "WhatsAppReminderDue";
 
     public static Task PublishAsync(IHubContext<IntegrationsHub> hub, string userId, string eventName, object payload, CancellationToken ct = default) =>
         hub.Clients.Group(IntegrationsHub.UserGroup(userId)).SendAsync(eventName, payload, ct);

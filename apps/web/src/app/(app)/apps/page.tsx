@@ -430,6 +430,7 @@ function AppsPageContent({ apps }: { apps: AppCatalogEntry[] }) {
       )}
 
       <Modal
+        wide
         open={whatsAppOpen}
         onClose={() => {
           setWhatsAppOpen(false);

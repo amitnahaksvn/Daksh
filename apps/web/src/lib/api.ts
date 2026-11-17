@@ -2,6 +2,8 @@
  * Typed client for the Daksh API. The website contains no business logic: every
  * operation is a call to the shared API.
  */
+import { SESSION_STORAGE_KEY } from "@/lib/session";
+
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5080";
 
 export class ApiError extends Error {
@@ -19,6 +21,25 @@ let accessToken: string | null = null;
 /** Called by the auth integration once an OIDC token is available. */
 export function setAccessToken(token: string | null) {
   accessToken = token;
+}
+
+/** A 401 means the stored token is gone/expired — clear it and send the user to sign in, carrying the
+ *  current URL as `returnUrl` so the login page can send them straight back afterwards. */
+function redirectToLogin(): void {
+  if (typeof window === "undefined") return;
+  if (window.location.pathname.startsWith("/login")) return; // already there; avoid a redirect loop
+
+  accessToken = null;
+  try {
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+  } catch {
+    /* ignore (private browsing, storage disabled, etc.) */
+  }
+
+  const returnUrl = window.location.pathname + window.location.search;
+  // apiFetch is a plain module function, not a component — there's no router instance to push() with here.
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+  window.location.href = `/login?returnUrl=${encodeURIComponent(returnUrl)}`;
 }
 
 function authHeaders(): Record<string, string> {
@@ -50,7 +71,10 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     } catch {
       /* non-JSON error body */
     }
-    if (res.status === 401) title = "You need to sign in to continue.";
+    if (res.status === 401) {
+      title = "You need to sign in to continue.";
+      redirectToLogin();
+    }
     throw new ApiError(res.status, title, fieldErrors);
   }
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
@@ -99,6 +123,44 @@ export type ConnectionStatusDto = {
   connectedAt: string | null;
   lastActiveAt: string | null;
   lastError: string | null;
+  notificationsEnabled: boolean;
+  autoReplyEnabled: boolean;
+  autoReplyInGroups: boolean;
+};
+export type WhatsAppReaction = { by: string; emoji: string };
+export type WhatsAppMessage = {
+  messageId: string;
+  chatId: string;
+  chatName: string | null;
+  fromMe: boolean;
+  isAiGenerated: boolean;
+  isGroup: boolean;
+  text: string;
+  hasMedia: boolean;
+  quotedMessageId: string | null;
+  quotedText: string | null;
+  reactions: WhatsAppReaction[];
+  timestamp: string;
+};
+export type WhatsAppChat = {
+  chatId: string;
+  chatName: string | null;
+  isGroup: boolean;
+  lastMessagePreview: string;
+  lastMessageAt: string;
+  unreadCount: number;
+};
+export type ActivityItem = {
+  integrationKey: string;
+  connectionId: string;
+  icon: string;
+  color: string;
+  chatId: string;
+  chatName: string | null;
+  isGroup: boolean;
+  fromMe: boolean;
+  text: string;
+  timestamp: string;
 };
 export type AppDetail = { catalog: AppCatalogEntry; connection: ConnectionStatusDto | null };
 export type QrResponse = { qr: string | null; expiresAt: string | null; status: string };
@@ -125,7 +187,131 @@ export type DashboardApp = {
   accountIdentifier: string | null;
   lastActiveAt: string | null;
   displayOrder: number;
+  unreadCount: number;
+  lastMessagePreview: string | null;
+  lastMessageAt: string | null;
+  lastMessageIsGroup: boolean;
 };
+
+export type WhatsAppGeneralSettings = {
+  paused: boolean;
+  operateContinuously: boolean;
+  activeHoursStart: string;
+  activeHoursEnd: string;
+  timezone: string;
+  incomingNotificationsEnabled: boolean;
+  outgoingNotificationsEnabled: boolean;
+};
+export type WhatsAppMonitoringSettings = {
+  monitorPersonal: boolean;
+  monitorGroups: boolean;
+  monitorImages: boolean;
+  monitorDocuments: boolean;
+  monitorAudio: boolean;
+  monitorVideos: boolean;
+  monitorLinks: boolean;
+  monitorLocation: boolean;
+  monitorCalls: boolean;
+  monitorSavedContacts: boolean;
+  monitorUnknownNumbers: boolean;
+  monitorBusiness: boolean;
+};
+export type WhatsAppAutoReplySettings = {
+  enabled: boolean;
+  inGroups: boolean;
+  scope: "All" | "UnknownOnly" | "SelectedOnly";
+  customMessageEnabled: boolean;
+  customMessage: string | null;
+  responseDelaySeconds: number;
+  cooldownSeconds: number;
+  requireApproval: boolean;
+  allowedChats: string[];
+  blockedChats: string[];
+  outsideHoursMessage: string | null;
+  businessMessage: string | null;
+};
+export type WhatsAppAiBehaviourSettings = {
+  personality: "Professional" | "Friendly" | "Casual" | "Formal" | "Custom";
+  customPersonality: string | null;
+  responseLength: "Short" | "Balanced" | "Detailed";
+  customInstructions: string | null;
+  neverRespondTopics: string | null;
+  useConversationContext: boolean;
+  contextRetentionMessages: number;
+  replyInSenderLanguage: boolean;
+  summarizeLongConversations: boolean;
+  aiSignatureEnabled: boolean;
+  aiSignatureText: string | null;
+};
+export type WhatsAppPrivacySettings = {
+  hideMessagePreviews: boolean;
+  messageRetentionDays: number;
+  allowMessageContentAsAiContext: boolean;
+  aiExcludedChats: string[];
+};
+export type WhatsAppNotificationSettings = {
+  scope: "All" | "Filtered";
+  tags: string[];
+  email: boolean;
+  whatsAppSelf: boolean;
+  desktop: boolean;
+  sound: boolean;
+};
+export type WhatsAppIntelligenceSettings = { disabledTags: string[] };
+export type WhatsAppFullSettings = {
+  connectionId: string;
+  accountIdentifier: string;
+  status: string;
+  general: WhatsAppGeneralSettings;
+  monitoring: WhatsAppMonitoringSettings;
+  autoReply: WhatsAppAutoReplySettings;
+  aiBehaviour: WhatsAppAiBehaviourSettings;
+  privacy: WhatsAppPrivacySettings;
+  notifications: WhatsAppNotificationSettings;
+  intelligence: WhatsAppIntelligenceSettings;
+};
+export type WhatsAppFullSettingsUpdate = {
+  general?: Partial<WhatsAppGeneralSettings>;
+  monitoring?: Partial<WhatsAppMonitoringSettings>;
+  autoReply?: Partial<WhatsAppAutoReplySettings>;
+  aiBehaviour?: Partial<WhatsAppAiBehaviourSettings>;
+  privacy?: Partial<WhatsAppPrivacySettings>;
+  notifications?: Partial<WhatsAppNotificationSettings>;
+  intelligence?: Partial<WhatsAppIntelligenceSettings>;
+};
+export type WhatsAppChatRule = {
+  chatId: string;
+  monitor: boolean;
+  autoReply: "Default" | "Always" | "Never";
+  priority: "Normal" | "High";
+  aiExcluded: boolean;
+  customReply: string | null;
+};
+export type WhatsAppRuleAction = { type: string; text: string | null };
+export type WhatsAppAutomationRule = {
+  id: string;
+  name: string;
+  enabled: boolean;
+  trigger: string;
+  chatIds: string[];
+  keyword: string | null;
+  category: string | null;
+  priority: "Any" | "High";
+  actions: WhatsAppRuleAction[];
+};
+export type WhatsAppAutomationRuleInput = Partial<Omit<WhatsAppAutomationRule, "id">>;
+export type WhatsAppInsight = {
+  id: string;
+  chatId: string;
+  chatName: string | null;
+  kind: string;
+  text: string;
+  value: string | null;
+  dueAt: string | null;
+  done: boolean;
+  createdAt: string;
+};
+export type WhatsAppPendingReply = { id: string; chatId: string; chatName: string | null; text: string; createdAt: string };
 
 const json = (body: unknown) => ({ method: "POST", body: JSON.stringify(body) });
 
@@ -165,8 +351,52 @@ export const api = {
   getConnectionStatus: (connectionId: string) => apiFetch<ConnectionStatusDto>(`/api/integrations/${connectionId}/status`),
   reconnectApp: (connectionId: string) => apiFetch<{ status: string }>(`/api/integrations/${connectionId}/reconnect`, { method: "POST" }),
   disconnectApp: (connectionId: string) => apiFetch<{ status: string }>(`/api/integrations/${connectionId}/disconnect`, { method: "POST" }),
+  updateConnectionSettings: (connectionId: string, settings: { notificationsEnabled?: boolean; autoReplyEnabled?: boolean; autoReplyInGroups?: boolean }) =>
+    apiFetch<ConnectionStatusDto>(`/api/integrations/${connectionId}/settings`, { method: "PATCH", body: JSON.stringify(settings) }),
+  whatsAppChats: (connectionId: string) => apiFetch<WhatsAppChat[]>(`/api/integrations/whatsapp/${connectionId}/chats`),
+  whatsAppMedia: async (connectionId: string, messageId: string): Promise<Blob> => {
+    const res = await fetch(`${API_URL}/api/integrations/whatsapp/${connectionId}/media/${encodeURIComponent(messageId)}`, { headers: authHeaders() });
+    if (res.status === 401) redirectToLogin();
+    if (!res.ok) throw new ApiError(res.status, "Could not load the photo.");
+    return res.blob();
+  },
+  whatsAppChatMessages: (connectionId: string, chatId: string) =>
+    apiFetch<WhatsAppMessage[]>(`/api/integrations/whatsapp/${connectionId}/chats/${encodeURIComponent(chatId)}/messages`),
+  sendWhatsAppChatMessage: (connectionId: string, chatId: string, text: string, quotedMessageId?: string) =>
+    apiFetch<void>(`/api/integrations/whatsapp/${connectionId}/chats/${encodeURIComponent(chatId)}/messages`, json({ text, quotedMessageId })),
+  sendNewWhatsAppMessage: (connectionId: string, to: string, text: string) =>
+    apiFetch<{ chatId: string }>(`/api/integrations/whatsapp/${connectionId}/send`, json({ to, text })),
+  reactToWhatsAppMessage: (connectionId: string, messageId: string, emoji: string) =>
+    apiFetch<void>(`/api/integrations/whatsapp/${connectionId}/messages/${encodeURIComponent(messageId)}/react`, json({ emoji })),
+
+  whatsAppFullSettings: (connectionId: string) => apiFetch<WhatsAppFullSettings>(`/api/integrations/whatsapp/${connectionId}/full-settings`),
+  updateWhatsAppFullSettings: (connectionId: string, update: WhatsAppFullSettingsUpdate) =>
+    apiFetch<WhatsAppFullSettings>(`/api/integrations/whatsapp/${connectionId}/full-settings`, { method: "PATCH", body: JSON.stringify(update) }),
+  whatsAppPendingReplies: (connectionId: string) => apiFetch<WhatsAppPendingReply[]>(`/api/integrations/whatsapp/${connectionId}/pending-replies`),
+  approveWhatsAppPendingReply: (connectionId: string, replyId: string) =>
+    apiFetch<void>(`/api/integrations/whatsapp/${connectionId}/pending-replies/${replyId}/approve`, { method: "POST" }),
+  discardWhatsAppPendingReply: (connectionId: string, replyId: string) =>
+    apiFetch<void>(`/api/integrations/whatsapp/${connectionId}/pending-replies/${replyId}`, { method: "DELETE" }),
+  whatsAppChatRules: (connectionId: string) => apiFetch<WhatsAppChatRule[]>(`/api/integrations/whatsapp/${connectionId}/chat-rules`),
+  saveWhatsAppChatRule: (connectionId: string, chatId: string, rule: Partial<Omit<WhatsAppChatRule, "chatId">>) =>
+    apiFetch<WhatsAppChatRule>(`/api/integrations/whatsapp/${connectionId}/chat-rules/${encodeURIComponent(chatId)}`, { method: "PUT", body: JSON.stringify(rule) }),
+  whatsAppAutomationRules: (connectionId: string) => apiFetch<WhatsAppAutomationRule[]>(`/api/integrations/whatsapp/${connectionId}/automation-rules`),
+  createWhatsAppAutomationRule: (connectionId: string, rule: WhatsAppAutomationRuleInput) =>
+    apiFetch<WhatsAppAutomationRule>(`/api/integrations/whatsapp/${connectionId}/automation-rules`, json(rule)),
+  updateWhatsAppAutomationRule: (connectionId: string, ruleId: string, rule: WhatsAppAutomationRuleInput) =>
+    apiFetch<WhatsAppAutomationRule>(`/api/integrations/whatsapp/${connectionId}/automation-rules/${ruleId}`, { method: "PUT", body: JSON.stringify(rule) }),
+  deleteWhatsAppAutomationRule: (connectionId: string, ruleId: string) =>
+    apiFetch<void>(`/api/integrations/whatsapp/${connectionId}/automation-rules/${ruleId}`, { method: "DELETE" }),
+  whatsAppInsights: (connectionId: string, kind?: string) =>
+    apiFetch<WhatsAppInsight[]>(`/api/integrations/whatsapp/${connectionId}/insights${kind ? `?kind=${encodeURIComponent(kind)}` : ""}`),
+  toggleWhatsAppInsightDone: (connectionId: string, insightId: string) =>
+    apiFetch<void>(`/api/integrations/whatsapp/${connectionId}/insights/${insightId}/toggle-done`, { method: "POST" }),
+  deleteWhatsAppInsight: (connectionId: string, insightId: string) =>
+    apiFetch<void>(`/api/integrations/whatsapp/${connectionId}/insights/${insightId}`, { method: "DELETE" }),
+  purgeWhatsAppMessages: (connectionId: string) => apiFetch<void>(`/api/integrations/whatsapp/${connectionId}/purge-messages`, { method: "POST" }),
 
   dashboardApps: () => apiFetch<DashboardApp[]>("/api/dashboard/apps"),
   addToDashboard: (connectionId: string) => apiFetch<{ id: string }>("/api/dashboard/apps", json({ connectionId })),
   removeFromDashboard: (id: string) => apiFetch<void>(`/api/dashboard/apps/${id}`, { method: "DELETE" }),
+  dashboardActivity: () => apiFetch<ActivityItem[]>("/api/dashboard/activity"),
 };

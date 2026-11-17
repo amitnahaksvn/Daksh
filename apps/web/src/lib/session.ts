@@ -1,6 +1,7 @@
 import { setAccessToken, type AccountProfile } from "@/lib/api";
 
-const KEY = "daksh.session";
+export const SESSION_STORAGE_KEY = "daksh.session";
+const KEY = SESSION_STORAGE_KEY;
 
 /** The signed-in user's profile, persisted so a page refresh doesn't lose the session. Includes the
  *  real access token the API issues on login/verify-otp — see rehydrateAccessToken() below. */

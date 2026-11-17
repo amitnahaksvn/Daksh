@@ -29,6 +29,9 @@ describe("GmailWorkspace", () => {
         connectedAt: null,
         lastActiveAt: null,
         lastError: null,
+        notificationsEnabled: true,
+        autoReplyEnabled: false,
+        autoReplyInGroups: false,
       },
     });
     const messages = vi.spyOn(api, "gmailMessages")

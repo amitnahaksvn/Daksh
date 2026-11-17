@@ -22,10 +22,11 @@ builder.Services.Configure<SecretProtectorOptions>(builder.Configuration.GetSect
 builder.Services.AddSingleton<ISecretProtector>(sp => new SecretProtector(sp.GetRequiredService<IOptions<SecretProtectorOptions>>().Value));
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ClaimsPrincipalAccessor>();
-builder.Services.AddDakshIntegrations();
+builder.Services.AddDakshIntegrations(builder.Configuration);
 builder.Services.AddDakshWhatsAppIntegration(builder.Configuration);
 builder.Services.AddGmailIntegration();
 builder.Services.AddSignalR();
+builder.Services.AddHostedService<WhatsAppReminderService>();
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 builder.Services.AddDakshAuth(builder.Configuration, builder.Environment);
 builder.Services.AddProblemDetails();
@@ -41,6 +42,7 @@ var app = builder.Build();
 await AccountModule.EnsureAccountIndexesAsync(app.Services.GetRequiredService<MongoDB.Driver.IMongoDatabase>());
 await IntegrationsModule.EnsureIntegrationIndexesAndCatalogAsync(app.Services.GetRequiredService<MongoDB.Driver.IMongoDatabase>());
 await GmailIntegrationModule.EnsureGmailIndexesAsync(app.Services.GetRequiredService<MongoDB.Driver.IMongoDatabase>());
+await WhatsAppSettingsModule.EnsureIndexesAsync(app.Services.GetRequiredService<MongoDB.Driver.IMongoDatabase>());
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
@@ -60,6 +62,8 @@ app.MapAccount();
 app.MapIntegrations();
 app.MapGmailIntegration();
 app.MapDashboardApps();
+app.MapWhatsAppSettings();
+app.MapWhatsAppAutomation();
 app.MapHub<IntegrationsHub>("/hubs/integrations").RequireAuthorization(Daksh.Api.Auth.AuthSetup.UserScheme);
 
 app.Run();

@@ -256,15 +256,29 @@ export function AppCard({
 
 export function DashboardAppCard({ app, onRemove }: { app: DashboardApp; onRemove: (id: string) => void }) {
   return (
-    <li className={`flex items-center gap-4 p-5 ${tileClass}`}>
-      <BrandTile icon={app.icon} color={app.color} size={44} />
-      <div className="min-w-0 flex-1">
+    <li className={`flex flex-wrap items-center gap-4 p-5 ${tileClass}`}>
+      <div className="relative shrink-0">
+        <BrandTile icon={app.icon} color={app.color} size={44} />
+        {app.unreadCount > 0 && (
+          <span className="absolute -right-1 -top-1 flex h-4.5 min-w-[1.125rem] items-center justify-center rounded-full bg-pink px-1 text-[10px] font-bold text-on-tint">
+            {app.unreadCount > 9 ? "9+" : app.unreadCount}
+          </span>
+        )}
+      </div>
+      <div className="min-w-[10rem] flex-1">
         <p className="font-semibold">{app.name}</p>
         <div className="mt-1 flex items-center gap-2">
           <StatusChip status={app.status} />
           {app.accountIdentifier && <span className="truncate text-xs text-muted">{app.accountIdentifier}</span>}
         </div>
-        {app.lastActiveAt && <p className="mt-1 text-xs text-muted">Last active {new Date(app.lastActiveAt).toLocaleString()}</p>}
+        {app.lastMessagePreview ? (
+          <p className="mt-1 truncate text-xs text-muted">
+            {app.lastMessagePreview}
+            {app.lastMessageAt && ` · ${new Date(app.lastMessageAt).toLocaleString()}`}
+          </p>
+        ) : (
+          app.lastActiveAt && <p className="mt-1 text-xs text-muted">Last active {new Date(app.lastActiveAt).toLocaleString()}</p>
+        )}
       </div>
       <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
         <Link href={`/apps/${app.integrationKey}`} className={`${secondaryButtonClass} px-4 py-2 text-xs`}>Manage</Link>

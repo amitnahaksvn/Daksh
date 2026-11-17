@@ -1,6 +1,7 @@
 using Daksh.Ai;
 using Daksh.Integrations;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Daksh.Ai.Tests;
@@ -25,7 +26,7 @@ public class OrchestratorTests
     {
         var s = new ServiceCollection().AddLogging();
         if (cloud is not null) s.AddSingleton(new ChatModelRegistration("cloud", cloud, ModelLocality.Cloud, IsSimulated: false));
-        s.AddDakshIntegrations();
+        s.AddDakshIntegrations(new ConfigurationBuilder().Build());
         return s.BuildServiceProvider();
     }
 
