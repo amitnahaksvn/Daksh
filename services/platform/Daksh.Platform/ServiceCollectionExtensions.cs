@@ -82,8 +82,54 @@ public static class ServiceCollectionExtensions
         services.AddScoped<SchedulerService>();
         services.AddHostedService<JobRunnerWorker>();
 
+        services.AddHttpClient<Daksh.Platform.Integrations.DeveloperPlatforms.GitHubIntegration>(c =>
+        {
+            c.BaseAddress = new Uri("https://api.github.com/");
+            c.Timeout = TimeSpan.FromSeconds(30);
+        });
+
+        services.AddHttpClient<Daksh.Platform.Integrations.DeveloperPlatforms.GitLabIntegration>(c =>
+        {
+            c.BaseAddress = new Uri("https://gitlab.com/api/v4/");
+            c.Timeout = TimeSpan.FromSeconds(30);
+        });
+
+        services.AddHttpClient<Daksh.Platform.Integrations.Google.GoogleCalendarIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<Daksh.Platform.Integrations.Google.GoogleSheetsIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<Daksh.Platform.Integrations.Google.GoogleDocsIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<Daksh.Platform.Integrations.Google.GoogleSlidesIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<Daksh.Platform.Integrations.Mail.ZohoMailIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<Daksh.Platform.Integrations.Microsoft.MicrosoftGraphIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<Daksh.Platform.Integrations.Notion.NotionIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<Daksh.Platform.Integrations.Atlassian.JiraIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+
+        services.AddHttpClient<Daksh.Platform.Integrations.Payments.RazorpayIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<Daksh.Platform.Integrations.Payments.PayPalIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<Daksh.Platform.Integrations.Automation.N8nIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<Daksh.Platform.Integrations.Cloud.CloudflareIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<Daksh.Platform.Integrations.Cloud.VercelIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<Daksh.Platform.Integrations.Cloud.SupabaseIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<Daksh.Platform.Integrations.Payments.StripeIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<Daksh.Platform.Integrations.Observability.SentryIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<Daksh.Platform.Integrations.DeveloperPlatforms.LinearIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<Daksh.Platform.Integrations.ProjectManagement.TrelloIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<Daksh.Platform.Integrations.Storage.DropboxIntegration>(c => c.Timeout = TimeSpan.FromMinutes(2));
+        services.AddHttpClient<Daksh.Platform.Integrations.ProjectManagement.AsanaIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<Daksh.Platform.Integrations.Storage.BoxIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<Daksh.Platform.Integrations.Meetings.ZoomIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<Daksh.Platform.Integrations.Storage.GoogleDriveIntegration>(c => c.Timeout = TimeSpan.FromSeconds(60));
+        services.AddHttpClient<Daksh.Platform.Integrations.Meetings.CalendlyIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<Daksh.Platform.Integrations.Microsoft.AzureDevOpsIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<Daksh.Platform.Integrations.Atlassian.ConfluenceIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<Daksh.Platform.Integrations.Data.AirtableIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<Daksh.Platform.Integrations.DeveloperPlatforms.BitbucketIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+
         services.AddSingleton<Channels.Core.MockChannelAdapter>();
         services.AddSingleton<IChannelAdapter>(sp => sp.GetRequiredService<Channels.Core.MockChannelAdapter>());
+        services.AddSingleton<Channels.Core.TelegramChannelAdapter>();
+        services.AddSingleton<IChannelAdapter>(sp => sp.GetRequiredService<Channels.Core.TelegramChannelAdapter>());
+        services.AddSingleton<Channels.Core.SlackChannelAdapter>();
+        services.AddSingleton<IChannelAdapter>(sp => sp.GetRequiredService<Channels.Core.SlackChannelAdapter>());
         services.AddScoped<ChannelService>();
         services.AddHostedService<ChannelOutboxWorker>();
 

@@ -99,6 +99,7 @@ app.MapAgents();
 app.MapSessions();
 app.MapApprovalsAndAutomations();
 app.MapChannels();
+app.MapProviderChannelWebhooks();
 app.MapDevices();
 app.MapHub<GatewayHub>("/hubs/gateway");
 app.MapHub<Daksh.Gateway.Hubs.NodeHub>("/hubs/node");
