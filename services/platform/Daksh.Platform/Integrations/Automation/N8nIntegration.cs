@@ -18,10 +18,10 @@ public sealed class N8nIntegration(HttpClient http)
     }
 
     public async Task<N8nWorkflowPage> ListWorkflowsAsync(string baseUrl, string apiKey,
-        int limit = 100, int? cursor = null, CancellationToken ct = default)
+        int limit = 100, string? cursor = null, CancellationToken ct = default)
     {
         limit = Math.Clamp(limit, 1, 250);
-        var query = $"limit={limit}" + (cursor.HasValue ? $"&cursor={cursor.Value}" : "");
+        var query = $"limit={limit}" + (!string.IsNullOrWhiteSpace(cursor) ? "&cursor=" + Uri.EscapeDataString(cursor) : "");
         using var request = Request(baseUrl, apiKey, HttpMethod.Get, "api/v1/workflows?" + query);
         using var response = await http.SendAsync(request, ct);
         await EnsureSuccess(response, ct);
