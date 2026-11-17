@@ -37,9 +37,6 @@ public sealed class PayPalIntegration(HttpClient http)
         if (purchaseUnits.Count == 0) throw new ArgumentException("At least one purchase unit is required.", nameof(purchaseUnits));
         if (intent is not ("CAPTURE" or "AUTHORIZE")) throw new ArgumentException("Intent must be CAPTURE or AUTHORIZE.", nameof(intent));
         var token = await GetAccessTokenAsync(clientId, clientSecret, sandbox, ct);
-        var payload = new Dictionary<string, object?> { ["intent"] = intent, ["purchase_units"] = purchaseUnits };
-        if (!string.IsNullOrWhiteSpace(returnUrl) || !string.IsNullOrWhiteSpace(cancelUrl))
-            payload["payment_source"] = null; // Redirect URLs are configured in application_context by the checkout UI.
         using var request = ApiRequest(token.AccessToken, sandbox, HttpMethod.Post, "v2/checkout/orders", requestId);
         request.Content = JsonContent.Create(new
         {
