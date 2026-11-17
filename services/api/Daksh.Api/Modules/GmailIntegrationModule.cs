@@ -16,8 +16,21 @@ using MimeKit;
 namespace Daksh.Api.Modules;
 
 public sealed record GmailAuthorizationResponse(string AuthorizationUrl);
-public sealed record GmailMessageSummary(string Id, string ThreadId, string From, string Subject, string Snippet, DateTimeOffset? Date);
-public sealed record GmailMessage(string Id, string From, string To, string Subject, DateTimeOffset Date, string Body);
+public sealed record GmailMessageSummary(string Id, string ThreadId, string From, string Subject, string Snippet, DateTimeOffset? Date, bool IsUnread = false, bool IsStarred = false);
+public sealed record GmailMessage(string Id, string From, string To, string Subject, DateTimeOffset Date, string Body, string? Html = null);
+public sealed record GmailSettingsDto(string Signature, bool ShowImages, int DashboardCount, string DashboardQuery, bool ShowOnDashboard);
+public sealed record UpdateGmailSettingsRequest(string? Signature, bool? ShowImages, int? DashboardCount, string? DashboardQuery);
+
+[BsonIgnoreExtraElements]
+public sealed class GmailUserSettings
+{
+    [BsonId] public required string UserId { get; set; }
+    public string Signature { get; set; } = "";
+    public bool ShowImages { get; set; }
+    public int DashboardCount { get; set; } = 5;
+    public string DashboardQuery { get; set; } = "in:inbox";
+    public DateTime UpdatedAtUtc { get; set; }
+}
 public sealed record GmailMessagePage(IReadOnlyList<GmailMessageSummary> Messages, string? NextPageToken);
 public sealed record SendGmailMessageRequest(string? To, string? Subject, string? Body);
 
@@ -60,6 +73,44 @@ public static class GmailIntegrationModule
         group.MapGet("/messages/{messageId}", GetMessageAsync).RequireAuthorization(AuthSetup.UserScheme);
         group.MapPost("/messages", SendMessageAsync).RequireAuthorization(AuthSetup.UserScheme);
         group.MapPost("/disconnect", DisconnectAsync).RequireAuthorization(AuthSetup.UserScheme);
+        group.MapGet("/settings", GetSettingsAsync).RequireAuthorization(AuthSetup.UserScheme);
+        group.MapPut("/settings", UpdateSettingsAsync).RequireAuthorization(AuthSetup.UserScheme);
+    }
+
+    private static async Task<GmailUserSettings> LoadSettingsAsync(IMongoDatabase db, string userId, CancellationToken ct) =>
+        await db.GetCollection<GmailUserSettings>("gmailSettings").Find(x => x.UserId == userId).FirstOrDefaultAsync(ct)
+        ?? new GmailUserSettings { UserId = userId };
+
+    private static async Task<GmailSettingsDto> ToSettingsDtoAsync(IMongoDatabase db, string userId, GmailUserSettings settings, CancellationToken ct)
+    {
+        var onDashboard = await db.GetCollection<UserDashboardApp>("userDashboardApps").Find(a => a.UserId == userId)
+            .ToListAsync(ct);
+        var connection = await db.GetCollection<IntegrationConnection>("integrationConnections")
+            .Find(c => c.UserId == userId && c.IntegrationKey == "gmail" && c.Status == ConnectionStatus.Connected).FirstOrDefaultAsync(ct);
+        var shown = connection is not null && onDashboard.Any(a => a.ConnectionId == connection.Id);
+        return new GmailSettingsDto(settings.Signature, settings.ShowImages, settings.DashboardCount, settings.DashboardQuery, shown);
+    }
+
+    private static async Task<IResult> GetSettingsAsync(IMongoDatabase db, ClaimsPrincipalAccessor who, CancellationToken ct) =>
+        Results.Ok(await ToSettingsDtoAsync(db, who.UserId, await LoadSettingsAsync(db, who.UserId, ct), ct));
+
+    private static async Task<IResult> UpdateSettingsAsync(UpdateGmailSettingsRequest request, IMongoDatabase db, ClaimsPrincipalAccessor who, CancellationToken ct)
+    {
+        if (request.Signature is { Length: > 2000 })
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["signature"] = ["The signature can be at most 2,000 characters."] });
+        if (request.DashboardCount is { } count && (count < 3 || count > 10))
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["dashboardCount"] = ["Choose between 3 and 10 emails."] });
+        if (request.DashboardQuery is { Length: > 200 })
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["dashboardQuery"] = ["The dashboard filter is too long."] });
+
+        var settings = await LoadSettingsAsync(db, who.UserId, ct);
+        if (request.Signature is not null) settings.Signature = request.Signature.Trim();
+        if (request.ShowImages is { } images) settings.ShowImages = images;
+        if (request.DashboardCount is { } c) settings.DashboardCount = c;
+        if (request.DashboardQuery is not null) settings.DashboardQuery = string.IsNullOrWhiteSpace(request.DashboardQuery) ? "in:inbox" : request.DashboardQuery.Trim();
+        settings.UpdatedAtUtc = DateTime.UtcNow;
+        await db.GetCollection<GmailUserSettings>("gmailSettings").ReplaceOneAsync(x => x.UserId == who.UserId, settings, new ReplaceOptions { IsUpsert = true }, ct);
+        return Results.Ok(await ToSettingsDtoAsync(db, who.UserId, settings, ct));
     }
 
     public static async Task EnsureGmailIndexesAsync(IMongoDatabase database, CancellationToken ct = default)
@@ -291,13 +342,18 @@ public static class GmailIntegrationModule
                     var snippet = root.TryGetProperty("snippet", out var messageSnippet)
                         ? messageSnippet.GetString() ?? item.Snippet
                         : item.Snippet;
+                    var labels = root.TryGetProperty("labelIds", out var labelValues)
+                        ? labelValues.EnumerateArray().Select(l => l.GetString()).ToHashSet()
+                        : new HashSet<string?>();
                     return new GmailMessageSummary(
                         item.Id,
                         item.ThreadId,
                         Header(headers, "From"),
                         Header(headers, "Subject"),
                         snippet,
-                        internalDate);
+                        internalDate,
+                        labels.Contains("UNREAD"),
+                        labels.Contains("STARRED"));
                 }
                 catch (GmailIntegrationException ex) when (ex.StatusCode == (int)HttpStatusCode.NotFound)
                 {
@@ -347,7 +403,8 @@ public static class GmailIntegrationModule
                 mime.To.ToString(),
                 mime.Subject ?? "",
                 mime.Date,
-                mime.TextBody ?? mime.HtmlBody ?? ""));
+                mime.TextBody ?? mime.HtmlBody ?? "",
+                mime.HtmlBody));
         }
         catch (GmailIntegrationException ex)
         {
@@ -401,7 +458,9 @@ public static class GmailIntegrationModule
             message.From.Add(MailboxAddress.Parse(context.Connection.AccountIdentifier!));
             message.To.AddRange(recipients);
             message.Subject = request.Subject.Trim();
-            message.Body = new TextPart("plain") { Text = request.Body };
+            var signature = (await LoadSettingsAsync(db, who.UserId, ct)).Signature;
+            var text = string.IsNullOrWhiteSpace(signature) ? request.Body : $"{request.Body}\r\n\r\n-- \r\n{signature}";
+            message.Body = new TextPart("plain") { Text = text };
             var raw = Base64Url(Encoding.UTF8.GetBytes(message.ToString()));
 
             using var sent = await GmailApiAsync(who.UserId, "users/me/messages/send", HttpMethod.Post, new { raw }, db, protector, config, clients, ct);

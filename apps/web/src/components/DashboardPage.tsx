@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { DashboardAppCard } from "@/components/integrations";
 import { buttonClass, EmptyState, ErrorState, Loading, PageHeader } from "@/components/ui";
+import { GmailDashboardCard } from "@/components/GmailDashboardCard";
 import { DashboardHero } from "@/components/DashboardWidgets";
 import { api, type DashboardApp } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
@@ -14,7 +15,9 @@ function DashboardBody({ apps, onRemove }: { apps: DashboardApp[]; onRemove: (id
     <>
       <DashboardHero apps={apps} />
       <ul className="grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {apps.map((app) => <DashboardAppCard key={app.id} app={app} onRemove={onRemove} />)}
+        {apps.map((app) => app.integrationKey === "gmail"
+          ? <GmailDashboardCard key={app.id} app={app} />
+          : <DashboardAppCard key={app.id} app={app} onRemove={onRemove} />)}
       </ul>
     </>
   );

@@ -177,10 +177,14 @@ export type GmailMessageSummary = {
   from: string;
   subject: string;
   snippet: string;
+  isUnread?: boolean;
+  isStarred?: boolean;
   date: string | null;
 };
 export type GmailMessagePage = { messages: GmailMessageSummary[]; nextPageToken: string | null };
-export type GmailMessage = { id: string; from: string; to: string; subject: string; date: string; body: string };
+export type GmailMessage = { id: string; from: string; to: string; subject: string; date: string; body: string; html: string | null };
+export type GmailSettings = { signature: string; showImages: boolean; dashboardCount: number; dashboardQuery: string; showOnDashboard: boolean };
+export type GmailSettingsUpdate = Partial<Pick<GmailSettings, "signature" | "showImages" | "dashboardCount" | "dashboardQuery">>;
 export type DashboardApp = {
   id: string;
   connectionId: string;
@@ -348,6 +352,8 @@ export const api = {
   appCatalog: () => apiFetch<AppCatalogEntry[]>("/api/integrations"),
   appDetail: (integrationKey: string) => apiFetch<AppDetail>(`/api/integrations/${integrationKey}`),
   connectWhatsApp: () => apiFetch<ConnectResponse>("/api/integrations/whatsapp/connect", { method: "POST" }),
+  gmailSettings: () => apiFetch<GmailSettings>("/api/integrations/gmail/settings"),
+  updateGmailSettings: (update: GmailSettingsUpdate) => apiFetch<GmailSettings>("/api/integrations/gmail/settings", { method: "PUT", body: JSON.stringify(update) }),
   connectGmail: () => apiFetch<GmailAuthorizationResponse>("/api/integrations/gmail/connect", { method: "POST" }),
   gmailMessages: (query: string, pageToken?: string | null) => {
     const params = new URLSearchParams({ q: query });
