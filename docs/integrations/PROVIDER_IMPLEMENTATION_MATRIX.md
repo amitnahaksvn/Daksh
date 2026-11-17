@@ -365,10 +365,10 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 
 ### Cloudflare
 
-- **Integration surface:** Cloudflare API.
-- **Required setup / access:** API token with scoped permissions and account/zone identifiers.
-- **Missing implementation:** Zone/account discovery; DNS/cache/Workers operations by capability; audit logging; rate limits/tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Integration surface:** Cloudflare API v4.
+- **Required setup / access:** API token with scoped Zone Read and DNS Read/Edit permissions; zone identifiers.
+- **Implemented / remaining:** Zone listing, DNS record listing with page filters, DNS record creation/update/deletion are implemented. Remaining: account discovery, DNS batch operations, cache/purge and Workers/Pages/Access capabilities, audit logging, retry/rate-limit handling, encrypted token storage, API/UI and automated tests.
+- **Code status:** Partial client; `services/platform/Daksh.Platform/Integrations/Cloud/CloudflareIntegration.cs`. API token is supplied per call; not production-complete.
 
 ### Vercel
 
