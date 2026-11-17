@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 
 namespace Daksh.Platform.Integrations.Cloud;
 
@@ -97,7 +98,11 @@ public sealed class SupabaseIntegration(HttpClient http)
 }
 
 public sealed record SupabaseOrganization(string Id, string? Name, string? Slug);
-public sealed record SupabaseProject(string Id, string Name, string? OrganizationId, string? Region,
-    string? Status, string? DatabaseVersion, string? CreatedAt, string? Ref, string? Url);
+public sealed record SupabaseProject(string Id, string Name,
+    [property: JsonPropertyName("organization_id")] string? OrganizationId,
+    string? Region, string? Status,
+    [property: JsonPropertyName("database_version")] string? DatabaseVersion,
+    [property: JsonPropertyName("created_at")] string? CreatedAt, string? Ref,
+    [property: JsonPropertyName("project_url")] string? Url);
 public sealed record SupabaseCreateProject(string Name, string OrganizationId, string DatabasePassword,
     string Region, string? Plan = "free");
