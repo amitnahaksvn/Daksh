@@ -372,10 +372,10 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 
 ### Vercel
 
-- **Integration surface:** Vercel REST API and webhooks.
-- **Required setup / access:** Vercel OAuth integration or scoped access token; team/project IDs.
-- **Missing implementation:** Projects/deployments/domains/logs; webhook validation; pagination/rate limits/tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Integration surface:** Vercel REST API.
+- **Required setup / access:** Vercel access token or OAuth token; optional team ID and project identifiers.
+- **Implemented / remaining:** User probe, project listing and retrieval, deployment listing with filters and deployment retrieval are implemented. Remaining: project creation/settings, deployment creation/cancellation/logs, domains and environment variables, webhook signature/event handling, pagination/rate-limit hardening, encrypted token storage, API/UI and automated tests.
+- **Code status:** Partial client; `services/platform/Daksh.Platform/Integrations/Cloud/VercelIntegration.cs`. Token supplied per call; not production-complete.
 
 ### Supabase
 
