@@ -105,8 +105,13 @@ async function backfill(connectionId: string, client: TelegramClient): Promise<v
     const dialogs = await client.getDialogs({ limit: 25 });
     for (const dialog of dialogs) {
       if (!dialog.entity || isBroadcast(dialog.entity)) continue;
-      const messages = await client.getMessages(dialog.entity, { limit: 15 });
-      for (const m of [...messages].reverse()) await reportMessage(connectionId, m, true);
+      // One unreadable chat (e.g. a private channel you were removed from → CHANNEL_PRIVATE) must not stop the rest.
+      try {
+        const messages = await client.getMessages(dialog.entity, { limit: 15 });
+        for (const m of [...messages].reverse()) await reportMessage(connectionId, m, true);
+      } catch (err) {
+        console.warn(`Telegram backfill skipped a chat for ${connectionId}: ${(err as Error).message}`);
+      }
     }
   } catch (err) {
     console.error(`Telegram backfill failed for ${connectionId}:`, err);
