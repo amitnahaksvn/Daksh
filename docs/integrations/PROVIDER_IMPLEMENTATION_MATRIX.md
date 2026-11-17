@@ -6,7 +6,7 @@ This register covers every requested provider plus the 13 additional messaging p
 
 - Telegram and Slack have adapter source files in this PR.
 - The other 13 messaging providers currently have configuration scaffolding only; they do not yet have complete provider adapters.
-- Partial connector clients now also exist for GitHub, GitLab.com, Google Calendar, Google Sheets, Google Docs, Google Slides, Zoho Mail, Razorpay, Microsoft Graph, Notion, Jira Cloud, Stripe, Sentry, Linear, Trello, Dropbox, Asana, Box, Zoom, Google Drive, Calendly, Azure DevOps, Confluence, Airtable and Bitbucket Cloud. These are not production-complete; see each provider entry below.
+- Partial connector clients now also exist for GitHub, GitLab.com, Google Calendar, Google Sheets, Google Docs, Google Slides, Zoho Mail, Razorpay, PayPal, Microsoft Graph, Notion, Jira Cloud, Stripe, Sentry, Linear, Trello, Dropbox, Asana, Box, Zoom, Google Drive, Calendly, Azure DevOps, Confluence, Airtable and Bitbucket Cloud. These are not production-complete; see each provider entry below.
 - Existing channel persistence/session routing is still blocked by the MongoDB channel-service/outbox TODOs. Live credentials and provider sandbox accounts have not been supplied, so no live connection is claimed.
 - All credentials must be stored in a secret store or encrypted database fields. Never commit live secrets or echo them in management APIs.
 
@@ -434,10 +434,10 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 - **Code status:** Partial implementation; `services/platform/Daksh.Platform/Integrations/Payments/StripeIntegration.cs`. Not production-complete.
 ### PayPal
 
-- **Integration surface:** PayPal REST APIs and webhooks.
-- **Required setup / access:** PayPal developer app client ID/secret; sandbox/live environment.
-- **Missing implementation:** OAuth; orders/captures/refunds; webhook signature verification; idempotency; environment tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Integration surface:** PayPal REST OAuth 2.0, Orders v2, Captures/Refunds v2 and Webhook verification API.
+- **Required setup / access:** PayPal developer app client ID/secret, sandbox or live environment, and webhook ID for verification. A PayPal Business account is required for live integrations and testing outside the US.
+- **Implemented / remaining:** On-demand OAuth client-credentials token acquisition, create/get/capture orders, full or partial capture refunds, request-id support and server-side webhook signature verification are implemented. Remaining: durable encrypted credential/token storage and caching, webhook event routing/deduplication, authorizations/voids, disputes/subscriptions, partner flows, API/UI and automated tests.
+- **Code status:** Partial implementation; `services/platform/Daksh.Platform/Integrations/Payments/PayPalIntegration.cs`. Credentials are supplied per call; not production-complete.
 
 ### QuickBooks Online
 
