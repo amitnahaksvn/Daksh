@@ -6,7 +6,7 @@ This register covers every requested provider plus the 13 additional messaging p
 
 - Telegram and Slack have adapter source files in this PR.
 - The other 13 messaging providers currently have configuration scaffolding only; they do not yet have complete provider adapters.
-- Partial connector clients now also exist for GitHub, GitLab.com, Google Calendar, Google Sheets, Google Docs, Google Slides, Microsoft Graph, Notion, Jira Cloud, Stripe, Sentry, Linear, Trello, Dropbox, Asana, Box, Zoom, Google Drive, Calendly, Azure DevOps, Confluence, Airtable and Bitbucket Cloud. These are not production-complete; see each provider entry below.
+- Partial connector clients now also exist for GitHub, GitLab.com, Google Calendar, Google Sheets, Google Docs, Google Slides, Zoho Mail, Microsoft Graph, Notion, Jira Cloud, Stripe, Sentry, Linear, Trello, Dropbox, Asana, Box, Zoom, Google Drive, Calendly, Azure DevOps, Confluence, Airtable and Bitbucket Cloud. These are not production-complete; see each provider entry below.
 - Existing channel persistence/session routing is still blocked by the MongoDB channel-service/outbox TODOs. Live credentials and provider sandbox accounts have not been supplied, so no live connection is claimed.
 - All credentials must be stored in a secret store or encrypted database fields. Never commit live secrets or echo them in management APIs.
 
@@ -49,10 +49,10 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 
 ### Zoho Mail
 
-- **Integration surface:** Zoho Mail API.
-- **Required setup / access:** Zoho OAuth client, region-specific accounts host, scopes and organization/mailbox identifiers.
-- **Missing implementation:** OAuth; region-aware endpoints; message/folder/search/send operations; pagination; notifications/polling; tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Integration surface:** Zoho Mail REST API.
+- **Required setup / access:** Zoho OAuth client, regional Mail host, `ZohoMail.accounts`, `ZohoMail.folders` and/or `ZohoMail.messages` scopes, and account ID.
+- **Implemented / remaining:** Region-validated API host, account listing, folder listing/creation, message listing and email sending are implemented. Remaining: OAuth authorization/refresh lifecycle, message content/search/reply and attachment operations, pagination/search filters, notifications/polling, encrypted credential storage, API/UI and automated tests.
+- **Code status:** Partial implementation; `services/platform/Daksh.Platform/Integrations/Mail/ZohoMailIntegration.cs`. Access token and regional host are passed per call; not production-complete.
 
 ### Proton Mail
 
@@ -648,6 +648,14 @@ Some providers require app review, partner onboarding, paid plans, organization 
 - **Required setup / access:** Google Cloud OAuth client, Docs scopes and user consent; Drive scopes may also be needed for file discovery and sharing workflows.
 - **Implemented / remaining:** Document retrieval, document creation, text insertion and find/replace are implemented. Remaining: OAuth consent/refresh-token lifecycle, structural editing and formatting, comments/suggestions, Drive file discovery/sharing, change notifications, encrypted account storage, API/UI and automated tests.
 - **Code status:** Partial implementation; `services/platform/Daksh.Platform/Integrations/Google/GoogleDocsIntegration.cs`. Registered with the platform HTTP client factory; not production-complete.
+
+
+### Google Slides
+
+- **Integration surface:** Google Slides API v1.
+- **Required setup / access:** Google Cloud OAuth client, Slides scopes and user consent; Drive scopes may be needed for file discovery/export/sharing.
+- **Implemented / remaining:** Presentation retrieval and creation, slide creation from predefined layouts, text insertion and replace-all-text are implemented. Remaining: OAuth consent/refresh-token lifecycle, shape/image/table creation and formatting, speaker notes, Drive file discovery/export/sharing, change notifications, encrypted account storage, API/UI and automated tests.
+- **Code status:** Partial implementation; `services/platform/Daksh.Platform/Integrations/Google/GoogleSlidesIntegration.cs`. Registered with the platform HTTP client factory; not production-complete.
 
 
 ### Google Slides
