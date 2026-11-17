@@ -6,7 +6,7 @@ This register covers every requested provider plus the 13 additional messaging p
 
 - Telegram and Slack have adapter source files in this PR.
 - The other 13 messaging providers currently have configuration scaffolding only; they do not yet have complete provider adapters.
-- Partial connector clients now also exist for GitHub, GitLab.com, Google Calendar, Google Sheets, Google Docs, Google Slides, Zoho Mail, Razorpay, PayPal, Microsoft Graph, Notion, Jira Cloud, Stripe, Sentry, Linear, Trello, Dropbox, Asana, Box, Zoom, Google Drive, Calendly, Azure DevOps, Confluence, Airtable and Bitbucket Cloud. These are not production-complete; see each provider entry below.
+- Partial connector clients now also exist for GitHub, GitLab.com, Google Calendar, Google Sheets, Google Docs, Google Slides, Zoho Mail, Razorpay, PayPal, n8n, Microsoft Graph, Notion, Jira Cloud, Stripe, Sentry, Linear, Trello, Dropbox, Asana, Box, Zoom, Google Drive, Calendly, Azure DevOps, Confluence, Airtable and Bitbucket Cloud. These are not production-complete; see each provider entry below.
 - Existing channel persistence/session routing is still blocked by the MongoDB channel-service/outbox TODOs. Live credentials and provider sandbox accounts have not been supplied, so no live connection is claimed.
 - All credentials must be stored in a secret store or encrypted database fields. Never commit live secrets or echo them in management APIs.
 
@@ -567,10 +567,10 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 
 ### n8n
 
-- **Integration surface:** n8n public API and webhooks.
-- **Required setup / access:** n8n instance URL, API key and enabled API access.
-- **Missing implementation:** Instance/version detection; workflow/credential metadata; execution APIs; webhook auth; self-hosted compatibility tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Integration surface:** n8n public REST API v1.
+- **Required setup / access:** HTTPS instance URL, API key and public API access enabled on the target instance.
+- **Implemented / remaining:** Connection probe, cursor-based workflow listing, workflow retrieval/create/update/activate/deactivate, execution listing with cursor and workflow filters, and execution retrieval are implemented. Remaining: webhook lifecycle and signing, credential CRUD (deliberately not exposed), workflow execution trigger coverage by trigger type, instance/version detection, pagination contract verification against supported n8n versions, encrypted key storage, API/UI and automated tests.
+- **Code status:** Partial client; `services/platform/Daksh.Platform/Integrations/Automation/N8nIntegration.cs`. Base URL and API key are supplied per call; HTTPS is required. Not production-complete.
 
 ### Make
 
