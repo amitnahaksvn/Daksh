@@ -379,10 +379,10 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 
 ### Supabase
 
-- **Integration surface:** Supabase Management API and project APIs.
-- **Required setup / access:** Access token for management API; project URL and scoped service credentials.
-- **Missing implementation:** Project discovery; management operations vs data-plane separation; secret handling; webhooks/tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Integration surface:** Supabase Management API v1.
+- **Required setup / access:** Supabase personal access token with organization/project management permissions.
+- **Implemented / remaining:** Organization and project listing, project retrieval, project creation and project deletion are implemented. Remaining: database/API data-plane client separated from management plane, project pause/restore, secrets/settings/database configuration, OAuth or delegated installation, encrypted token storage, destructive-action safeguards, API/UI and automated tests.
+- **Code status:** Partial client; `services/platform/Daksh.Platform/Integrations/Cloud/SupabaseIntegration.cs`. Personal access token is supplied per call; not production-complete.
 
 ### Firebase
 
