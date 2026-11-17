@@ -137,11 +137,10 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 
 ### Google Slides
 
-- **Integration surface:** Google Slides API plus Drive API.
-- **Required setup / access:** Google Cloud OAuth and Slides/Drive scopes.
-- **Missing implementation:** Presentation read/batchUpdate, image/media handling, export via Drive, permissions and tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
-
+- **Integration surface:** Google Slides API v1.
+- **Required setup / access:** Google Cloud OAuth client, Slides scopes and user consent; Drive scopes may be needed for file discovery/export/sharing.
+- **Implemented / remaining:** Presentation retrieval and creation, slide creation from predefined layouts, text insertion and replace-all-text are implemented. Remaining: OAuth consent/refresh-token lifecycle, shape/image/table creation and formatting, speaker notes, Drive file discovery/export/sharing, change notifications, encrypted account storage, API/UI and automated tests.
+- **Code status:** Partial implementation; `services/platform/Daksh.Platform/Integrations/Google/GoogleSlidesIntegration.cs`. Registered with the platform HTTP client factory; not production-complete.
 ### OneDrive
 
 - **Integration surface:** Microsoft Graph Drive API.
@@ -648,27 +647,3 @@ Some providers require app review, partner onboarding, paid plans, organization 
 - **Required setup / access:** Google Cloud OAuth client, Docs scopes and user consent; Drive scopes may also be needed for file discovery and sharing workflows.
 - **Implemented / remaining:** Document retrieval, document creation, text insertion and find/replace are implemented. Remaining: OAuth consent/refresh-token lifecycle, structural editing and formatting, comments/suggestions, Drive file discovery/sharing, change notifications, encrypted account storage, API/UI and automated tests.
 - **Code status:** Partial implementation; `services/platform/Daksh.Platform/Integrations/Google/GoogleDocsIntegration.cs`. Registered with the platform HTTP client factory; not production-complete.
-
-
-### Google Slides
-
-- **Integration surface:** Google Slides API v1.
-- **Required setup / access:** Google Cloud OAuth client, Slides scopes and user consent; Drive scopes may be needed for file discovery/export/sharing.
-- **Implemented / remaining:** Presentation retrieval and creation, slide creation from predefined layouts, text insertion and replace-all-text are implemented. Remaining: OAuth consent/refresh-token lifecycle, shape/image/table creation and formatting, speaker notes, Drive file discovery/export/sharing, change notifications, encrypted account storage, API/UI and automated tests.
-- **Code status:** Partial implementation; `services/platform/Daksh.Platform/Integrations/Google/GoogleSlidesIntegration.cs`. Registered with the platform HTTP client factory; not production-complete.
-
-
-### Google Slides
-
-- **Integration surface:** Google Slides API v1.
-- **Required setup / access:** Google Cloud OAuth client, Slides scopes and user consent; Drive scopes may be needed for file discovery/export/sharing.
-- **Implemented / remaining:** Presentation retrieval and creation, slide creation from predefined layouts, text insertion and replace-all-text are implemented. Remaining: OAuth consent/refresh-token lifecycle, shape/image/table creation and formatting, speaker notes, Drive file discovery/export/sharing, change notifications, encrypted account storage, API/UI and automated tests.
-- **Code status:** Partial implementation; `services/platform/Daksh.Platform/Integrations/Google/GoogleSlidesIntegration.cs`. Registered with the platform HTTP client factory; not production-complete.
-
-
-### Google Slides
-
-- **Integration surface:** Google Slides API v1.
-- **Required setup / access:** Google Cloud OAuth client, Slides scopes and user consent; Drive scopes may be needed for file discovery/export/sharing.
-- **Implemented / remaining:** Presentation retrieval and creation, slide creation from predefined layouts, text insertion and replace-all-text are implemented. Remaining: OAuth consent/refresh-token lifecycle, shape/image/table creation and formatting, speaker notes, Drive file discovery/export/sharing, change notifications, encrypted account storage, API/UI and automated tests.
-- **Code status:** Partial implementation; `services/platform/Daksh.Platform/Integrations/Google/GoogleSlidesIntegration.cs`. Registered with the platform HTTP client factory; not production-complete.
