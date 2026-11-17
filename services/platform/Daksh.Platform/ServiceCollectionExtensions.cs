@@ -97,6 +97,7 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<Daksh.Platform.Integrations.Google.GoogleCalendarIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
         services.AddHttpClient<Daksh.Platform.Integrations.Google.GoogleSheetsIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
         services.AddHttpClient<Daksh.Platform.Integrations.Google.GoogleDocsIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<Daksh.Platform.Integrations.Google.GoogleSlidesIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
         services.AddHttpClient<Daksh.Platform.Integrations.Microsoft.MicrosoftGraphIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
         services.AddHttpClient<Daksh.Platform.Integrations.Notion.NotionIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
         services.AddHttpClient<Daksh.Platform.Integrations.Atlassian.JiraIntegration>(c => c.Timeout = TimeSpan.FromSeconds(30));
