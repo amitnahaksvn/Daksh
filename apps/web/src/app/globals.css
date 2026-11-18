@@ -421,3 +421,43 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 @media (prefers-reduced-motion: reduce) {
   .chat-window { animation: none; }
 }
+
+/* Skeleton placeholders: a soft light sweep over blocks shaped like the content that is loading. */
+@keyframes skeleton-sweep {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+.skeleton {
+  background: linear-gradient(100deg, var(--surface-2) 30%, color-mix(in srgb, var(--accent) 14%, var(--surface-2)) 50%, var(--surface-2) 70%);
+  background-size: 200% 100%;
+  animation: skeleton-sweep 1.6s ease-in-out infinite;
+}
+/* Thin indeterminate bar along the top of a card that is refreshing data it already shows. */
+@keyframes progress-slide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(350%); }
+}
+.progress-bar { animation: progress-slide 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .skeleton, .progress-bar { animation: none; }
+}
+
+/* Whole-card "working" effect: a soft light sweep across the entire card plus a breathing accent edge. Sits above content, never blocks clicks. */
+@keyframes card-sweep {
+  from { background-position: 220% 0; }
+  to { background-position: -120% 0; }
+}
+@keyframes card-edge {
+  0%, 100% { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent), 0 0 0 0 transparent; }
+  50% { box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--accent) 80%, transparent), 0 0 24px 2px color-mix(in srgb, var(--accent) 28%, transparent); }
+}
+.card-busy {
+  /* a soft veil so the card visibly "dims" while it works, with a bright band sweeping across the whole thing */
+  background:
+    linear-gradient(105deg, transparent 18%, color-mix(in srgb, var(--accent) 38%, transparent) 50%, transparent 82%) 0 0 / 260% 100%,
+    color-mix(in srgb, var(--surface) 38%, transparent);
+  animation: card-sweep 1.3s ease-in-out infinite, card-edge 1.3s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-busy { animation: none; background: color-mix(in srgb, var(--accent) 8%, transparent); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent); }
+}

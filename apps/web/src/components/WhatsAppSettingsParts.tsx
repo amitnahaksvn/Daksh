@@ -2,12 +2,13 @@
 import { chatDisplayName } from "@/components/WhatsAppChatsPanel";
 import type { WhatsAppChat } from "@/lib/api";
 
-export function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+export function Toggle({ checked, onChange, disabled, label }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; label?: string }) {
   return (
     <label className={`relative inline-flex h-6 w-11 shrink-0 items-center ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}>
       <input
         type="checkbox"
         role="switch"
+        aria-label={label}
         aria-checked={checked}
         checked={checked}
         disabled={disabled}

@@ -138,6 +138,14 @@ public sealed class UserDashboardApp
     public required string ConnectionId { get; set; }
     public bool IsVisible { get; set; } = true;
     public int DisplayOrder { get; set; }
+    /// <summary>Legacy width in a 3-column grid (1–3). Superseded by <see cref="Cols"/>; still read so saved layouts carry over.</summary>
+    public int ColSpan { get; set; }
+    /// <summary>Tile width in a 12-column grid (3–12). 0 = the card's own default.</summary>
+    public int Cols { get; set; }
+    /// <summary>Tile height in pixels. 0 = fit the content. A shorter tile scrolls inside itself.</summary>
+    public int Height { get; set; }
+    /// <summary>The column (1–10) the tile starts in, in the 12-column grid. 0 = flow naturally after the previous tile.</summary>
+    public int Col { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
@@ -759,6 +767,19 @@ public static class IntegrationsModule
             else
             {
                 if (settings.AiExcludedChats.Contains(chatId) || chatRule?.AiExcluded == true) return; // never sent to the AI
+
+                // The rule gate: the AI only ever answers simple social messages. Media/reels/emoji get nothing; anything that needs a
+                // decision or information is held for the boss (a task is created) and the sender gets a holding reply instead.
+                var gate = await ReplyGateFlow.ResolveAsync(db, settings, connection.Id, chatId, chatName, messageText, isGroup,
+                    since => messages.Find(m => m.ConnectionId == connection.Id && m.ChatId == chatId && m.FromMe && !m.IsAiGenerated && m.Timestamp > since).AnyAsync(ct),
+                    DateTime.UtcNow, forced: null, ct);
+                if (gate.Action == GateAction.Silent)
+                {
+                    logger.LogInformation("Reply gate: no reply for {ChatId} ({Reason})", chatId, gate.Reason);
+                    return;
+                }
+                if (gate.Action == GateAction.SendHolding) { replyText = gate.Text!; goto Deliver; }
+
                 // Turning auto-reply on for this connection IS the user's explicit, per-channel opt-in to let
                 // AI see and answer these messages — that opt-in is the provider-data-sharing consent here.
                 var userContext = new UserAiContext(connection.UserId, MemoryEnabled: false, AllowProviderDataSharing: true);
@@ -773,9 +794,19 @@ public static class IntegrationsModule
                     return;
                 }
                 if (result.Text.Trim().Equals("NO_REPLY", StringComparison.OrdinalIgnoreCase)) return; // hit a never-respond topic
-                replyText = result.Text;
+                if (ReplyGate.ModelSaidNeedBoss(result.Text))
+                {
+                    // Second line of defence: the model itself judged this beyond small talk. Same as a gate hold.
+                    var hold = await ReplyGateFlow.ResolveAsync(db, settings, connection.Id, chatId, chatName, messageText, isGroup,
+                        since => messages.Find(m => m.ConnectionId == connection.Id && m.ChatId == chatId && m.FromMe && !m.IsAiGenerated && m.Timestamp > since).AnyAsync(ct),
+                        DateTime.UtcNow, GateVerdict.Boss, ct);
+                    if (hold.Action != GateAction.SendHolding) return;
+                    replyText = hold.Text!;
+                }
+                else replyText = result.Text;
             }
 
+            Deliver:
             if (settings.ResponseDelaySeconds > 0) await Task.Delay(TimeSpan.FromSeconds(settings.ResponseDelaySeconds), ct);
 
             // If you answered this chat yourself (from your phone or Daksha's chat view) while the reply was
@@ -930,7 +961,7 @@ public static class IntegrationsModule
         }
     }
 
-    internal static string BuildAutoReplyPrompt(WhatsAppSettings settings, string chatId, string? chatName, string messageText, bool isGroup, string? summary = null, string channel = "WhatsApp")
+    public static string BuildAutoReplyPrompt(WhatsAppSettings settings, string chatId, string? chatName, string messageText, bool isGroup, string? summary = null, string channel = "WhatsApp")
     {
         var who = chatName ?? chatId;
         // Explicit about point of view and output format: without this, a model asked to "reply on someone's
@@ -956,12 +987,16 @@ public static class IntegrationsModule
             _ => "Keep it brief — a sentence or two.",
         };
 
+        var boss = ReplyGate.NormaliseBoss(settings.BossReference);
+        // The assistant is not the owner and must not decide anything for them. It only does small talk; for everything else it says NEED_BOSS
+        // and the gate sends a holding reply. (The gate normally stops those messages before they reach this prompt; this is the backstop.)
         var instructions =
-            $"You ARE the owner of this {channel} account, personally replying {scope}. Write only the exact " +
-            "message text to send, in first person, as a real person casually texting — never a list of " +
-            "options, never meta-commentary about the message, never asking the user to pick a scenario, " +
-            "never explaining your reasoning. If asked something you can't know for certain (e.g. confirming " +
-            $"your identity), answer naturally and confidently the way someone would over text, don't hedge. " +
+            $"You are the AI assistant that answers {channel} messages on behalf of the account owner, whom you refer to as \"{boss}\", " +
+            $"replying {scope}. Write only the exact message text to send — never a list of options, never meta-commentary. " +
+            "You may ONLY handle simple social messages: greetings, thanks, \"how are you\", good wishes, goodbyes. " +
+            "You must NEVER make a decision, promise, commitment or confirmation, agree to anything, share any information or opinion, answer a " +
+            "question of substance, discuss money, time, availability, documents or plans, or speak as if you were the owner. " +
+            $"If the message needs any of that, output exactly NEED_BOSS and nothing else. Never reply to photos, reels, videos, stickers or voice notes. " +
             $"Tone: {personality}. {length}";
 
         if (!string.IsNullOrWhiteSpace(settings.CustomInstructions))

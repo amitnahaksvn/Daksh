@@ -68,6 +68,13 @@ public sealed class WhatsAppSettings
     public string ResponseLength { get; set; } = "Balanced"; // Short | Balanced | Detailed
     public string? CustomInstructions { get; set; }
     public string? NeverRespondTopics { get; set; }
+    /// <summary>The rule gate that runs before any AI reply: the AI only answers greetings and pleasantries; anything needing a decision is held
+    /// for the owner and the sender gets a holding reply. On by default — turning it off lets the AI answer everything, as it used to.</summary>
+    public bool ReplyGateEnabled { get; set; } = true;
+    /// <summary>How the assistant refers to the owner in holding replies ("my boss", "Amit sir"…).</summary>
+    public string BossReference { get; set; } = "my boss";
+    /// <summary>At most one holding reply per chat in this many minutes, unless the owner has answered since (0 = reply every time).</summary>
+    public int GateHoldingCooldownMinutes { get; set; } = 240;
     public bool UseConversationContext { get; set; } = true;
     public int ContextRetentionMessages { get; set; } = 5;
     public bool ReplyInSenderLanguage { get; set; }
@@ -110,6 +117,8 @@ public sealed class WhatsAppAutoReplyState
     public required string ConnectionId { get; set; }
     public required string ChatId { get; set; }
     public DateTime LastRepliedAt { get; set; }
+    /// <summary>When the last "I'll check with my boss" holding reply went to this chat.</summary>
+    public DateTime? LastHoldingAt { get; set; }
 }
 
 /// <summary>An AI-drafted reply held for the user's explicit approval (RequireApproval) instead of being
@@ -126,7 +135,7 @@ public sealed class WhatsAppPendingReply
 
 public sealed record GeneralSettingsDto(bool Paused, bool OperateContinuously, string ActiveHoursStart, string ActiveHoursEnd, string Timezone, IReadOnlyList<int> ActiveDays, bool IncomingNotificationsEnabled, bool OutgoingNotificationsEnabled);
 public sealed record MonitoringSettingsDto(bool MonitorPersonal, bool MonitorGroups, bool MonitorImages, bool MonitorDocuments, bool MonitorAudio, bool MonitorVideos, bool MonitorLinks, bool MonitorLocation, bool MonitorCalls, bool MonitorSavedContacts, bool MonitorUnknownNumbers, bool MonitorBusiness);
-public sealed record AutoReplySettingsDto(bool Enabled, bool InGroups, string Scope, bool CustomMessageEnabled, string? CustomMessage, int ResponseDelaySeconds, int CooldownSeconds, bool RequireApproval, IReadOnlyList<string> AllowedChats, IReadOnlyList<string> BlockedChats, string? OutsideHoursMessage, string? BusinessMessage, int BatchWindowSeconds);
+public sealed record AutoReplySettingsDto(bool Enabled, bool InGroups, string Scope, bool CustomMessageEnabled, string? CustomMessage, int ResponseDelaySeconds, int CooldownSeconds, bool RequireApproval, IReadOnlyList<string> AllowedChats, IReadOnlyList<string> BlockedChats, string? OutsideHoursMessage, string? BusinessMessage, int BatchWindowSeconds, bool ReplyGateEnabled = true, string BossReference = "my boss", int HoldingCooldownMinutes = 240);
 public sealed record AiBehaviourSettingsDto(string Personality, string? CustomPersonality, string ResponseLength, string? CustomInstructions, string? NeverRespondTopics, bool UseConversationContext, int ContextRetentionMessages, bool ReplyInSenderLanguage, bool SummarizeLongConversations, bool AiSignatureEnabled, string? AiSignatureText);
 public sealed record PrivacySectionDto(bool HideMessagePreviews, int MessageRetentionDays, bool AllowMessageContentAsAiContext, IReadOnlyList<string> AiExcludedChats);
 public sealed record NotificationSettingsDto(string Scope, IReadOnlyList<string> Tags, bool Email, bool WhatsAppSelf, bool Desktop, bool Sound);
@@ -135,7 +144,7 @@ public sealed record WhatsAppFullSettingsDto(string ConnectionId, string Account
 
 public sealed record UpdateGeneralSettingsRequest(bool? Paused, bool? OperateContinuously, string? ActiveHoursStart, string? ActiveHoursEnd, string? Timezone, List<int>? ActiveDays, bool? IncomingNotificationsEnabled, bool? OutgoingNotificationsEnabled);
 public sealed record UpdateMonitoringSettingsRequest(bool? MonitorPersonal, bool? MonitorGroups, bool? MonitorImages, bool? MonitorDocuments, bool? MonitorAudio, bool? MonitorVideos, bool? MonitorLinks, bool? MonitorLocation, bool? MonitorCalls, bool? MonitorSavedContacts, bool? MonitorUnknownNumbers, bool? MonitorBusiness);
-public sealed record UpdateAutoReplySettingsRequest(bool? Enabled, bool? InGroups, string? Scope, bool? CustomMessageEnabled, string? CustomMessage, int? ResponseDelaySeconds, int? CooldownSeconds, bool? RequireApproval, List<string>? AllowedChats, List<string>? BlockedChats, string? OutsideHoursMessage, string? BusinessMessage, int? BatchWindowSeconds = null);
+public sealed record UpdateAutoReplySettingsRequest(bool? Enabled, bool? InGroups, string? Scope, bool? CustomMessageEnabled, string? CustomMessage, int? ResponseDelaySeconds, int? CooldownSeconds, bool? RequireApproval, List<string>? AllowedChats, List<string>? BlockedChats, string? OutsideHoursMessage, string? BusinessMessage, int? BatchWindowSeconds = null, bool? ReplyGateEnabled = null, string? BossReference = null, int? HoldingCooldownMinutes = null);
 public sealed record UpdateAiBehaviourSettingsRequest(string? Personality, string? CustomPersonality, string? ResponseLength, string? CustomInstructions, string? NeverRespondTopics, bool? UseConversationContext, int? ContextRetentionMessages, bool? ReplyInSenderLanguage, bool? SummarizeLongConversations, bool? AiSignatureEnabled, string? AiSignatureText);
 public sealed record UpdatePrivacySectionRequest(bool? HideMessagePreviews, int? MessageRetentionDays, bool? AllowMessageContentAsAiContext, List<string>? AiExcludedChats);
 public sealed record UpdateNotificationSettingsRequest(string? Scope, List<string>? Tags, bool? Email, bool? WhatsAppSelf, bool? Desktop, bool? Sound);
@@ -262,6 +271,9 @@ public static class WhatsAppSettingsModule
             if (autoReply.ResponseDelaySeconds is { } v4) { update = update.Set(s => s.ResponseDelaySeconds, v4); changed = true; }
             if (autoReply.CooldownSeconds is { } v5) { update = update.Set(s => s.CooldownSeconds, v5); changed = true; }
             if (autoReply.BatchWindowSeconds is { } bw) { update = update.Set(s => s.BatchWindowSeconds, Math.Clamp(bw, 0, 60)); changed = true; }
+            if (autoReply.ReplyGateEnabled is { } gate) { update = update.Set(s => s.ReplyGateEnabled, gate); changed = true; }
+            if (autoReply.BossReference is { } boss) { update = update.Set(s => s.BossReference, ReplyGate.NormaliseBoss(boss)); changed = true; }
+            if (autoReply.HoldingCooldownMinutes is { } hold) { update = update.Set(s => s.GateHoldingCooldownMinutes, Math.Clamp(hold, 0, 10_080)); changed = true; }
             if (autoReply.RequireApproval is { } v6) { update = update.Set(s => s.RequireApproval, v6); changed = true; }
             if (autoReply.AllowedChats is { } a1) { update = update.Set(s => s.AutoReplyAllowedChats, a1); changed = true; }
             if (autoReply.BlockedChats is { } a2) { update = update.Set(s => s.AutoReplyBlockedChats, a2); changed = true; }
@@ -378,7 +390,7 @@ public static class WhatsAppSettingsModule
         c.Id, c.AccountIdentifier ?? "unknown", c.Status.ToString(),
         new GeneralSettingsDto(s.Paused, s.OperateContinuously, s.ActiveHoursStart, s.ActiveHoursEnd, s.Timezone, s.ActiveDays, c.NotificationsEnabled, s.OutgoingNotificationsEnabled),
         new MonitoringSettingsDto(s.MonitorPersonal, s.MonitorGroups, s.MonitorImages, s.MonitorDocuments, s.MonitorAudio, s.MonitorVideos, s.MonitorLinks, s.MonitorLocation, s.MonitorCalls, s.MonitorSavedContacts, s.MonitorUnknownNumbers, s.MonitorBusiness),
-        new AutoReplySettingsDto(c.AutoReplyEnabled, c.AutoReplyInGroups, s.AutoReplyScope, s.CustomMessageEnabled, s.CustomMessage, s.ResponseDelaySeconds, s.CooldownSeconds, s.RequireApproval, s.AutoReplyAllowedChats, s.AutoReplyBlockedChats, s.OutsideHoursMessage, s.BusinessMessage, s.BatchWindowSeconds),
+        new AutoReplySettingsDto(c.AutoReplyEnabled, c.AutoReplyInGroups, s.AutoReplyScope, s.CustomMessageEnabled, s.CustomMessage, s.ResponseDelaySeconds, s.CooldownSeconds, s.RequireApproval, s.AutoReplyAllowedChats, s.AutoReplyBlockedChats, s.OutsideHoursMessage, s.BusinessMessage, s.BatchWindowSeconds, s.ReplyGateEnabled, s.BossReference, s.GateHoldingCooldownMinutes),
         new AiBehaviourSettingsDto(s.Personality, s.CustomPersonality, s.ResponseLength, s.CustomInstructions, s.NeverRespondTopics, s.UseConversationContext, s.ContextRetentionMessages, s.ReplyInSenderLanguage, s.SummarizeLongConversations, s.AiSignatureEnabled, s.AiSignatureText),
         new PrivacySectionDto(s.HideMessagePreviews, s.MessageRetentionDays, s.AllowMessageContentAsAiContext, s.AiExcludedChats),
         new NotificationSettingsDto(s.NotifyScope, s.NotifyTags, s.DeliverEmail, s.DeliverWhatsAppSelf, s.DeliverDesktop, s.NotificationSound),

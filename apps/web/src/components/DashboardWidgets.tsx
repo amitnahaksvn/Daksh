@@ -62,7 +62,15 @@ function greeting(): string {
   return h < 5 ? "Working late" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
 }
 
-export function DashboardHero({ apps }: { apps: DashboardApp[] }) {
+export function DashboardHero({ apps, canResetLayout = false, onResetLayout, layoutSaveFailed = false, onRetryLayoutSave }: {
+  apps: DashboardApp[];
+  /** True when tiles have been moved or resized, so "Reset layout" would do something. */
+  canResetLayout?: boolean;
+  onResetLayout?: () => void;
+  /** The last attempt to save the arrangement failed. */
+  layoutSaveFailed?: boolean;
+  onRetryLayoutSave?: () => void;
+}) {
   const connected = apps.filter((a) => a.status === "Connected").length;
   const unread = apps.reduce((n, a) => n + a.unreadCount, 0);
   const bits = [`${apps.length} on your dashboard`, unread > 0 ? `${unread} unread message${unread === 1 ? "" : "s"}` : "inbox is clear"];
@@ -80,9 +88,21 @@ export function DashboardHero({ apps }: { apps: DashboardApp[] }) {
             {connected} connected · {bits.join(" · ")}
           </p>
         </div>
-        <Link href="/apps" className="rounded-full bg-black/85 px-5 py-2 text-sm font-semibold text-white hover:bg-black">
-          Add or manage apps
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          {layoutSaveFailed && (
+            <button type="button" onClick={onRetryLayoutSave} className="rounded-full border border-black/40 bg-white/60 px-5 py-2 text-sm font-semibold text-black hover:bg-white/80">
+              Couldn&apos;t save layout — retry
+            </button>
+          )}
+          {canResetLayout && (
+            <button type="button" onClick={onResetLayout} className="rounded-full border border-black/40 px-5 py-2 text-sm font-semibold text-black hover:bg-black/10">
+              Reset layout
+            </button>
+          )}
+          <Link href="/apps" className="rounded-full bg-black/85 px-5 py-2 text-sm font-semibold text-white hover:bg-black">
+            Add or manage apps
+          </Link>
+        </div>
       </div>
     </section>
   );

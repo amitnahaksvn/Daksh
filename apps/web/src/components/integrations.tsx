@@ -256,7 +256,7 @@ export function AppCard({
 
 export function DashboardAppCard({ app, onRemove }: { app: DashboardApp; onRemove: (id: string) => void }) {
   return (
-    <li className={`flex flex-wrap items-center gap-4 p-5 ${tileClass}`}>
+    <div className={`flex min-h-full flex-wrap items-center gap-4 p-5 ${tileClass}`}>
       <div className="relative shrink-0">
         <BrandTile icon={app.icon} color={app.color} size={44} />
         {app.unreadCount > 0 && (
@@ -284,6 +284,6 @@ export function DashboardAppCard({ app, onRemove }: { app: DashboardApp; onRemov
         <Link href={`/apps/${app.integrationKey}`} className={`${secondaryButtonClass} px-4 py-2 text-xs`}>Manage</Link>
         <button onClick={() => onRemove(app.id)} className={`${secondaryButtonClass} px-4 py-2 text-xs`}>Remove</button>
       </div>
-    </li>
+    </div>
   );
 }

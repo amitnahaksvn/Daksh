@@ -11,6 +11,9 @@ export class ApiError extends Error {
     public status: number,
     message: string,
     public fieldErrors: Record<string, string[]> = {},
+    /** Machine-readable reason from the API, e.g. "scope_upgrade_required", "permission_denied", "confirmation_required". */
+    public code: string | null = null,
+    public requiredScope: string | null = null,
   ) {
     super(message);
     this.name = "ApiError";
@@ -64,10 +67,14 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   if (!res.ok) {
     let title = `Request failed (${res.status})`;
     let fieldErrors: Record<string, string[]> = {};
+    let code: string | null = null;
+    let requiredScope: string | null = null;
     try {
       const body = await res.json();
       title = body.title ?? title;
       fieldErrors = body.errors ?? {};
+      code = body.code ?? null;
+      requiredScope = body.requiredScope ?? null;
     } catch {
       /* non-JSON error body */
     }
@@ -75,7 +82,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
       title = "You need to sign in to continue.";
       redirectToLogin();
     }
-    throw new ApiError(res.status, title, fieldErrors);
+    throw new ApiError(res.status, title, fieldErrors, code, requiredScope);
   }
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
 }
@@ -200,7 +207,14 @@ export type DashboardApp = {
   lastMessagePreview: string | null;
   lastMessageAt: string | null;
   lastMessageIsGroup: boolean;
+  /** Saved tile width in a 12-column grid (3–12). 0 = the card's default. */
+  cols: number;
+  /** Saved tile height in pixels. 0 = fit the content. */
+  height: number;
+  /** The column (1–10) the tile starts in. 0 = flow after the previous tile. */
+  col: number;
 };
+export type DashboardLayoutItem = { id: string; displayOrder: number; cols: number; height: number; col: number };
 
 export type WhatsAppGeneralSettings = {
   paused: boolean;
@@ -236,6 +250,12 @@ export type WhatsAppAutoReplySettings = {
   cooldownSeconds: number;
   batchWindowSeconds: number;
   requireApproval: boolean;
+  /** The rule gate before any AI reply: the AI only answers greetings; anything needing a decision is held for the boss. */
+  replyGateEnabled: boolean;
+  /** How the assistant refers to you in holding replies, e.g. "my boss". */
+  bossReference: string;
+  /** At most one holding reply per chat in this many minutes, unless you have answered since. */
+  holdingCooldownMinutes: number;
   allowedChats: string[];
   blockedChats: string[];
   outsideHoursMessage: string | null;
@@ -423,5 +443,7 @@ export const api = {
   dashboardApps: () => apiFetch<DashboardApp[]>("/api/dashboard/apps"),
   addToDashboard: (connectionId: string) => apiFetch<{ id: string }>("/api/dashboard/apps", json({ connectionId })),
   removeFromDashboard: (id: string) => apiFetch<void>(`/api/dashboard/apps/${id}`, { method: "DELETE" }),
+  saveDashboardLayout: (items: DashboardLayoutItem[]) => apiFetch<{ updated: number }>("/api/dashboard/apps/layout", { method: "PUT", body: JSON.stringify(items) }),
+  resetDashboardLayout: () => apiFetch<void>("/api/dashboard/apps/layout", { method: "DELETE" }),
   dashboardActivity: () => apiFetch<ActivityItem[]>("/api/dashboard/activity"),
 };

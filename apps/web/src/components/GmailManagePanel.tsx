@@ -1,21 +1,23 @@
 "use client";
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { BrandTile, StatusChip } from "@/components/integrations";
 import { GmailConnectCard } from "@/components/GmailConnectCard";
+import { CONTROL_TABS, GmailControlCentre, type ControlTabId } from "@/components/GmailControlCentre";
 import { Card, Row, Toggle } from "@/components/WhatsAppSettingsParts";
-import { buttonClass, Dropdown, ErrorState, inputClass, Loading, secondaryButtonClass } from "@/components/ui";
+import { buttonClass, Dropdown, ErrorState, inputClass, Loading } from "@/components/ui";
 import { api, ApiError, type GmailSettings } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 
-type TabId = "general" | "reading" | "compose" | "dashboard" | "account";
-const TABS: { id: TabId; label: string }[] = [
+type BasicTabId = "general" | "reading" | "compose" | "dashboard";
+type TabId = BasicTabId | ControlTabId;
+const BASIC_TABS: { id: BasicTabId; label: string }[] = [
   { id: "general", label: "General" },
   { id: "reading", label: "Reading" },
   { id: "compose", label: "Compose" },
   { id: "dashboard", label: "Dashboard" },
-  { id: "account", label: "Account" },
 ];
+const TABS: { id: TabId; label: string }[] = [...BASIC_TABS, ...CONTROL_TABS];
+const isControlTab = (t: TabId): t is ControlTabId => CONTROL_TABS.some((c) => c.id === t);
 
 const DASHBOARD_FILTERS = [
   { value: "in:inbox", label: "Inbox" },
@@ -30,9 +32,10 @@ function errorText(err: unknown, fallback: string) {
 }
 
 /** The Gmail "Manage" panel (opened from the Apps page): connect Gmail, or tune how it behaves. */
-export function GmailManagePanel({ onChanged }: { onChanged?: () => void }) {
+export function GmailManagePanel({ onChanged, initialTab }: { onChanged?: () => void; initialTab?: ControlTabId }) {
   const { state, reload } = useApi(() => api.appDetail("gmail"));
-  const [tab, setTab] = useState<TabId>("general");
+  const [tab, setTab] = useState<TabId>(initialTab ?? "general");
+  const [controlDirty, setControlDirty] = useState(false);
 
   if (state.status === "loading") return <Loading label="Loading Gmail" />;
   if (state.status === "error") return <ErrorState error={state.error} onRetry={reload} />;
@@ -51,7 +54,6 @@ export function GmailManagePanel({ onChanged }: { onChanged?: () => void }) {
             {connection?.accountIdentifier && <span className="truncate text-xs text-muted">{connection.accountIdentifier}</span>}
           </div>
         </div>
-        {connected && <Link href="/apps/gmail" className={`${buttonClass} ml-auto px-4 py-2 text-xs`}>Open Gmail</Link>}
       </header>
 
       {!connected ? (
@@ -60,13 +62,17 @@ export function GmailManagePanel({ onChanged }: { onChanged?: () => void }) {
         </div>
       ) : (
         <>
-          <div role="tablist" aria-label="Gmail settings" className="mt-5 flex gap-1 overflow-x-auto border-b border-line">
+          <div role="tablist" aria-label="Gmail settings" className="sticky top-0 z-10 -mx-1 mt-5 flex gap-1 overflow-x-auto border-b border-line bg-surface px-1">
             {TABS.map((t) => (
               <button
                 key={t.id}
                 role="tab"
                 aria-selected={tab === t.id}
-                onClick={() => setTab(t.id)}
+                onClick={() => {
+                  // The control-centre tabs share one unsaved draft; keep it safe when leaving them for the simple tabs.
+                  if (controlDirty && isControlTab(tab) && !isControlTab(t.id) && !window.confirm("You have unsaved Gmail settings. Leave without saving?")) return;
+                  setTab(t.id);
+                }}
                 className={`shrink-0 border-b-2 px-4 py-2 text-sm font-semibold transition-colors ${tab === t.id ? "border-accent text-text" : "border-transparent text-muted hover:text-text"}`}
               >
                 {t.label}
@@ -74,13 +80,11 @@ export function GmailManagePanel({ onChanged }: { onChanged?: () => void }) {
             ))}
           </div>
           <div className="mt-4">
-            <GmailSettingsTabs
-              tab={tab}
-              connectionId={connection!.connectionId}
-              account={connection!.accountIdentifier}
-              onDisconnected={() => { reload(); onChanged?.(); }}
-              onChanged={onChanged}
-            />
+            {!isControlTab(tab) && <GmailSettingsTabs tab={tab} connectionId={connection!.connectionId} onChanged={onChanged} />}
+            {/* Stays mounted (hidden) while a simple tab is open so unsaved edits aren't lost. */}
+            <div hidden={!isControlTab(tab)}>
+              <GmailControlCentre tab={isControlTab(tab) ? tab : undefined} hideTabs onDirtyChange={setControlDirty} onAccountsChanged={() => { reload(); onChanged?.(); }} />
+            </div>
           </div>
         </>
       )}
@@ -88,18 +92,15 @@ export function GmailManagePanel({ onChanged }: { onChanged?: () => void }) {
   );
 }
 
-function GmailSettingsTabs({ tab, connectionId, account, onDisconnected, onChanged }: {
-  tab: TabId;
+function GmailSettingsTabs({ tab, connectionId, onChanged }: {
+  tab: BasicTabId;
   connectionId: string;
-  account: string | null;
-  onDisconnected: () => void;
   onChanged?: () => void;
 }) {
   const [settings, setSettings] = useState<GmailSettings | null>(null);
   const [signature, setSignature] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     api.gmailSettings().then(
@@ -141,19 +142,6 @@ function GmailSettingsTabs({ tab, connectionId, account, onDisconnected, onChang
     }
   }
 
-  async function disconnect() {
-    if (!window.confirm("Disconnect Gmail and revoke Daksh's Google access?")) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await api.disconnectGmail();
-      onDisconnected();
-    } catch (err) {
-      setError(errorText(err, "Could not disconnect Gmail."));
-      setBusy(false);
-    }
-  }
-
   if (!settings && !error) return <Loading label="Loading settings" />;
 
   return (
@@ -163,11 +151,8 @@ function GmailSettingsTabs({ tab, connectionId, account, onDisconnected, onChang
 
       {settings && tab === "general" && (
         <Card>
-          <Row label="Show Gmail on dashboard" hint="Pin your latest emails to the Daksha dashboard." search="">
+          <Row label="Show Gmail dashboard" hint="Show the Gmail dashboard (briefing, statistics, priority emails) on your Daksha dashboard. Turn off to hide it." search="">
             <Toggle checked={settings.showOnDashboard} onChange={(v) => void toggleDashboard(v)} />
-          </Row>
-          <Row label="Open full mailbox" hint="Read, search and send mail in the Gmail view." search="">
-            <Link href="/apps/gmail" className={`${secondaryButtonClass} px-4 py-2 text-xs`}>Open Gmail</Link>
           </Row>
         </Card>
       )}
@@ -220,13 +205,6 @@ function GmailSettingsTabs({ tab, connectionId, account, onDisconnected, onChang
         </Card>
       )}
 
-      {tab === "account" && (
-        <div className="rounded-[1.25rem] border border-line p-4">
-          <p className="text-sm font-semibold">{account}</p>
-          <p className="mt-0.5 text-xs text-muted">Daksha can read and send mail for this account. Disconnecting revokes that access and removes the stored Google tokens.</p>
-          <button onClick={disconnect} disabled={busy} className={`${secondaryButtonClass} mt-3`}>Disconnect Gmail</button>
-        </div>
-      )}
     </div>
   );
 }

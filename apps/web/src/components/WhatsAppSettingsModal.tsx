@@ -161,7 +161,7 @@ export function WhatsAppSettingsModal({ connectionId, onClose, inline = false, p
         monitorAudio: true, monitorVideos: true, monitorLinks: true, monitorLocation: true,
         monitorCalls: true, monitorSavedContacts: true, monitorUnknownNumbers: true, monitorBusiness: true,
       },
-      autoReply: { ...draft.autoReply, scope: "All", customMessageEnabled: false, customMessage: null, responseDelaySeconds: 0, cooldownSeconds: 0, batchWindowSeconds: 5, requireApproval: false, allowedChats: [], blockedChats: [], outsideHoursMessage: null, businessMessage: null },
+      autoReply: { ...draft.autoReply, scope: "All", customMessageEnabled: false, customMessage: null, responseDelaySeconds: 0, cooldownSeconds: 0, batchWindowSeconds: 5, requireApproval: false, replyGateEnabled: true, bossReference: "my boss", holdingCooldownMinutes: 240, allowedChats: [], blockedChats: [], outsideHoursMessage: null, businessMessage: null },
       aiBehaviour: {
         personality: "Friendly", customPersonality: null, responseLength: "Balanced",
         customInstructions: null, neverRespondTopics: null, useConversationContext: true, contextRetentionMessages: 5,
@@ -460,6 +460,35 @@ export function WhatsAppSettingsModal({ connectionId, onClose, inline = false, p
                         />
                       </Row>
 )}
+                      <Row
+                        label="Only auto-reply to simple messages"
+                        hint="The reply gate. The AI answers greetings and thanks only. Anything that asks for a decision, money, time, a document or any information is NOT answered by the AI: the sender is told you'll get back to them, and you get a task. Reels, photos, videos, voice notes, stickers and emoji never get a reply."
+                        search={search}
+                      >
+                        <Toggle checked={draft.autoReply.replyGateEnabled} onChange={(v) => update("autoReply", { replyGateEnabled: v })} />
+                      </Row>
+                      <Row label="What the assistant calls you" hint="Used in the holding reply, e.g. “I'll let my boss know and my boss will get back to you.”" search={search}>
+                        <input
+                          value={draft.autoReply.bossReference}
+                          maxLength={60}
+                          disabled={!draft.autoReply.replyGateEnabled}
+                          onChange={(e) => update("autoReply", { bossReference: e.target.value })}
+                          className={`${inputClass} w-48`}
+                          aria-label="What the assistant calls you"
+                        />
+                      </Row>
+                      <Row label="Holding reply at most once every (minutes)" hint="So a sender isn't told “I'll check with my boss” on every message. It resets as soon as you reply yourself. 0 = every time." search={search}>
+                        <input
+                          type="number"
+                          min={0}
+                          max={10080}
+                          value={draft.autoReply.holdingCooldownMinutes}
+                          disabled={!draft.autoReply.replyGateEnabled}
+                          onChange={(e) => update("autoReply", { holdingCooldownMinutes: Math.min(10080, Math.max(0, Number(e.target.value))) })}
+                          className={`${inputClass} w-24`}
+                          aria-label="Holding reply interval in minutes"
+                        />
+                      </Row>
                       <Row label="Response delay (seconds)" hint="Wait this long before sending the reply." search={search}>
                         <input
                           type="number"

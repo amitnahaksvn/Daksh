@@ -462,6 +462,7 @@ function AppsPageContent({ apps }: { apps: AppCatalogEntry[] }) {
 
       <Modal
         wide
+        fixedHeight
         open={gmailOpen}
         onClose={() => {
           setGmailOpen(false);

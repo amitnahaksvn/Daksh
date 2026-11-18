@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { api, ApiError, type GmailMessage, type GmailMessageSummary } from "@/lib/api";
 import { GmailMessageBody } from "@/components/GmailMessageBody";
+import { gmailControl } from "@/lib/gmailControl";
 import { inputClass, Loading, tileClass } from "@/components/ui";
 
 const FOLDERS: { id: string; label: string; query: string; icon: string }[] = [
@@ -74,9 +75,14 @@ function Icon({ path, className = "h-5 w-5" }: { path: string; className?: strin
 
 type Draft = { to: string; subject: string; body: string };
 
-export function GmailMailbox({ showImages, onOpenSettings }: { showImages: boolean; onOpenSettings?: () => void }) {
-  const [folder, setFolder] = useState("inbox");
-  const [query, setQuery] = useState("in:inbox");
+export function GmailMailbox({ showImages, onOpenSettings, initial }: {
+  showImages: boolean; onOpenSettings?: () => void;
+  /** Where to start when opened from the dashboard card: a query, a message to open, a blank compose window, or a focused search box. */
+  initial?: { query?: string; compose?: boolean; focusSearch?: boolean; openMessageId?: string };
+}) {
+  const startQuery = initial?.query ?? "in:inbox";
+  const [folder, setFolder] = useState(FOLDERS.find((f) => f.query === startQuery)?.id ?? "");
+  const [query, setQuery] = useState(startQuery);
   const [messages, setMessages] = useState<GmailMessageSummary[]>([]);
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,7 +90,7 @@ export function GmailMailbox({ showImages, onOpenSettings }: { showImages: boole
   const [notice, setNotice] = useState<string | null>(null);
   const [selected, setSelected] = useState<GmailMessage | null>(null);
   const [openingId, setOpeningId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<Draft | null>(null);
+  const [draft, setDraft] = useState<Draft | null>(initial?.compose ? { to: "", subject: "", body: "" } : null);
   const [sending, setSending] = useState(false);
   const request = useRef(0);
 
@@ -104,7 +110,12 @@ export function GmailMailbox({ showImages, onOpenSettings }: { showImages: boole
     }
   }, []);
 
-  useEffect(() => { void load("in:inbox"); }, [load]);
+  useEffect(() => { void load(startQuery); }, [load, startQuery]);
+  const openId = initial?.openMessageId;
+  useEffect(() => {
+    if (!openId) return;
+    api.gmailMessage(openId).then(setSelected, (err) => setError(messageError(err, "Could not open this message.")));
+  }, [openId]);
 
   function chooseFolder(id: string) {
     const target = FOLDERS.find((f) => f.id === id)!;
@@ -120,6 +131,29 @@ export function GmailMailbox({ showImages, onOpenSettings }: { showImages: boole
     setFolder(FOLDERS.find((f) => f.query === text)?.id ?? "");
     setSelected(null);
     void load(text);
+  }
+
+  /** Archive / trash / star / mark unread. The API enforces the permission profile and Google scope; if more access is needed we say so. */
+  async function messageAction(action: "archive" | "trash" | "star" | "unstar" | "unread", done: string) {
+    if (!selected) return;
+    setError(null);
+    try {
+      await gmailControl.messageAction(selected.id, action);
+      setNotice(done);
+      if (action === "archive" || action === "trash") {
+        setMessages((list) => list.filter((m) => m.id !== selected.id));
+        setSelected(null);
+      } else if (action === "unread") {
+        setMessages((list) => list.map((m) => (m.id === selected.id ? { ...m, isUnread: true } : m)));
+        setSelected(null);
+      } else {
+        setMessages((list) => list.map((m) => (m.id === selected.id ? { ...m, isStarred: action === "star" } : m)));
+      }
+    } catch (err) {
+      if (err instanceof ApiError && (err.code === "scope_upgrade_required" || err.code === "permission_denied")) {
+        setError(`${err.message} Open Settings (the gear) → Security to allow it.`);
+      } else setError(messageError(err, "Could not update this message."));
+    }
   }
 
   async function openMessage(message: GmailMessageSummary) {
@@ -179,6 +213,7 @@ export function GmailMailbox({ showImages, onOpenSettings }: { showImages: boole
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search mail"
+            autoFocus={initial?.focusSearch}
             className="w-full bg-transparent py-1.5 text-sm outline-none placeholder:text-muted"
           />
           <button type="submit" disabled={loading} className="rounded-full px-3 py-1 text-xs font-semibold text-accent hover:bg-surface">Search</button>
@@ -224,7 +259,13 @@ export function GmailMailbox({ showImages, onOpenSettings }: { showImages: boole
                 <button onClick={() => setSelected(null)} aria-label={`Back to ${currentLabel}`} className="rounded-full p-2 hover:bg-surface-2">
                   <Icon path="M15 5l-7 7 7 7" />
                 </button>
-                <button onClick={() => reply(selected)} className="ml-auto flex items-center gap-2 rounded-full border border-line px-4 py-1.5 text-sm font-semibold hover:bg-surface-2">
+                <span className="ml-auto flex items-center gap-1" role="toolbar" aria-label="Message actions">
+                  <button onClick={() => messageAction("archive", "Conversation archived.")} className="rounded-full px-3 py-1.5 text-xs font-semibold hover:bg-surface-2">Archive</button>
+                  <button onClick={() => messageAction("trash", "Moved to trash.")} className="rounded-full px-3 py-1.5 text-xs font-semibold hover:bg-surface-2">Trash</button>
+                  <button onClick={() => messageAction("unread", "Marked as unread.")} className="rounded-full px-3 py-1.5 text-xs font-semibold hover:bg-surface-2">Mark unread</button>
+                  <button onClick={() => messageAction(messages.find((m) => m.id === selected.id)?.isStarred ? "unstar" : "star", "Star updated.")} className="rounded-full px-3 py-1.5 text-xs font-semibold hover:bg-surface-2">Star</button>
+                </span>
+                <button onClick={() => reply(selected)} className="flex items-center gap-2 rounded-full border border-line px-4 py-1.5 text-sm font-semibold hover:bg-surface-2">
                   <Icon path="M9 8L4 13l5 5M4 13h10a6 6 0 016 6" className="h-4 w-4" /> Reply
                 </button>
               </div>

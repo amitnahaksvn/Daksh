@@ -492,6 +492,14 @@ public static class TelegramAutoReply
             else
             {
                 if (settings.AiExcludedChats.Contains(chatId) || chatRule?.AiExcluded == true) return;
+
+                // The rule gate (see ReplyGate): the AI only answers simple social messages; everything else is held for the boss.
+                var gate = await ReplyGateFlow.ResolveAsync(db, settings, connection.Id, chatId, trigger.ChatName, text, trigger.IsGroup,
+                    since => messages.Find(m => m.ConnectionId == connection.Id && m.ChatId == chatId && m.FromMe && !m.IsAiGenerated && m.Timestamp > since).AnyAsync(),
+                    DateTime.UtcNow, forced: null);
+                if (gate.Action == GateAction.Silent) { logger.LogInformation("Reply gate: no Telegram reply for {ChatId} ({Reason})", chatId, gate.Reason); return; }
+                if (gate.Action == GateAction.SendHolding) { replyText = gate.Text!; isAi = true; goto Deliver; }
+
                 List<(string, string)>? history = null;
                 if (settings.AllowMessageContentAsAiContext && settings.UseConversationContext && settings.ContextRetentionMessages > 0)
                 {
@@ -504,10 +512,19 @@ public static class TelegramAutoReply
                 var result = await sp.GetRequiredService<IAssistantOrchestrator>().RespondAsync(new AssistantRequest(userContext, prompt, history));
                 if (result.IsSimulated || string.IsNullOrWhiteSpace(result.Text)) return;
                 if (result.Text.Trim().Equals("NO_REPLY", StringComparison.OrdinalIgnoreCase)) return;
-                replyText = result.Text.Trim();
+                if (ReplyGate.ModelSaidNeedBoss(result.Text))
+                {
+                    var hold = await ReplyGateFlow.ResolveAsync(db, settings, connection.Id, chatId, trigger.ChatName, text, trigger.IsGroup,
+                        since => messages.Find(m => m.ConnectionId == connection.Id && m.ChatId == chatId && m.FromMe && !m.IsAiGenerated && m.Timestamp > since).AnyAsync(),
+                        DateTime.UtcNow, GateVerdict.Boss);
+                    if (hold.Action != GateAction.SendHolding) return;
+                    replyText = hold.Text!;
+                }
+                else replyText = result.Text.Trim();
                 isAi = true;
             }
 
+            Deliver:
             if (settings.ResponseDelaySeconds > 0) await Task.Delay(TimeSpan.FromSeconds(settings.ResponseDelaySeconds));
 
             // If you answered yourself while this was being prepared or delayed, don't talk over you.

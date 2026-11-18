@@ -44,12 +44,15 @@ public sealed class GmailOAuthAttempt
     public DateTime ExpiresAtUtc { get; set; }
 }
 
-public sealed class GmailIntegrationException(int statusCode, string message) : Exception(message)
+public sealed class GmailIntegrationException(int statusCode, string message, string? code = null, string? requiredScope = null) : Exception(message)
 {
     public int StatusCode { get; } = statusCode;
+    /// <summary>Machine-readable reason the UI can act on, e.g. <c>scope_upgrade_required</c> or <c>permission_denied</c>.</summary>
+    public string? Code { get; } = code;
+    public string? RequiredScope { get; } = requiredScope;
 }
 
-public static class GmailIntegrationModule
+public static partial class GmailIntegrationModule
 {
     private const string IntegrationKey = "gmail";
     private const string CredentialKey = "gmail-oauth-token";
@@ -60,6 +63,10 @@ public static class GmailIntegrationModule
     {
         services.AddHttpClient("google-oauth", client => client.BaseAddress = new Uri("https://oauth2.googleapis.com/"));
         services.AddHttpClient("gmail-api", client => client.BaseAddress = new Uri("https://gmail.googleapis.com/gmail/v1/"));
+        services.AddSingleton<GmailServices>();
+        services.AddSingleton<GmailPipeline>();
+        services.AddSingleton<GmailSyncEngine>();
+        services.AddHostedService<GmailSyncWorker>();
         return services;
     }
 
@@ -75,6 +82,7 @@ public static class GmailIntegrationModule
         group.MapPost("/disconnect", DisconnectAsync).RequireAuthorization(AuthSetup.UserScheme);
         group.MapGet("/settings", GetSettingsAsync).RequireAuthorization(AuthSetup.UserScheme);
         group.MapPut("/settings", UpdateSettingsAsync).RequireAuthorization(AuthSetup.UserScheme);
+        MapGmailManagement(group);
     }
 
     private static async Task<GmailUserSettings> LoadSettingsAsync(IMongoDatabase db, string userId, CancellationToken ct) =>
@@ -123,13 +131,14 @@ public static class GmailIntegrationModule
             cancellationToken: ct);
     }
 
-    public static string BuildAuthorizationUrl(string clientId, string redirectUri, string state, string codeChallenge) =>
+    public static string BuildAuthorizationUrl(string clientId, string redirectUri, string state, string codeChallenge, string? scope = null) =>
         QueryHelpers.AddQueryString("https://accounts.google.com/o/oauth2/v2/auth", new Dictionary<string, string?>
         {
             ["client_id"] = clientId,
             ["redirect_uri"] = redirectUri,
             ["response_type"] = "code",
-            ["scope"] = GmailScope,
+            ["scope"] = scope ?? GmailScope,
+            ["include_granted_scopes"] = "true",
             ["state"] = state,
             ["access_type"] = "offline",
             ["prompt"] = "consent",
@@ -142,6 +151,7 @@ public static class GmailIntegrationModule
         ClaimsPrincipalAccessor who,
         IConfiguration config,
         ISecretProtector protector,
+        string? features,
         CancellationToken ct)
     {
         if (!TryGetSettings(config, out var settings))
@@ -166,7 +176,7 @@ public static class GmailIntegrationModule
             ExpiresAtUtc = now.AddMinutes(10),
         }, cancellationToken: ct);
 
-        return Results.Ok(new GmailAuthorizationResponse(BuildAuthorizationUrl(settings.ClientId, settings.RedirectUri, state, challenge)));
+        return Results.Ok(new GmailAuthorizationResponse(BuildAuthorizationUrl(settings.ClientId, settings.RedirectUri, state, challenge, GmailScopes.ForFeatures(features))));
     }
 
     private static async Task<IResult> CompleteOAuthAsync(
@@ -256,7 +266,7 @@ public static class GmailIntegrationModule
             return RedirectToFrontend(attempt.FrontendUrl, "error", "profile_lookup");
 
         var connections = db.GetCollection<IntegrationConnection>("integrationConnections");
-        var existing = await connections.Find(c => c.UserId == attempt.UserId && c.IntegrationKey == IntegrationKey)
+        var existing = await connections.Find(c => c.UserId == attempt.UserId && c.IntegrationKey == IntegrationKey && c.AccountIdentifier == profile.EmailAddress)
             .SortByDescending(c => c.CreatedAt).FirstOrDefaultAsync(ct);
         var connectedAt = DateTime.UtcNow;
         IntegrationConnection connection;
@@ -291,6 +301,7 @@ public static class GmailIntegrationModule
 
         var tokenSet = new GmailTokens(tokenResponse.AccessToken, tokenResponse.RefreshToken, connectedAt.AddSeconds(tokenResponse.ExpiresIn));
         await SaveTokensAsync(db, protector, connection.Id, tokenSet, ct);
+        await RegisterAccountAsync(db, connection, tokenResponse.Scope, ct);
         return RedirectToFrontend(attempt.FrontendUrl, "status", "connected");
     }
 
@@ -453,7 +464,8 @@ public static class GmailIntegrationModule
 
         try
         {
-            var context = await GetUserContextAsync(who.UserId, db, protector, ct);
+            var authorized = await GmailGuard.AuthorizeAsync(db, who.UserId, null, GmailPermission.Send, ct);
+            var context = await GetUserContextAsync(who.UserId, authorized.Connection.Id, db, protector, ct);
             var message = new MimeMessage();
             message.From.Add(MailboxAddress.Parse(context.Connection.AccountIdentifier!));
             message.To.AddRange(recipients);
@@ -463,13 +475,14 @@ public static class GmailIntegrationModule
             message.Body = new TextPart("plain") { Text = text };
             var raw = Base64Url(Encoding.UTF8.GetBytes(message.ToString()));
 
-            using var sent = await GmailApiAsync(who.UserId, "users/me/messages/send", HttpMethod.Post, new { raw }, db, protector, config, clients, ct);
+            using var sent = await GmailApiForAsync(who.UserId, context.Connection.Id, "users/me/messages/send", HttpMethod.Post, new { raw }, db, protector, config, clients, ct);
             var id = sent.RootElement.TryGetProperty("id", out var sentId) ? sentId.GetString() : null;
+            await db.GetCollection<GmailActionAudit>("gmailActionAudit").InsertOneAsync(new GmailActionAudit { UserId = who.UserId, AccountId = authorized.Connection.Id, MessageRef = id, Action = "message.send", AtUtc = DateTime.UtcNow }, cancellationToken: ct);
             return Results.Ok(new { messageId = id });
         }
         catch (GmailIntegrationException ex)
         {
-            return Results.Problem(statusCode: ex.StatusCode, title: ex.Message);
+            return Results.Problem(statusCode: ex.StatusCode == 401 ? 409 : ex.StatusCode, title: ex.Message, extensions: new Dictionary<string, object?> { ["code"] = ex.Code, ["requiredScope"] = ex.RequiredScope });
         }
         catch (HttpRequestException ex)
         {
@@ -484,11 +497,13 @@ public static class GmailIntegrationModule
         ISecretProtector protector,
         IHttpClientFactory clients,
         ILoggerFactory loggerFactory,
+        string? accountId,
         CancellationToken ct)
     {
         var logger = loggerFactory.CreateLogger("Daksh.Api.Gmail");
         var connections = db.GetCollection<IntegrationConnection>("integrationConnections");
-        var connection = await connections.Find(c => c.UserId == who.UserId && c.IntegrationKey == IntegrationKey)
+        var connection = await connections.Find(c => c.UserId == who.UserId && c.IntegrationKey == IntegrationKey
+                && c.Status == ConnectionStatus.Connected && (accountId == null || c.Id == accountId))
             .SortByDescending(c => c.CreatedAt).FirstOrDefaultAsync(ct);
         if (connection is null) return Results.NotFound();
 
@@ -536,11 +551,20 @@ public static class GmailIntegrationModule
                 .Set(c => c.Status, ConnectionStatus.Disconnected)
                 .Set(c => c.DisconnectedAt, DateTime.UtcNow)
                 .Set(c => c.UpdatedAt, DateTime.UtcNow), cancellationToken: ct);
+        await GmailLocalData.PurgeAccountAsync(db, who.UserId, connection.Id, keepAudit: true, ct);
         return Results.Ok(new { status = ConnectionStatus.Disconnected.ToString() });
     }
 
-    private static async Task<JsonDocument> GmailApiAsync(
+    private static Task<JsonDocument> GmailApiAsync(
+        string userId, string path, HttpMethod method, object? body,
+        IMongoDatabase db, ISecretProtector protector, IConfiguration config, IHttpClientFactory clients, CancellationToken ct) =>
+        GmailApiForAsync(userId, null, path, method, body, db, protector, config, clients, ct);
+
+    /// <summary>Calls the Gmail API as <paramref name="userId"/>'s account <paramref name="connectionId"/> (default account when null).
+    /// Refreshes the access token, retries 429/5xx with exponential backoff + jitter, and never throws Google's raw error body.</summary>
+    internal static async Task<JsonDocument> GmailApiForAsync(
         string userId,
+        string? connectionId,
         string path,
         HttpMethod method,
         object? body,
@@ -550,11 +574,12 @@ public static class GmailIntegrationModule
         IHttpClientFactory clients,
         CancellationToken ct)
     {
-        var context = await GetUserContextAsync(userId, db, protector, ct);
+        var context = await GetUserContextAsync(userId, connectionId, db, protector, ct);
         if (context.Tokens.ExpiresAtUtc <= DateTimeOffset.UtcNow.AddMinutes(1))
             context = context with { Tokens = await RefreshTokensAsync(context.Connection, context.Tokens, db, protector, config, clients, ct) };
 
         var client = clients.CreateClient("gmail-api");
+        var transientRetries = 0;
         for (var attempt = 0; attempt < 2; attempt++)
         {
             using var request = new HttpRequestMessage(method, path);
@@ -566,27 +591,41 @@ public static class GmailIntegrationModule
                 context = context with { Tokens = await RefreshTokensAsync(context.Connection, context.Tokens, db, protector, config, clients, ct) };
                 continue;
             }
+            if (response.StatusCode is HttpStatusCode.TooManyRequests or HttpStatusCode.BadGateway or HttpStatusCode.ServiceUnavailable or HttpStatusCode.GatewayTimeout or HttpStatusCode.InternalServerError
+                && transientRetries < 3)
+            {
+                transientRetries++;
+                attempt--; // transient retries do not consume the single token-refresh retry
+                await Task.Delay(GmailBackoff.Delay(transientRetries), ct);
+                continue;
+            }
             if (!response.IsSuccessStatusCode)
-                throw new GmailIntegrationException((int)response.StatusCode,
-                    response.StatusCode == HttpStatusCode.Unauthorized
-                        ? "Gmail authorization expired. Reconnect your Gmail account."
-                        : "Gmail could not complete the request. Check the connection and permissions.");
+                throw new GmailIntegrationException((int)response.StatusCode, response.StatusCode switch
+                {
+                    HttpStatusCode.Unauthorized => "Gmail authorization expired. Reconnect your Gmail account.",
+                    HttpStatusCode.Forbidden => "Google denied this request. The account may need additional permission — reconnect Gmail and approve it.",
+                    HttpStatusCode.NotFound => "Gmail could not find that item.",
+                    HttpStatusCode.TooManyRequests => "Gmail is rate limiting requests. Try again shortly.",
+                    _ => "Gmail could not complete the request. Check the connection and permissions.",
+                }, response.StatusCode == HttpStatusCode.Forbidden ? "google_forbidden" : null);
 
-            await using var stream = await response.Content.ReadAsStreamAsync(ct);
-            return await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+            var bytes = await response.Content.ReadAsByteArrayAsync(ct);
+            return bytes.Length == 0 ? JsonDocument.Parse("{}") : JsonDocument.Parse(bytes);
         }
         throw new GmailIntegrationException(401, "Gmail authorization expired. Reconnect your Gmail account.");
     }
 
+    private static Task<GmailUserContext> GetUserContextAsync(string userId, IMongoDatabase db, ISecretProtector protector, CancellationToken ct) =>
+        GetUserContextAsync(userId, null, db, protector, ct);
+
     private static async Task<GmailUserContext> GetUserContextAsync(
         string userId,
+        string? connectionId,
         IMongoDatabase db,
         ISecretProtector protector,
         CancellationToken ct)
     {
-        var connection = await db.GetCollection<IntegrationConnection>("integrationConnections")
-            .Find(c => c.UserId == userId && c.IntegrationKey == IntegrationKey && c.Status == ConnectionStatus.Connected)
-            .SortByDescending(c => c.CreatedAt).FirstOrDefaultAsync(ct);
+        var connection = await ResolveConnectionAsync(db, userId, connectionId, ct);
         if (connection is null)
             throw new GmailIntegrationException(409, "Connect a Gmail account to continue.");
 
@@ -736,6 +775,7 @@ public static class GmailIntegrationModule
         [JsonPropertyName("access_token")] public string? AccessToken { get; init; }
         [JsonPropertyName("refresh_token")] public string? RefreshToken { get; init; }
         [JsonPropertyName("expires_in")] public int ExpiresIn { get; init; } = 3600;
+        [JsonPropertyName("scope")] public string? Scope { get; init; }
     }
 
     private sealed class GoogleProfile

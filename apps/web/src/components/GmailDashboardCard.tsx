@@ -1,74 +1,73 @@
 "use client";
-import Link from "next/link";
-import { useEffect, useState } from "react";
-import { BrandTile } from "@/components/integrations";
-import { Avatar, listDate, parseSender } from "@/components/GmailMailbox";
-import { api, type DashboardApp, type GmailMessageSummary } from "@/lib/api";
-import { Loading, tileClass } from "@/components/ui";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { CardBusyOverlay, DashboardSkeleton, GmailDashboard, type MailboxTarget, type ManageTab } from "@/components/GmailDashboard";
+import { GmailManagePanel } from "@/components/GmailManagePanel";
+import { Modal } from "@/components/Modal";
+import { tileClass } from "@/components/ui";
+import type { DashboardApp } from "@/lib/api";
 
-/** Dashboard tile for Gmail: a live preview of recent email. Managed from Apps → Gmail → Manage, so no Manage/Remove here. */
-export function GmailDashboardCard({ app }: { app: DashboardApp }) {
-  const [messages, setMessages] = useState<GmailMessageSummary[] | null>(null);
-  const [error, setError] = useState(false);
+/** Where the mailbox page should start for a given dashboard click. */
+export function mailboxUrl(target: MailboxTarget = {}): string {
+  const p = new URLSearchParams();
+  if (target.query) p.set("q", target.query);
+  if (target.compose) p.set("compose", "1");
+  if (target.focusSearch) p.set("focus", "search");
+  if (target.openMessageId) p.set("open", target.openMessageId);
+  const qs = p.toString();
+  return qs ? `/apps/gmail?${qs}` : "/apps/gmail";
+}
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const settings = await api.gmailSettings();
-        const page = await api.gmailMessages(settings.dashboardQuery || "in:inbox");
-        if (!cancelled) setMessages(page.messages.slice(0, settings.dashboardCount || 5));
-      } catch {
-        if (!cancelled) setError(true);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  const unread = messages?.filter((m) => m.isUnread).length ?? 0;
+/**
+ * The Gmail card on the Daksha dashboard: a compact, live dashboard (briefing, statistics, priority emails, quick actions).
+ * Settings — including whether this card is shown at all — live in the Manage popup, opened by the card's gear.
+ */
+export function GmailDashboardCard({ app, onChanged }: { app: DashboardApp; onChanged?: () => void }) {
+  const router = useRouter();
+  const [manageOpen, setManageOpen] = useState(false);
+  const [manageTab, setManageTab] = useState<ManageTab | undefined>();
+  const [version, setVersion] = useState(0);
+  const openManage = (tab?: ManageTab) => { setManageTab(tab); setManageOpen(true); };
 
   return (
-    <li className={`flex flex-col gap-3 p-5 sm:col-span-2 ${tileClass}`}>
-      <div className="flex items-center gap-3">
-        <div className="relative shrink-0">
-          <BrandTile icon={app.icon} color={app.color} size={44} />
-          {unread > 0 && (
-            <span className="absolute -right-1 -top-1 flex h-4.5 min-w-[1.125rem] items-center justify-center rounded-full bg-pink px-1 text-[10px] font-bold text-on-tint">
-              {unread > 9 ? "9+" : unread}
-            </span>
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="font-semibold">Gmail</p>
-          {app.accountIdentifier && <p className="truncate text-xs text-muted">{app.accountIdentifier}</p>}
-        </div>
-        <Link href="/apps/gmail" className="rounded-full px-3 py-1.5 text-xs font-semibold text-accent hover:bg-surface-2">Open inbox</Link>
-      </div>
+    <div className={`min-h-full p-4 ${tileClass}`}>
+      <GmailDashboard
+        key={version}
+        icon={app.icon}
+        color={app.color}
+        onOpenMailbox={(target) => router.push(mailboxUrl(target))}
+        onOpenManage={openManage}
+      />
+      <Modal wide fixedHeight open={manageOpen} onClose={() => { setManageOpen(false); setVersion((v) => v + 1); }}>
+        <GmailManagePanel key={manageTab ?? "default"} initialTab={manageTab} onChanged={() => { setVersion((v) => v + 1); onChanged?.(); }} />
+      </Modal>
+    </div>
+  );
+}
 
-      {!messages && !error && <Loading label="Loading emails" />}
-      {error && <p className="text-sm text-muted">Could not load your emails right now.</p>}
-      {messages && messages.length === 0 && <p className="text-sm text-muted">No emails to show.</p>}
-      {messages && messages.length > 0 && (
-        <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line">
-          {messages.map((m) => {
-            const sender = parseSender(m.from);
-            return (
-              <li key={m.id}>
-                <Link href="/apps/gmail" className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-surface-2">
-                  <Avatar name={sender.name} size={32} />
-                  <span className="min-w-0 flex-1">
-                    <span className={`block truncate text-sm ${m.isUnread ? "font-bold" : "font-medium"}`}>{sender.name}</span>
-                    <span className="block truncate text-xs text-muted">
-                      <span className={m.isUnread ? "font-semibold text-text" : ""}>{m.subject || "(no subject)"}</span> — {m.snippet}
-                    </span>
-                  </span>
-                  <span className={`shrink-0 text-xs ${m.isUnread ? "font-bold" : "text-muted"}`}>{listDate(m.date)}</span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </li>
+/** Remembered so a full page refresh can reserve the card's space before the app list has loaded. */
+export const GMAIL_CARD_HINT_KEY = "daksh.dashboard.gmailCard";
+
+/** Same footprint as the loaded card (header with its settings icon, then the skeleton), shown while the dashboard's app list loads. */
+export function GmailCardPlaceholder() {
+  return (
+    <ul className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12" aria-busy="true">
+      <li className={`relative overflow-hidden p-4 lg:col-span-8 ${tileClass}`}>
+        <CardBusyOverlay />
+        <div className="space-y-3">
+          <header className="flex items-start gap-3">
+            <span className="skeleton h-10 w-10 shrink-0 rounded-xl" />
+            <div className="min-w-0 flex-1">
+              <h2 className="text-xl font-bold leading-tight">Gmail Dashboard</h2>
+              <p className="mt-0.5 text-xs text-muted sm:text-sm">Manage, summarize and take action on your Gmail with Daksha.</p>
+            </div>
+            <span aria-hidden className="rounded-xl border border-line p-2 text-muted opacity-60">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-4.5 w-4.5"><path d="M12 15a3 3 0 100-6 3 3 0 000 6zM19 12l2-1-2-4-2 .5-1.5-1L15 4h-4l-.5 2.5-1.5 1L7 7l-2 4 2 1v2l-2 1 2 4 2-.5 1.5 1L11 20h4l.5-2.5 1.5-1 2 .5 2-4-2-1z" /></svg>
+            </span>
+          </header>
+          <DashboardSkeleton />
+        </div>
+      </li>
+    </ul>
   );
 }

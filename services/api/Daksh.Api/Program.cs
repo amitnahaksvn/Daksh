@@ -43,6 +43,7 @@ var app = builder.Build();
 await AccountModule.EnsureAccountIndexesAsync(app.Services.GetRequiredService<MongoDB.Driver.IMongoDatabase>());
 await IntegrationsModule.EnsureIntegrationIndexesAndCatalogAsync(app.Services.GetRequiredService<MongoDB.Driver.IMongoDatabase>());
 await GmailIntegrationModule.EnsureGmailIndexesAsync(app.Services.GetRequiredService<MongoDB.Driver.IMongoDatabase>());
+await GmailIntegrationModule.EnsureGmailManagementIndexesAsync(app.Services.GetRequiredService<MongoDB.Driver.IMongoDatabase>());
 await TelegramIntegrationModule.EnsureTelegramIndexesAsync(app.Services.GetRequiredService<MongoDB.Driver.IMongoDatabase>());
 await WhatsAppSettingsModule.EnsureIndexesAsync(app.Services.GetRequiredService<MongoDB.Driver.IMongoDatabase>());
 

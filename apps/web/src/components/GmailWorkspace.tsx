@@ -28,6 +28,13 @@ export function GmailWorkspace() {
   const connected = connection?.status === "Connected";
   const [settings, setSettings] = useState<GmailSettings | null>(null);
   const [manageOpen, setManageOpen] = useState(false);
+  // The dashboard card links here with ?compose=1, ?q=<search>, ?open=<message id> or ?focus=search.
+  const [initial] = useState(() => {
+    if (typeof window === "undefined") return undefined;
+    const p = new URLSearchParams(window.location.search);
+    const start = { query: p.get("q") ?? undefined, compose: p.get("compose") === "1", focusSearch: p.get("focus") === "search", openMessageId: p.get("open") ?? undefined };
+    return start.query || start.compose || start.focusSearch || start.openMessageId ? start : undefined;
+  });
 
   // In the OAuth popup: Google redirected here. Tell the opener the result, then close.
   const inPopup = typeof window !== "undefined" && Boolean(window.opener) && window.opener !== window;
@@ -60,8 +67,8 @@ export function GmailWorkspace() {
 
       {connected && (
         <>
-          <GmailMailbox showImages={settings?.showImages ?? false} onOpenSettings={() => setManageOpen(true)} />
-          <Modal wide open={manageOpen} onClose={() => { setManageOpen(false); reload(); }}>
+          <GmailMailbox showImages={settings?.showImages ?? false} onOpenSettings={() => setManageOpen(true)} initial={initial} />
+          <Modal wide fixedHeight open={manageOpen} onClose={() => { setManageOpen(false); reload(); }}>
             <GmailManagePanel onChanged={reload} />
           </Modal>
         </>
