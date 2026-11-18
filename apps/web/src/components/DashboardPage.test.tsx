@@ -8,7 +8,7 @@ vi.mock("./DashboardWidgets", () => ({
   DashboardHero: ({ canResetLayout, onResetLayout, layoutSaveFailed, onRetryLayoutSave }: { canResetLayout?: boolean; onResetLayout?: () => void; layoutSaveFailed?: boolean; onRetryLayoutSave?: () => void }) => (
     <div>
       {canResetLayout && <button onClick={onResetLayout}>Reset layout</button>}
-      {layoutSaveFailed && <button onClick={onRetryLayoutSave}>Couldn't save layout — retry</button>}
+      {layoutSaveFailed && <button onClick={onRetryLayoutSave}>Couldn&apos;t save layout — retry</button>}
     </div>
   ),
 }));

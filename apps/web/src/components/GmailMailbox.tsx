@@ -110,7 +110,7 @@ export function GmailMailbox({ showImages, onOpenSettings, initial }: {
     }
   }, []);
 
-  useEffect(() => { void load(startQuery); }, [load, startQuery]);
+  useEffect(() => { void load(startQuery); }, [load, startQuery]); // eslint-disable-line react-hooks/set-state-in-effect
   const openId = initial?.openMessageId;
   useEffect(() => {
     if (!openId) return;

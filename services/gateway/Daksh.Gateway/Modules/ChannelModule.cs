@@ -38,7 +38,7 @@ public static class ChannelModule
     /// <summary>Public provider webhooks. Message persistence/agent routing is handled by ChannelService once its MongoDB implementation is restored.</summary>
     public static void MapProviderChannelWebhooks(this WebApplication app)
     {
-        var config = app.ServiceProvider.GetRequiredService<IConfiguration>();
+        var config = app.Services.GetRequiredService<IConfiguration>();
         MapProviderWebhook(app, config["Channels:Telegram:WebhookPath"] ?? "/api/v1/webhooks/telegram", "telegram", "Channels:Telegram", "BotToken", "WebhookSecretToken", "telegram");
         MapProviderWebhook(app, config["Channels:Slack:WebhookPath"] ?? "/api/v1/webhooks/slack", "slack", "Channels:Slack", "BotToken", "SigningSecret", "slack");
     }

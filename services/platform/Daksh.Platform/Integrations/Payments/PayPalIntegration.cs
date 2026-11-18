@@ -92,7 +92,8 @@ public sealed class PayPalIntegration(HttpClient http)
         var token = await GetAccessTokenAsync(clientId, clientSecret, sandbox, ct);
         using var request = ApiRequest(token.AccessToken, sandbox, HttpMethod.Post,
             $"v2/payments/captures/{Uri.EscapeDataString(captureId)}/refund", requestId);
-        request.Content = JsonContent.Create(refundAmount is null ? new { } : new { amount = refundAmount }, options: Json);
+        object payload = refundAmount is null ? new { } : new { amount = refundAmount };
+        request.Content = JsonContent.Create(payload, options: Json);
         using var response = await http.SendAsync(request, ct);
         await EnsureSuccess(response, ct);
         return await response.Content.ReadFromJsonAsync<PayPalRefund>(Json, ct)
