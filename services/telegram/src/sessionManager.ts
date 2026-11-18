@@ -181,9 +181,16 @@ export async function connect(db: Db, connectionId: string): Promise<void> {
       );
       await onConnected(db, connectionId, entry, client);
     } catch (err) {
+      const message = err instanceof Error ? err.message : "Telegram sign-in failed.";
+      const duplicateKey = /AUTH_KEY_DUPLICATED|auth key duplicated/i.test(message);
       entry.status = "Error";
-      entry.error = err instanceof Error ? err.message : "Telegram sign-in failed.";
+      entry.error = duplicateKey
+        ? "Telegram detected a duplicate session. Reconnect and scan the QR code again."
+        : message;
       entry.qr = undefined;
+      if (duplicateKey) {
+        await credentialsCollection(db).deleteMany({ connectionId, credentialKey: SESSION_KEY });
+      }
       await reportEvent({ connectionId, eventType: "Status", status: "Error", error: entry.error });
       await client.disconnect().catch(() => undefined);
       entry.client = undefined;
