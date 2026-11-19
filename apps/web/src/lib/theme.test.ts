@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { applyAppearance, DEFAULT_STYLE, readStylePref, readThemePref, setStylePref, setThemePref, STYLE_KEY, THEME_KEY, THEMES } from "./theme";
+import { applyAppearance, DEFAULT_STYLE, effectiveShell, LAYOUT_KEY, readLayoutPref, setLayoutPref, readStylePref, readThemePref, setStylePref, setThemePref, STYLE_KEY, THEME_KEY, THEMES } from "./theme";
 
 /** A tiny in-memory localStorage: the one Node provides is unusable without a file, and jsdom's is shadowed by it. */
 function memoryStorage(): Storage {
@@ -73,5 +73,19 @@ describe("appearance", () => {
     expect(document.getElementById("daksh-theme-fonts")?.getAttribute("href")).toContain("Fraunces");
     setStylePref("prana");
     expect(document.getElementById("daksh-theme-fonts")?.getAttribute("href")).toContain("Sora");
+  });
+
+  it("lets any theme use any layout, and 'auto' follows the theme's own", () => {
+    for (const t of THEMES) {
+      expect(effectiveShell(t.id, "auto")).toBe(t.shell);
+      for (const layout of ["sidebar", "rail", "top"] as const) expect(effectiveShell(t.id, layout)).toBe(layout);
+    }
+    expect(readLayoutPref()).toBe("auto");
+    setLayoutPref("top");
+    expect(readLayoutPref()).toBe("top");
+    setLayoutPref("auto");
+    expect(readLayoutPref()).toBe("auto");
+    window.localStorage.setItem(LAYOUT_KEY, "diagonal");
+    expect(readLayoutPref()).toBe("auto"); // an unknown value is ignored
   });
 });

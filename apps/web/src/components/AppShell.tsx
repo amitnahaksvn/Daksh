@@ -4,11 +4,11 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { DakshaBrand } from "@/components/DakshaBrand";
 import { NAV_ITEMS } from "@/components/AppNav";
-import { AppearanceControls, StyleToggle, useStyle } from "@/components/ThemeToggle";
+import { AppearanceControls, StyleToggle, useLayout, useStyle } from "@/components/ThemeToggle";
 import { NotificationBell } from "@/components/NotificationBell";
 import { UserBadge } from "@/components/UserBadge";
 import { tileClass } from "@/components/ui";
-import { themeInfo } from "@/lib/theme";
+import { effectiveShell } from "@/lib/theme";
 
 const linkClass = (active: boolean) =>
   `whitespace-nowrap rounded-full px-4 py-2.5 text-sm font-medium transition-colors ${active ? "bg-accent text-accent-contrast" : "text-muted hover:bg-surface-2 hover:text-text"}`;
@@ -100,7 +100,9 @@ function TopShell({ children }: { children: ReactNode }) {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const shell = themeInfo(useStyle()).shell;
+  const style = useStyle();
+  const layout = useLayout();
+  const shell = effectiveShell(style, layout);
   const frame = shell === "rail" ? <RailShell>{children}</RailShell> : shell === "top" ? <TopShell>{children}</TopShell> : <SidebarShell>{children}</SidebarShell>;
   return <><div data-shell={shell} className="contents">{frame}</div><BottomTabs /></>;
 }

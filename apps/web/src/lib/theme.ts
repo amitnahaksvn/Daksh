@@ -11,6 +11,14 @@ export type StylePref = StyleId;
 export const DEFAULT_STYLE: StyleId = "hybrid";
 /** How the app frame is arranged: a full sidebar, a slim rail, or a top bar. Phones always get a bottom tab bar. */
 export type ShellKind = "sidebar" | "rail" | "top";
+/** The person's own choice of frame. "auto" means: use the theme's own. */
+export type LayoutPref = "auto" | ShellKind;
+export const LAYOUTS: { value: LayoutPref; label: string; hint: string }[] = [
+  { value: "auto", label: "Theme default", hint: "The frame this theme was designed with" },
+  { value: "sidebar", label: "Sidebar", hint: "Menu down the left side" },
+  { value: "rail", label: "Slim sidebar", hint: "A narrow rail with small labels" },
+  { value: "top", label: "Top bar", hint: "Menu across the top" },
+];
 
 export interface ThemeInfo {
   id: StyleId;
@@ -44,6 +52,7 @@ const FONT_BASE = "https://fonts.googleapis.com/css2?";
 
 export const THEME_KEY = "daksh.theme";
 export const STYLE_KEY = "daksh.style";
+export const LAYOUT_KEY = "daksh.layout";
 export const themeInfo = (id: StyleId): ThemeInfo => THEMES.find((t) => t.id === id) ?? THEMES.find((t) => t.id === DEFAULT_STYLE) ?? THEMES[0];
 
 /** Runs before first paint (inline in <head>) so the chosen theme never flashes. Keep it dependency-free. */
@@ -51,6 +60,9 @@ export const themeInitScript = `(function(){try{var S=${JSON.stringify(STYLE_IDS
 
 function read(key: string): string | null { try { return window.localStorage.getItem(key); } catch { return null; } }
 export function readThemePref(): ThemePref { const value = read(THEME_KEY); return value === "light" || value === "dark" ? value : "system"; }
+export function readLayoutPref(): LayoutPref { const value = read(LAYOUT_KEY); return value === "sidebar" || value === "rail" || value === "top" ? value : "auto"; }
+/** The frame actually used: the person's choice, else the theme's own. */
+export const effectiveShell = (style: StyleId, layout: LayoutPref): ShellKind => (layout === "auto" ? themeInfo(style).shell : layout);
 export function readStylePref(): StylePref { const value = read(STYLE_KEY); return (STYLE_IDS as string[]).includes(value ?? "") ? (value as StyleId) : DEFAULT_STYLE; }
 
 function applyFonts(style: StyleId) {
@@ -75,9 +87,10 @@ const listeners = new Set<() => void>(); const notify = () => listeners.forEach(
 function write(key: string, value: string) { try { window.localStorage.setItem(key, value); } catch { /* Apply for this visit if storage is unavailable. */ } applyAppearance(); notify(); }
 export const setThemePref = (pref: ThemePref) => write(THEME_KEY, pref);
 export const setStylePref = (style: StylePref) => write(STYLE_KEY, style);
+export const setLayoutPref = (layout: LayoutPref) => write(LAYOUT_KEY, layout);
 export function subscribeAppearance(onChange: () => void) {
   listeners.add(onChange);
-  const onStorage = (event: StorageEvent) => { if (event.key === THEME_KEY || event.key === STYLE_KEY) { applyAppearance(); onChange(); } };
+  const onStorage = (event: StorageEvent) => { if (event.key === THEME_KEY || event.key === STYLE_KEY || event.key === LAYOUT_KEY) { applyAppearance(); onChange(); } };
   const media = window.matchMedia("(prefers-color-scheme: dark)"); const onSystem = () => applyAppearance();
   window.addEventListener("storage", onStorage); media.addEventListener("change", onSystem);
   return () => { listeners.delete(onChange); window.removeEventListener("storage", onStorage); media.removeEventListener("change", onSystem); };

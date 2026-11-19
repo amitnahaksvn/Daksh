@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ThemeHero } from "./ThemeHero";
 import { AppShell } from "./AppShell";
 import { api, type DashboardApp } from "@/lib/api";
-import { THEMES, STYLE_KEY } from "@/lib/theme";
+import { THEMES, STYLE_KEY, LAYOUT_KEY } from "@/lib/theme";
 
 vi.mock("next/link", () => ({ default: ({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) => <a href={href} className={className}>{children}</a> }));
 vi.mock("next/navigation", () => ({ usePathname: () => "/dashboard", useRouter: () => ({ push: vi.fn() }) }));
@@ -52,5 +52,12 @@ describe("app shell follows the theme", () => {
     expect(container.querySelector(`[data-shell="${shell}"]`)).not.toBeNull();
     expect(screen.getByText("page")).toBeTruthy();
     expect(screen.getByLabelText("Main (mobile)")).toBeTruthy();
+  });
+
+  it.each([["galaxy", "sidebar"], ["hybrid", "top"], ["prana", "rail"]])("%s can be switched to the %s layout by choice", (id, layout) => {
+    window.localStorage.setItem(STYLE_KEY, id);
+    window.localStorage.setItem(LAYOUT_KEY, layout);
+    const { container } = render(<AppShell><p>page</p></AppShell>);
+    expect(container.querySelector(`[data-shell="${layout}"]`)).not.toBeNull();
   });
 });

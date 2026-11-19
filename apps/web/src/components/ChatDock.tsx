@@ -170,7 +170,7 @@ export function ChatDock() {
 
   // Let the page make room for the fixed sidebar on desktop.
   useEffect(() => {
-    const width = desktop && groups.length > 0 ? (collapsed ? "4.25rem" : "21rem") : "0rem";
+    const width = desktop && groups.length > 0 ? (collapsed ? "3.25rem" : "16rem") : "0rem";
     document.documentElement.style.setProperty("--chat-rail-w", width);
     return () => {
       document.documentElement.style.removeProperty("--chat-rail-w");
@@ -206,7 +206,7 @@ export function ChatDock() {
           <section
             key={`${w.channel}:${w.chatId}`}
             aria-label={`Chat with ${name}`}
-            className={`chat-window pointer-events-auto flex w-[min(20.5rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-t-2xl border border-b-0 border-line bg-surface shadow-[0_-6px_28px_rgb(0_0_0/0.22)] ${w.minimized ? "" : "h-[min(30rem,calc(100vh-5rem))]"}`}
+            className={`chat-window pointer-events-auto flex w-[min(16rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-t-2xl border border-b-0 border-line bg-surface shadow-[0_-6px_28px_rgb(0_0_0/0.22)] ${w.minimized ? "" : "h-[min(25rem,calc(100vh-5rem))]"}`}
           >
             <header className="flex shrink-0 items-center gap-2 border-b border-line bg-surface-2 px-3 py-2">
               <button type="button" onClick={() => toggleMinimize(w.channel, w.chatId)} className="flex min-w-0 flex-1 items-center gap-2 text-left" aria-label={w.minimized ? `Expand chat with ${name}` : `Minimise chat with ${name}`}>
@@ -219,7 +219,7 @@ export function ChatDock() {
             {!w.minimized && (
               <div className="min-h-0 flex-1 overflow-hidden">
                 {w.channel === "whatsapp" && wa ? (
-                  <ChatThread connectionId={group.connectionId} chat={wa} onClose={() => closeWindow(w.channel, w.chatId)} onSent={() => void refresh()} embedded bodyHeightClass="h-[min(22.5rem,calc(100vh-14rem))]" />
+                  <ChatThread connectionId={group.connectionId} chat={wa} onClose={() => closeWindow(w.channel, w.chatId)} onSent={() => void refresh()} embedded bodyHeightClass="h-[min(14rem,calc(100vh-17rem))]" />
                 ) : tg ? (
                   <TelegramThread connectionId={group.connectionId} chat={tg} onBack={() => closeWindow(w.channel, w.chatId)} embedded heightClass="h-full" />
                 ) : (
@@ -238,13 +238,13 @@ export function ChatDock() {
     return (
       <>
       {windowsLayer}
-      <aside aria-label="Chats" className="chat-rail fixed bottom-0 right-0 top-0 z-30 flex w-[4.25rem] flex-col items-center gap-3 border-l border-line bg-surface py-4">
-        <button type="button" onClick={() => setCollapsedPersisted(false)} aria-label="Expand chats" className="relative flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-contrast">
+      <aside aria-label="Chats" className="chat-rail fixed bottom-0 right-0 top-0 z-30 flex w-[3.25rem] flex-col items-center gap-2.5 border-l border-line bg-surface py-3">
+        <button type="button" onClick={() => setCollapsedPersisted(false)} aria-label="Expand chats" className="relative flex h-9 w-9 items-center justify-center rounded-full bg-accent text-accent-contrast">
           ‹
           {totalUnread > 0 && <span className="absolute -right-1 -top-1">{badge(totalUnread)}</span>}
         </button>
         {groups.map((g) => (
-          <button key={g.channel} type="button" onClick={() => { setCollapsedPersisted(false); setClosedGroups((c) => { const n = new Set(c); n.delete(g.channel); return n; }); }} aria-label={`${LABEL[g.channel]}, ${g.unread} unread`} className="relative flex h-10 w-10 items-center justify-center rounded-full bg-surface-2 text-lg hover:bg-line">
+          <button key={g.channel} type="button" onClick={() => { setCollapsedPersisted(false); setClosedGroups((c) => { const n = new Set(c); n.delete(g.channel); return n; }); }} aria-label={`${LABEL[g.channel]}, ${g.unread} unread`} className="relative flex h-9 w-9 items-center justify-center rounded-full bg-surface-2 text-lg hover:bg-line">
             <BrandIcon icon={BRAND[g.channel].icon} color={BRAND[g.channel].color} size={22} />
             {g.unread > 0 && <span className="absolute -right-1 -top-1">{badge(g.unread)}</span>}
             {g.status !== "Connected" && <span aria-label="Connection problem" className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-danger ring-2 ring-[var(--surface)]" />}
@@ -270,8 +270,8 @@ export function ChatDock() {
   return (
     <>
     {windowsLayer}
-    <aside aria-label="Chats" className={`chat-rail fixed bottom-0 right-0 top-0 z-30 flex w-full flex-col border-l border-line bg-surface ${desktop ? "max-w-[21rem]" : "max-w-[24rem] shadow-[-12px_0_40px_rgb(0_0_0/0.25)]"}`}>
-      <header className="flex items-center justify-between gap-2 border-b border-line px-4 py-3">
+    <aside aria-label="Chats" className={`chat-rail fixed bottom-0 right-0 top-0 z-30 flex w-full flex-col border-l border-line bg-surface ${desktop ? "max-w-[16rem]" : "max-w-[24rem] shadow-[-12px_0_40px_rgb(0_0_0/0.25)]"}`}>
+      <header className="flex items-center justify-between gap-2 border-b border-line px-3 py-2">
         <div className="flex items-center gap-2">
           <h2 className="text-base font-extrabold">Chats</h2>
           {badge(totalUnread)}
@@ -314,9 +314,9 @@ export function ChatDock() {
                     <ul className={g.status === "Connected" ? "" : "opacity-60"}>
                       {g.rows.map((r) => (
                         <li key={r.chatId}>
-                          <button type="button" onClick={() => openWindow(r.channel, r.chatId)} className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-surface-2">
+                          <button type="button" onClick={() => openWindow(r.channel, r.chatId)} className="flex w-full items-center gap-2 rounded-xl px-1.5 py-1.5 text-left hover:bg-surface-2">
                             <span className="relative shrink-0">
-                              <ChatAvatar channel={r.channel} connectionId={r.connectionId} chatId={r.chatId} name={r.name} isGroup={r.isGroup} size={40} />
+                              <ChatAvatar channel={r.channel} connectionId={r.connectionId} chatId={r.chatId} name={r.name} isGroup={r.isGroup} size={32} />
                               <span className="absolute -bottom-0.5 -right-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-white ring-2 ring-[var(--surface)]">
                                 <BrandIcon icon={BRAND[r.channel].icon} color={BRAND[r.channel].color} size={11} />
                               </span>
