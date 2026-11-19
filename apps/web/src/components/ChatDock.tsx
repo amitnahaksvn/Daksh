@@ -317,9 +317,6 @@ export function ChatDock() {
                           <button type="button" onClick={() => openWindow(r.channel, r.chatId)} className="flex w-full items-center gap-2 rounded-xl px-1.5 py-1.5 text-left hover:bg-surface-2">
                             <span className="relative shrink-0">
                               <ChatAvatar channel={r.channel} connectionId={r.connectionId} chatId={r.chatId} name={r.name} isGroup={r.isGroup} size={32} />
-                              <span className="absolute -bottom-0.5 -right-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-white ring-2 ring-[var(--surface)]">
-                                <BrandIcon icon={BRAND[r.channel].icon} color={BRAND[r.channel].color} size={11} />
-                              </span>
                             </span>
                             <span className="min-w-0 flex-1">
                               <span className="flex items-center gap-1.5">
