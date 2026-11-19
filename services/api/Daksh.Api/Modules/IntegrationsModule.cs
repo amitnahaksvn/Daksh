@@ -616,8 +616,13 @@ public static class IntegrationsModule
 
         // A message the owner types in their OWN chat ("Message yourself") may be a command: "busy for 2 hours", "buy milk", "free now"…
         // Daksha does it and confirms in the same chat. Only the owner's own chat is ever read this way, never anyone else's.
-        if (evt.EventType is IntegrationEvents.MessageReceived or IntegrationEvents.MessageSent && !isGroup && evt.ChatId is not null && evt.Preview is not null
-            && IsOwnChat(connection.AccountIdentifier, evt.ChatId) && !evt.Preview.StartsWith(SelfCommands.ReplyMarker, StringComparison.Ordinal)
+        var looksLikeSelfCommand = evt.EventType is IntegrationEvents.MessageReceived or IntegrationEvents.MessageSent && !isGroup && evt.ChatId is not null && evt.Preview is not null
+            && !evt.Preview.StartsWith(SelfCommands.ReplyMarker, StringComparison.Ordinal)
+            && (SelfCommands.Parse(evt.Preview).Kind != SelfCommandKind.None || SelfAssistant.LooksLikeQuestion(evt.Preview));
+        var ownChat = looksLikeSelfCommand && await IsOwnChatAsync(db, connection, evt.ChatId!, ct);
+        if (looksLikeSelfCommand && !ownChat)
+            loggerFactory.CreateLogger("SelfCommands").LogInformation("A command-like WhatsApp message in chat {ChatId} was not treated as a self-command: not the owner's own chat (account {Account}).", evt.ChatId, connection.AccountIdentifier);
+        if (ownChat && evt.ChatId is not null && evt.Preview is not null && !evt.Preview.StartsWith(SelfCommands.ReplyMarker, StringComparison.Ordinal)
             && (SelfCommands.Parse(evt.Preview).Kind != SelfCommandKind.None || SelfAssistant.LooksLikeQuestion(evt.Preview))
             && SelfCommandSeen.First(evt.ConnectionId, evt.MessageId ?? $"{evt.ChatId}:{evt.Preview}"))
         {
@@ -964,6 +969,18 @@ public static class IntegrationsModule
     /// <summary>True when the owner wrote in this chat themselves within <see cref="OwnerActiveQuiet"/> of now.</summary>
     public static bool IsOwnerActive(DateTime? lastOwnerMessageUtc, DateTime nowUtc) =>
         lastOwnerMessageUtc is { } last && nowUtc - last >= TimeSpan.Zero && nowUtc - last < OwnerActiveQuiet;
+
+    /// <summary>Own chat, including when WhatsApp names it by its newer "@lid" id: the contact record for that id then carries the owner's phone number.</summary>
+    internal static async Task<bool> IsOwnChatAsync(IMongoDatabase db, IntegrationConnection connection, string chatId, CancellationToken ct)
+    {
+        if (IsOwnChat(connection.AccountIdentifier, chatId)) return true;
+        if (string.IsNullOrEmpty(connection.AccountIdentifier) || !chatId.EndsWith("@lid", StringComparison.Ordinal)) return false;
+        var me = connection.AccountIdentifier.Split(':')[0].Split('@')[0];
+        var contact = await db.GetCollection<WhatsAppContact>("whatsappContacts")
+            .Find(c => c.ConnectionId == connection.Id && (c.Lid == chatId || c.ContactId == chatId)).FirstOrDefaultAsync(ct);
+        var phone = new string((contact?.PhoneNumber ?? "").Where(char.IsDigit).ToArray());
+        return phone.Length >= 5 && phone == me;
+    }
 
     /// <summary>True when the chat is the owner's own number ("Message yourself").</summary>
     public static bool IsOwnChat(string? accountIdentifier, string chatId)

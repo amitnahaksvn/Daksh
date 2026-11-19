@@ -31,6 +31,10 @@ public static class ListsModule
     {
         var n = Regex.Replace(name ?? "", @"\s+", " ").Trim().Trim('"', '\'', ':', '-');
         if (n.Length == 0) return DefaultTodo;
+        // "buy list", "shopping list", "to buy"… are all the Shopping list; "to do", "tasks"… are all the To-do list.
+        var key = Regex.Replace(n.ToLowerInvariant(), @"\b(my|the|a)\b|\blist\b", "").Trim();
+        if (key is "buy" or "buying" or "to buy" or "shopping" or "shop" or "purchase" or "purchases" or "buylist" or "buy ") return DefaultShopping;
+        if (key is "todo" or "to do" or "to-do" or "task" or "tasks" or "todos" or "to dos" or "") return DefaultTodo;
         if (n.Length > 40) n = n[..40].Trim();
         return char.ToUpperInvariant(n[0]) + n[1..];
     }

@@ -32,6 +32,9 @@ public static class SelfCommands
     {
         var t = (text ?? "").Trim();
         if (t.Length == 0 || t.Length > 400 || t.StartsWith(ReplyMarker, StringComparison.Ordinal)) return new(SelfCommandKind.None);
+        // "Daksha, add kids jacket to buy list" is the same command as "add kids jacket to buy list".
+        var addressed = SelfAssistant.StripAddress(t);
+        if (addressed.Length > 0) t = addressed;
 
         if (Free.IsMatch(t)) return new(SelfCommandKind.Free);
         if (Show.IsMatch(t)) return new(SelfCommandKind.ShowLists);

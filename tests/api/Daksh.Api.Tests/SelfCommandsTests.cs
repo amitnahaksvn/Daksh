@@ -38,6 +38,8 @@ public class SelfCommandsTests
     [InlineData("add headphones to amazon list", "Amazon", "headphones")] [InlineData("put sunscreen on my groceries list", "Groceries", "sunscreen")] [InlineData("add milk to shopping", "Shopping", "milk")]
     [InlineData("todo call the bank", "To-do", "call the bank")] [InlineData("todo: renew passport", "To-do", "renew passport")] [InlineData("remind me to pay rent", "To-do", "pay rent")]
     [InlineData("amazon: usb cable", "Amazon", "usb cable")]
+    [InlineData("Daksha add kids jacket in buy list", "Shopping", "kids jacket")] [InlineData("Daksha, add kids jacket to my buy list", "Shopping", "kids jacket")] [InlineData("hey daksha buy milk", "Shopping", "milk")]
+    [InlineData("add kids jacket to shopping list", "Shopping", "kids jacket")] [InlineData("add pay bills to my to do list", "To-do", "pay bills")] [InlineData("add kids jacket to to buy list", "Shopping", "kids jacket")]
     public void Adding_to_lists(string text, string list, string item)
     {
         var c = P(text);
