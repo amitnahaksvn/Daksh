@@ -14,6 +14,8 @@ public enum GateVerdict
     Boss,
     /// <summary>Same, but too vague to pass on as it is — ask the sender for more detail first.</summary>
     BossAskMore,
+    /// <summary>The sender is wrapping up the conversation (thanks, bye, take care). Answered with a fixed, friendly sign-off — never by the AI.</summary>
+    Closing,
 }
 
 public sealed record GateDecision(GateVerdict Verdict, string Reason);
@@ -118,13 +120,16 @@ public static class ReplyGate
         // 4) Clause by clause: greetings/pleasantries are casual, "ok" needs nothing, everything else is a real message.
         var clauses = Regex.Split(withoutUrls, @"[\n,.;!]+|\s+(?:and|aur|&)\s+")
             .Select(Clean).Where(c => c.Length > 0).ToList();
-        var casual = 0; var other = new List<string>();
+        var casual = 0; var closing = 0; var other = new List<string>();
         foreach (var clause in clauses)
         {
-            if (IsCasual(clause)) casual++;
+            if (IsClosing(clause)) { casual++; closing++; }
+            else if (IsCasual(clause)) casual++;
             else if (Acknowledgement.IsMatch(clause) || !clause.Any(char.IsLetterOrDigit)) continue;
             else other.Add(clause);
         }
+        if (other.Count == 0 && closing > 0 && closing == casual)
+            return new(GateVerdict.Closing, "The sender is ending the conversation — a short thank-you.");
         if (other.Count == 0)
             return casual > 0 ? new(GateVerdict.AiOk, "A greeting or pleasantry.") : new(GateVerdict.Silent, "An acknowledgement that needs no answer.");
 
@@ -137,6 +142,14 @@ public static class ReplyGate
         if (words <= 2 || Vague.IsMatch(Clean(body)))
             return new(GateVerdict.BossAskMore, "A request with no detail — ask for more information before passing it on.");
         return new(GateVerdict.Boss, NeedsBoss.IsMatch(body) ? "Asks for a decision, commitment or information." : "Not a simple greeting — only the boss can answer this.");
+    }
+
+    private static readonly Regex LeadingAck = new(@"^(ok+a?y?|alright|cool|fine|sure|great|nice|accha|achha|theek hai|thik hai)\s+", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    /// <summary>"thanks", "bye", "ok thanks" — the sender is wrapping up.</summary>
+    private static bool IsClosing(string clause)
+    {
+        var c = LeadingAck.Replace(clause, "");
+        return Thanks.IsMatch(c) || Goodbye.IsMatch(c);
     }
 
     private static bool IsCasual(string clause)
@@ -172,23 +185,34 @@ public static class ReplyGate
     private static string Pick(string seed, string[] options) => options[(int)((uint)StableHash(seed) % (uint)options.Length)];
     private static int StableHash(string s) { unchecked { var h = 17; foreach (var c in s) h = h * 31 + c; return h; } }
 
-    /// <summary>What the sender is told when the message needs the boss. Written as an assistant, never as the boss.</summary>
+    /// <summary>What the sender is told when the message needs the boss. Always says openly that this is an AI assistant (so nobody
+    /// mistakes it for the owner), asks who is writing, and never answers the question itself or shares anything.</summary>
     public static string HoldingReply(GateVerdict verdict, string? boss, string seed)
     {
         var b = NormaliseBoss(boss);
+        if (verdict == GateVerdict.Closing) return ClosingReply(seed);
         return verdict == GateVerdict.BossAskMore
             ? Pick(seed,
             [
-                $"Thanks for reaching out! Could you share a few more details (what it's about and when you need it)? I'll pass it on to {b}, and {b} will get back to you once they see your message.",
-                $"Hi! So I can pass this on properly, could you tell me a bit more about what you need? I'll let {b} know, and {b} will get back to you.",
+                $"Hi! I'm {b}'s AI assistant, not {b} personally. Could you tell me who you are and a little more about what you need? I'll pass it on, and {b} will get back to you.",
+                $"Hello! This is {b}'s AI assistant. So I can pass this on properly, may I know who this is and what it's about? {b} will get back to you.",
             ])
             : Pick(seed,
             [
-                $"Thanks for your message! I'll let {b} know, and {b} will get back to you as soon as they see it.",
-                $"Hi! Please wait until {b} sees your message — I'll let {b} know and get back to you.",
-                $"Got it, thank you. I can't decide this myself, so I'll check with {b} and get back to you.",
+                $"Hi! I'm {b}'s AI assistant, not {b} personally. I can't help with this myself, but I've noted your message and {b} will get back to you.",
+                $"Hello! This is {b}'s AI assistant. I'm not able to answer this one, so I'll pass it on to {b}, who will reply as soon as they see it.",
+                $"Thanks for your message! I'm {b}'s AI assistant. I'll let {b} know, and they'll get back to you directly.",
             ]);
     }
+
+    /// <summary>A fixed sign-off for "thanks" / "bye". Deliberately not generated, so it can never leak anything.</summary>
+    public static string ClosingReply(string seed) => Pick(seed,
+    [
+        "Thank you! Take care 😊",
+        "Thanks, have a wonderful day! 🙏",
+        "You're welcome! Take care and stay well 😊",
+        "Thank you, it was nice talking to you. Take care!",
+    ]);
 
     /// <summary>What an AI answer looks like when the model itself decided the message is beyond small talk (the prompt tells it to say NEED_BOSS).</summary>
     public static bool ModelSaidNeedBoss(string? reply) => reply is not null && Regex.IsMatch(reply, @"\bNEED_BOSS\b", RegexOptions.IgnoreCase);
@@ -211,18 +235,16 @@ public static class ReplyGateFlow
         {
             case GateVerdict.Silent: return new(GateAction.Silent, null, decision.Reason);
             case GateVerdict.AiOk: return new(GateAction.UseAi, null, decision.Reason);
+            case GateVerdict.Closing: return new(GateAction.SendHolding, ReplyGate.ClosingReply(chatId + text), decision.Reason);
         }
 
         // The boss gets a to-do either way, so nothing that needs a decision is lost even when we stay quiet.
         var boss = ReplyGate.NormaliseBoss(settings.BossReference);
         await AddBossTaskAsync(db, connectionId, chatId, chatName, text, ct);
 
+        // Never go quiet on someone who keeps writing: every message that needs the boss gets a reply (the old "one holding reply
+        // per chat until the boss answers" cooldown is gone; GateHoldingCooldownMinutes is kept only so saved settings still load).
         var state = db.GetCollection<WhatsAppAutoReplyState>("whatsappAutoReplyState");
-        var existing = await state.Find(s => s.ConnectionId == connectionId && s.ChatId == chatId).FirstOrDefaultAsync(ct);
-        var cooldown = TimeSpan.FromMinutes(Math.Max(0, settings.GateHoldingCooldownMinutes));
-        if (existing?.LastHoldingAt is { } last && cooldown > TimeSpan.Zero && nowUtc - last < cooldown && !await ownerRepliedSince(last))
-            return new(GateAction.Silent, null, "A holding reply was already sent to this chat and the boss hasn't answered yet.");
-
         await state.UpdateOneAsync(s => s.ConnectionId == connectionId && s.ChatId == chatId,
             Builders<WhatsAppAutoReplyState>.Update.Set(s => s.LastHoldingAt, nowUtc).SetOnInsert(s => s.ConnectionId, connectionId).SetOnInsert(s => s.ChatId, chatId).SetOnInsert(s => s.LastRepliedAt, DateTime.MinValue),
             new UpdateOptions { IsUpsert = true }, ct);

@@ -85,6 +85,6 @@ public static class PlatformModules
         app.MapGet("/api/v1/integrations", (IServiceProvider sp) =>
                 Results.Ok(sp.DescribeIntegrations()
                     .Select(i => new IntegrationDto(i.Key, i.Category, i.Provider, i.State.ToString(), i.Note))))
-            .RequireAuthorization().WithTags("Integrations");
+            .RequireAuthorization(AuthSetup.UserScheme).WithTags("Integrations"); // must name the scheme: the default one is the external OIDC authority in production, which 401s our own tokens (and a 401 signs the user out)
     }
 }

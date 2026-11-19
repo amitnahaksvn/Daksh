@@ -9,14 +9,21 @@ public class ReplyGateTests
     // ── The AI may answer only simple social messages ────────────────────────────────────────────
     [Theory]
     [InlineData("hi")] [InlineData("Hi!")] [InlineData("Hello")] [InlineData("hello sir")] [InlineData("Hey there")] [InlineData("hii")]
-    [InlineData("Good morning")] [InlineData("good morning sir!")] [InlineData("Good night")] [InlineData("gm")]
+    [InlineData("Good morning")] [InlineData("good morning sir!")] [InlineData("gm")]
     [InlineData("how are you?")] [InlineData("How r u")] [InlineData("hi, how are you?")] [InlineData("hello bhai kaise ho")]
     [InlineData("what's up")] [InlineData("namaste")] [InlineData("Namaste sir")] [InlineData("kya haal hai")]
-    [InlineData("thanks")] [InlineData("Thank you so much!")] [InlineData("thanks sir")] [InlineData("dhanyavad")]
     [InlineData("Happy birthday!")] [InlineData("Happy Diwali")] [InlineData("congratulations")] [InlineData("all the best")]
-    [InlineData("bye")] [InlineData("take care")]
     [InlineData("Hi\nhow are you")]
     public void Greetings_and_pleasantries_may_be_answered_by_the_AI(string text) => Assert.Equal(GateVerdict.AiOk, V(text));
+
+    // ── Ending the conversation gets a fixed, friendly sign-off ──────────────────────────────────────
+    [Theory]
+    [InlineData("thanks")] [InlineData("Thank you so much!")] [InlineData("thanks sir")] [InlineData("dhanyavad")]
+    [InlineData("bye")] [InlineData("take care")] [InlineData("thanks, bye")] [InlineData("ok thanks")] [InlineData("Good night")]
+    public void Ending_the_conversation_gets_a_thank_you(string text) => Assert.Equal(GateVerdict.Closing, V(text));
+
+    [Fact]
+    public void Thanks_followed_by_a_request_is_still_a_request() => Assert.Equal(GateVerdict.Boss, V("thanks, can you send me the invoice?"));
 
     // ── Reels, images, videos, voice notes, stickers, emoji and plain acknowledgements get no reply ─────
     [Theory]
@@ -107,6 +114,7 @@ public class ReplyGateTests
         {
             var reply = ReplyGate.HoldingReply(verdict, null, seed);
             Assert.Contains("my boss", reply);
+            Assert.Contains("AI assistant", reply);
             Assert.DoesNotContain("NEED_BOSS", reply);
             Assert.True(reply.Length < 300, reply);
         }
