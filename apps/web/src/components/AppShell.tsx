@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useSyncExternalStore, type ReactNode } from "react";
 import { DakshaBrand } from "@/components/DakshaBrand";
 import { NAV_ITEMS } from "@/components/AppNav";
 import { AppearanceControls, StyleToggle, useStyle } from "@/components/ThemeToggle";
@@ -10,6 +10,7 @@ import { UserBadge } from "@/components/UserBadge";
 import { tileClass } from "@/components/ui";
 import { FakeBadge } from "@/components/CommandCentre";
 import type { StyleId } from "@/lib/theme";
+import { setSidebarCollapsed, sidebarSnapshot, subscribeSidebar } from "@/lib/sidebarPref";
 
 /** Phones get the same bottom tab bar in every theme, so the thumb reaches everything. */
 function BottomTabs() {
@@ -35,12 +36,32 @@ function MobileBar() {
 /** A search box that is not wired up yet. It looks and types like a real one, does nothing, and says so. */
 function TopSearch() {
   return (
-    <label className="flex min-w-0 max-w-md flex-1 items-center gap-2 rounded-full border border-dashed border-danger/60 bg-surface-2 px-4 py-2 text-sm text-muted focus-within:border-solid focus-within:border-accent focus-within:ring-2 focus-within:ring-[color-mix(in_srgb,var(--accent)_35%,transparent)]">
+    <label className="flex min-w-0 max-w-3xl flex-1 items-center gap-2 rounded-full border border-dashed border-danger/60 bg-surface-2 px-4 py-2 text-sm text-muted focus-within:border-solid focus-within:border-accent focus-within:ring-2 focus-within:ring-[color-mix(in_srgb,var(--accent)_35%,transparent)]">
       <svg aria-hidden viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
       <input type="search" aria-label="Search everything (placeholder)" placeholder="Search messages, mail, tasks, people…" className="field-in-pill min-w-0 flex-1 appearance-none border-0 bg-transparent p-0 text-text placeholder:text-muted" onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }} />
       <span className="ai-mono hidden rounded-md border border-line px-1.5 py-0.5 text-xs lg:inline">⌘K</span>
       <FakeBadge />
     </label>
+  );
+}
+
+/** The minimized menu: one square per destination (its first letter), the current page filled in. */
+function CompactMenu() {
+  const pathname = usePathname();
+  return (
+    <nav aria-label="Main" className="flex flex-col items-center gap-2">
+      {NAV_ITEMS.map((i) => (
+        <Link key={i.href} href={i.href} title={i.label} aria-label={i.label} aria-current={pathname === i.href ? "page" : undefined}
+          className={`flex h-10 w-10 items-center justify-center rounded-xl text-sm font-extrabold transition-colors ${pathname === i.href ? "bg-accent text-accent-contrast" : "bg-surface-2 text-muted hover:text-text"}`}>{i.label[0]}</Link>
+      ))}
+    </nav>
+  );
+}
+
+function CollapseButton({ collapsed }: { collapsed: boolean }) {
+  return (
+    <button type="button" onClick={() => setSidebarCollapsed(!collapsed)} aria-label={collapsed ? "Expand sidebar" : "Minimize sidebar"} aria-expanded={!collapsed} title={collapsed ? "Expand sidebar" : "Minimize sidebar"}
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line bg-surface-2 text-sm text-muted hover:text-text">{collapsed ? "»" : "«"}</button>
   );
 }
 
@@ -105,16 +126,28 @@ function SideFooter({ style }: { style: StyleId }) {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const style = useStyle();
+  const collapsed = useSyncExternalStore(subscribeSidebar, sidebarSnapshot, () => false);
   return (
     <>
-      <div data-nav={style} className="grid w-full flex-1 grid-cols-[minmax(0,1fr)] content-start gap-3 p-3 pb-24 transition-[padding] duration-300 md:grid-cols-[12rem_minmax(0,1fr)] md:gap-4 md:p-4 md:pb-4 lg:pr-[calc(var(--chat-rail-w,0rem)+1rem)]">
-        <aside className={`hidden min-w-0 flex-col gap-4 p-3 md:sticky md:top-4 md:flex md:h-[calc(100vh-2rem)] md:self-start md:overflow-y-auto ${tileClass}`}>
-          <DakshaBrand />
-          <SideMenu style={style} />
-          <div className="mt-auto flex flex-col gap-3">
-            <SideFooter style={style} />
-            <div><p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted">Appearance</p><AppearanceControls /></div>
-          </div>
+      <div data-nav={style} data-sidebar={collapsed ? "collapsed" : "open"} className={`grid w-full flex-1 grid-cols-[minmax(0,1fr)] content-start gap-3 p-3 pb-24 transition-[padding] duration-300 md:gap-4 md:p-4 md:pb-4 lg:pr-[calc(var(--chat-rail-w,0rem)+1rem)] ${collapsed ? "md:grid-cols-[3.75rem_minmax(0,1fr)]" : "md:grid-cols-[12rem_minmax(0,1fr)]"}`}>
+        <aside className={`hidden min-w-0 flex-col md:sticky md:top-4 md:flex md:h-[calc(100vh-2rem)] md:self-start md:overflow-y-auto ${tileClass} ${collapsed ? "items-center gap-4 px-2 py-3" : "gap-4 p-3"}`}>
+          {collapsed ? (
+            <>
+              <DakshaBrand compact />
+              <CollapseButton collapsed />
+              <CompactMenu />
+              <div className="mt-auto"><StyleToggle compact /></div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-2"><DakshaBrand /><CollapseButton collapsed={false} /></div>
+              <SideMenu style={style} />
+              <div className="mt-auto flex flex-col gap-3">
+                <SideFooter style={style} />
+                <div><p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted">Appearance</p><AppearanceControls /></div>
+              </div>
+            </>
+          )}
         </aside>
         <main id="main" className="flex min-w-0 flex-col gap-3 md:gap-4">
           <MobileBar />

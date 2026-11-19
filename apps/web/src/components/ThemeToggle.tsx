@@ -67,7 +67,7 @@ function ThemeDialog({ onClose, style, pref }: { onClose: () => void; style: Sty
 }
 
 /** A button showing the current theme that opens the picker. */
-export function StyleToggle({ className = "" }: { className?: string }) {
+export function StyleToggle({ className = "", compact = false }: { className?: string; compact?: boolean }) {
   const style = useStyle();
   const pref = useSyncExternalStore(subscribeAppearance, readThemePref, () => "system" as ThemePref);
   const [open, setOpen] = useState(false);
@@ -75,8 +75,8 @@ export function StyleToggle({ className = "" }: { className?: string }) {
   const night = pref === "dark";
   return (
     <div className={className}>
-      <button type="button" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)} className="flex items-center gap-2 rounded-full border border-line bg-surface-2 px-3 py-1.5 text-xs font-semibold text-text">
-        <ThemeSwatch colors={night ? current.night : current.day} />Theme: {current.label}
+      <button type="button" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)} aria-label={compact ? `Change theme (now ${current.label})` : undefined} title={compact ? `Theme: ${current.label}` : undefined} className={`flex items-center gap-2 rounded-full border border-line bg-surface-2 text-xs font-semibold text-text ${compact ? "justify-center p-2" : "px-3 py-1.5"}`}>
+        <ThemeSwatch colors={night ? current.night : current.day} />{!compact && <>Theme: {current.label}</>}
       </button>
       {open && <ThemeDialog onClose={() => setOpen(false)} style={style} pref={pref} />}
     </div>
