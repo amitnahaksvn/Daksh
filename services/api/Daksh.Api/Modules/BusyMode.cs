@@ -31,23 +31,25 @@ public static class BusyMode
         try { TimeZoneInfo.FindSystemTimeZoneById(id); return true; } catch { return false; }
     }
 
-    public static TimeZoneInfo ResolveTimezone(BusyProfile p)
+    public static TimeZoneInfo ResolveTimezone(BusyProfile p, string? fallbackTimezone = null)
     {
-        if (!string.IsNullOrWhiteSpace(p.Timezone))
+        foreach (var id in new[] { p.Timezone, fallbackTimezone })
         {
-            try { return TimeZoneInfo.FindSystemTimeZoneById(p.Timezone); } catch { /* fall through to UTC */ }
+            if (string.IsNullOrWhiteSpace(id)) continue;
+            try { return TimeZoneInfo.FindSystemTimeZoneById(id); } catch { /* try the next */ }
         }
         return TimeZoneInfo.Utc;
     }
 
-    public static bool IsBusy(BusyProfile? p, DateTime utcNow)
+    /// <param name="fallbackTimezone">Used when the profile has no timezone of its own (the connection's own timezone setting).</param>
+    public static bool IsBusy(BusyProfile? p, DateTime utcNow, string? fallbackTimezone = null)
     {
         if (p is null || !p.Enabled) return false;
         if (p.Until is { } until && until > utcNow) return true;
         if (p.Days.Count == 0) return false;
         if (!TimeSpan.TryParse(p.Start, out var start) || !TimeSpan.TryParse(p.End, out var end) || start == end) return false;
 
-        var local = TimeZoneInfo.ConvertTimeFromUtc(utcNow, ResolveTimezone(p));
+        var local = TimeZoneInfo.ConvertTimeFromUtc(utcNow, ResolveTimezone(p, fallbackTimezone));
         var now = local.TimeOfDay;
         var day = (int)local.DayOfWeek;
         // The selected day is the one the window starts on, so an overnight Mon 22:00–06:00 window still covers Tuesday's small hours.
@@ -61,7 +63,7 @@ public static class BusyMode
         p is { ReplyMode: "Fixed" } && !string.IsNullOrWhiteSpace(p.FixedMessage) ? p.FixedMessage.Trim() : null;
 
     /// <summary>The optional note to share while busy, only when the owner is actually busy.</summary>
-    public static string? ActiveNote(BusyProfile? p, DateTime utcNow) => IsBusy(p, utcNow) && !string.IsNullOrWhiteSpace(p!.Note) ? p.Note!.Trim() : null;
+    public static string? ActiveNote(BusyProfile? p, DateTime utcNow, string? fallbackTimezone = null) => IsBusy(p, utcNow, fallbackTimezone) && !string.IsNullOrWhiteSpace(p!.Note) ? p.Note!.Trim() : null;
 
     /// <summary>The busy profile of the account that owns a connection. Never throws: no profile means "not busy".</summary>
     public static async Task<BusyProfile?> LoadAsync(IMongoDatabase db, string userId, CancellationToken ct = default)

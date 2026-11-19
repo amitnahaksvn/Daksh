@@ -531,7 +531,7 @@ public static class TelegramAutoReply
             {
                 "Always" => true,
                 "Never" => false,
-                _ => (connection.AutoReplyEnabled || BusyMode.IsBusy(await BusyMode.LoadAsync(db, connection.UserId), DateTime.UtcNow)) && (!message.IsGroup || connection.AutoReplyInGroups),
+                _ => (connection.AutoReplyEnabled || BusyMode.IsBusy(await BusyMode.LoadAsync(db, connection.UserId), DateTime.UtcNow, settings.Timezone)) && (!message.IsGroup || connection.AutoReplyInGroups),
             };
             if (!repliedByRule && allowed) await RunAsync(scopes, connection, message, chatRule, force: false, logger);
         }
@@ -587,7 +587,7 @@ public static class TelegramAutoReply
             if (!forcedIn && settings.AutoReplyScope == "SelectedOnly" && !settings.AutoReplyAllowedChats.Contains(chatId)) return;
 
             var busyProfile = await BusyMode.LoadAsync(db, connection.UserId);
-            var busy = BusyMode.IsBusy(busyProfile, DateTime.UtcNow); // busy mode (profile-wide) overrides the active-hours rules
+            var busy = BusyMode.IsBusy(busyProfile, DateTime.UtcNow, settings.Timezone); // busy mode (profile-wide) overrides the active-hours rules
             var withinHours = busy || IntegrationsModule.IsWithinActiveHours(settings);
             var useOutsideHoursMessage = !busy && !force && !withinHours && !string.IsNullOrWhiteSpace(settings.OutsideHoursMessage);
             if (!force && !settings.OperateContinuously && !withinHours && !useOutsideHoursMessage) return;
@@ -641,7 +641,7 @@ public static class TelegramAutoReply
                 if (gate.Action == GateAction.Silent) { logger.LogInformation("Reply gate: no Telegram reply for {ChatId} ({Reason})", chatId, gate.Reason); return; }
                 if (gate.Action == GateAction.SendHolding)
                 {
-                    replyText = await ComposeHumanHoldingAsync(sp, settings, connection, chatId, trigger.ChatName, text, gate, BusyMode.ActiveNote(busyProfile, DateTime.UtcNow), messages, logger);
+                    replyText = await ComposeHumanHoldingAsync(sp, settings, connection, chatId, trigger.ChatName, text, gate, BusyMode.ActiveNote(busyProfile, DateTime.UtcNow, settings.Timezone), messages, logger);
                     isAi = true; goto Deliver;
                 }
 
@@ -653,7 +653,7 @@ public static class TelegramAutoReply
                     history = recent.Select(m => (m.FromMe ? "assistant" : "user", m.Text)).ToList();
                 }
                 var userContext = new UserAiContext(connection.UserId, MemoryEnabled: false, AllowProviderDataSharing: true);
-                var prompt = IntegrationsModule.BuildAutoReplyPrompt(settings, chatId, trigger.ChatName, text, trigger.IsGroup, null, "Telegram", BusyMode.ActiveNote(busyProfile, DateTime.UtcNow));
+                var prompt = IntegrationsModule.BuildAutoReplyPrompt(settings, chatId, trigger.ChatName, text, trigger.IsGroup, null, "Telegram", BusyMode.ActiveNote(busyProfile, DateTime.UtcNow, settings.Timezone));
                 var result = await sp.GetRequiredService<IAssistantOrchestrator>().RespondAsync(new AssistantRequest(userContext, prompt, history));
                 if (result.IsSimulated || string.IsNullOrWhiteSpace(result.Text)) { logger.LogWarning("Telegram auto-reply for {ChatId}: the AI gave no usable answer", chatId); return; }
                 if (result.Text.Trim().Equals("NO_REPLY", StringComparison.OrdinalIgnoreCase)) return;
@@ -663,7 +663,7 @@ public static class TelegramAutoReply
                         since => messages.Find(m => m.ConnectionId == connection.Id && m.ChatId == chatId && m.FromMe && !m.IsAiGenerated && m.Timestamp > since).AnyAsync(),
                         DateTime.UtcNow, GateVerdict.Boss);
                     if (hold.Action != GateAction.SendHolding) return;
-                    replyText = await ComposeHumanHoldingAsync(sp, settings, connection, chatId, trigger.ChatName, text, hold, BusyMode.ActiveNote(busyProfile, DateTime.UtcNow), messages, logger);
+                    replyText = await ComposeHumanHoldingAsync(sp, settings, connection, chatId, trigger.ChatName, text, hold, BusyMode.ActiveNote(busyProfile, DateTime.UtcNow, settings.Timezone), messages, logger);
                 }
                 else replyText = result.Text.Trim();
                 isAi = true;

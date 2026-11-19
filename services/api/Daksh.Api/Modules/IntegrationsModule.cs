@@ -731,7 +731,7 @@ public static class IntegrationsModule
         {
             "Always" => true,
             "Never" => false,
-            _ => (connection.AutoReplyEnabled || BusyMode.IsBusy(await BusyMode.LoadAsync(db, connection.UserId, ct), DateTime.UtcNow)) && (!isGroup || connection.AutoReplyInGroups),
+            _ => (connection.AutoReplyEnabled || BusyMode.IsBusy(await BusyMode.LoadAsync(db, connection.UserId, ct), DateTime.UtcNow, settings.Timezone)) && (!isGroup || connection.AutoReplyInGroups),
         };
         if (!repliedByRule && autoReplyAllowed && passesMonitoring && !IsCallNotice(evt.Preview))
             // The reply can legitimately take minutes (response delay, batching, the AI call). If the caller hangs up meanwhile -- the
@@ -763,7 +763,7 @@ public static class IntegrationsModule
 
             // Busy mode (set on the owner's profile, for all apps) overrides the active-hours rules: being busy IS the reason to answer.
             var busyProfile = await BusyMode.LoadAsync(db, connection.UserId, ct);
-            var busy = BusyMode.IsBusy(busyProfile, DateTime.UtcNow);
+            var busy = BusyMode.IsBusy(busyProfile, DateTime.UtcNow, settings.Timezone);
             var withinHours = busy || IsWithinActiveHours(settings);
             var useOutsideHoursMessage = !busy && !force && !withinHours && !string.IsNullOrWhiteSpace(settings.OutsideHoursMessage);
             if (!force && !settings.OperateContinuously && !withinHours && !useOutsideHoursMessage) return;
@@ -848,7 +848,7 @@ public static class IntegrationsModule
                 }
                 if (gate.Action == GateAction.SendHolding)
                 {
-                    replyText = await ComposeHumanHoldingAsync(settings, connection, chatId, chatName, messageText, gate, savedContact, BusyMode.ActiveNote(busyProfile, DateTime.UtcNow), messages, orchestrator, logger, ct);
+                    replyText = await ComposeHumanHoldingAsync(settings, connection, chatId, chatName, messageText, gate, savedContact, BusyMode.ActiveNote(busyProfile, DateTime.UtcNow, settings.Timezone), messages, orchestrator, logger, ct);
                     goto Deliver;
                 }
 
@@ -856,7 +856,7 @@ public static class IntegrationsModule
                 // AI see and answer these messages — that opt-in is the provider-data-sharing consent here.
                 var userContext = new UserAiContext(connection.UserId, MemoryEnabled: false, AllowProviderDataSharing: true);
                 var summary = await SummarizeOlderConversationAsync(settings, connection.Id, chatId, messages, orchestrator, userContext, logger, ct);
-                var prompt = BuildAutoReplyPrompt(settings, chatId, chatName, messageText, isGroup, summary, busyNote: BusyMode.ActiveNote(busyProfile, DateTime.UtcNow));
+                var prompt = BuildAutoReplyPrompt(settings, chatId, chatName, messageText, isGroup, summary, busyNote: BusyMode.ActiveNote(busyProfile, DateTime.UtcNow, settings.Timezone));
                 var history = await BuildAutoReplyHistoryAsync(settings, connection.Id, chatId, messages, ct);
                 var result = await orchestrator.RespondAsync(new AssistantRequest(userContext, prompt, history));
 
@@ -873,7 +873,7 @@ public static class IntegrationsModule
                         since => messages.Find(m => m.ConnectionId == connection.Id && m.ChatId == chatId && m.FromMe && !m.IsAiGenerated && m.Timestamp > since).AnyAsync(ct),
                         DateTime.UtcNow, GateVerdict.Boss, ct, savedContact: savedContact);
                     if (hold.Action != GateAction.SendHolding) return;
-                    replyText = await ComposeHumanHoldingAsync(settings, connection, chatId, chatName, messageText, hold, savedContact, BusyMode.ActiveNote(busyProfile, DateTime.UtcNow), messages, orchestrator, logger, ct);
+                    replyText = await ComposeHumanHoldingAsync(settings, connection, chatId, chatName, messageText, hold, savedContact, BusyMode.ActiveNote(busyProfile, DateTime.UtcNow, settings.Timezone), messages, orchestrator, logger, ct);
                 }
                 else replyText = result.Text;
             }

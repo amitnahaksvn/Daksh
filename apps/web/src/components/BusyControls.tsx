@@ -24,7 +24,13 @@ function untilText(iso: string | null) {
 function useBusy() {
   const [busy, setBusy] = useState<BusyProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const load = useCallback(() => { api.busy().then(setBusy).catch(() => { /* the chip just stays hidden */ }); }, []);
+  const load = useCallback(() => {
+    api.busy().then((b) => {
+      setBusy(b);
+      // A busy profile with no timezone would be judged in UTC while the form shows this device's timezone as if it were saved: save it.
+      if (!b.timezone) void api.updateBusy({ timezone: systemTimezone() }).then(setBusy).catch(() => { /* try again next load */ });
+    }).catch(() => { /* the chip just stays hidden */ });
+  }, []);
   useEffect(() => {
     load();
     window.addEventListener(BUSY_CHANGED_EVENT, load);
