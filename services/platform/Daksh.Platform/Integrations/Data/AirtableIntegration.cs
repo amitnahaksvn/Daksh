@@ -21,7 +21,7 @@ public sealed class AirtableIntegration(HttpClient http)
         return new(true, result?.Id, result?.Scopes ?? []);
     }
 
-    public async Task<AirtablePage<AirtableBase>> ListBasesAsync(
+    public async Task<AirtableBasePage> ListBasesAsync(
         string token, string? offset = null, CancellationToken ct = default)
     {
         var uri = new Uri(MetaBase + "bases" +
@@ -29,11 +29,10 @@ public sealed class AirtableIntegration(HttpClient http)
         using var request = CreateRequest(token, HttpMethod.Get, uri);
         using var response = await http.SendAsync(request, ct);
         await EnsureSuccess(response, ct);
-        var page = await response.Content.ReadFromJsonAsync<AirtableBasePage>(Json, ct);
-        return new AirtablePage<AirtableBase>(page?.Bases, page?.Offset);
+        return await response.Content.ReadFromJsonAsync<AirtableBasePage>(Json, ct) ?? new(null, null);
     }
 
-    public async Task<AirtablePage<AirtableRecord>> ListRecordsAsync(
+    public async Task<AirtableRecordPage> ListRecordsAsync(
         string token, string baseId, string tableIdOrName, int pageSize = 100,
         string? offset = null, string? filterByFormula = null, string? view = null,
         CancellationToken ct = default)
@@ -50,8 +49,7 @@ public sealed class AirtableIntegration(HttpClient http)
         using var request = CreateRequest(token, HttpMethod.Get, uri);
         using var response = await http.SendAsync(request, ct);
         await EnsureSuccess(response, ct);
-        var page = await response.Content.ReadFromJsonAsync<AirtableRecordPage>(Json, ct);
-        return new AirtablePage<AirtableRecord>(page?.Records, page?.Offset);
+        return await response.Content.ReadFromJsonAsync<AirtableRecordPage>(Json, ct) ?? new(null, null);
     }
 
     public async Task<AirtableRecord> CreateRecordAsync(
@@ -133,11 +131,6 @@ public sealed class AirtableIntegration(HttpClient http)
 
 public sealed record AirtableConnection(bool Connected, string? UserId, IReadOnlyList<string> Scopes);
 public sealed record AirtableWhoAmI(string? Id, IReadOnlyList<string>? Scopes);
-public sealed record AirtablePage<T>(IReadOnlyList<T>? Items, string? Offset)
-{
-    public IReadOnlyList<AirtableBase>? Bases => Items as IReadOnlyList<AirtableBase>;
-    public IReadOnlyList<AirtableRecord>? Records => Items as IReadOnlyList<AirtableRecord>;
-}
 public sealed record AirtableBasePage(
     [property: JsonPropertyName("bases")] IReadOnlyList<AirtableBase>? Bases,
     [property: JsonPropertyName("offset")] string? Offset);
