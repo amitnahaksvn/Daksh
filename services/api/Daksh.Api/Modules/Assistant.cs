@@ -88,7 +88,8 @@ public static class AssistantModule
         catch (Exception ex)
         {
             logger.LogWarning(ex, "The AI model did not answer");
-            return Results.Problem(statusCode: 502, title: "The AI service did not answer just now. Try again in a moment.");
+            var (title, code) = DescribeAiFailure(ex);
+            return Results.Problem(statusCode: 502, title: title, extensions: new Dictionary<string, object?> { ["code"] = code });
         }
 
         var now = DateTime.UtcNow;
@@ -100,6 +101,18 @@ public static class AssistantModule
 
         return Results.Ok(new AssistantReply(Guid.Parse(conversationId), Guid.Parse(replyDoc.Id), result.Text, result.Model, result.IsSimulated, context.Sources));
     }
+
+    /// <summary>Turns an AI provider failure into something a person can act on.</summary>
+    public static (string Title, string Code) DescribeAiFailure(Exception ex) => ex switch
+    {
+        HttpRequestException { StatusCode: System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden } =>
+            ("The AI provider rejected Daksha's API key, so no answer can be generated. The key needs to be replaced in the API's settings (Ai:Gemini:ApiKey).", "ai_key_invalid"),
+        HttpRequestException { StatusCode: System.Net.HttpStatusCode.TooManyRequests } =>
+            ("The AI provider is rate limiting Daksha right now (its free quota may be used up). Try again in a minute.", "ai_rate_limited"),
+        HttpRequestException { StatusCode: System.Net.HttpStatusCode.NotFound } =>
+            ("The AI provider does not know the configured model name. Check Ai:Gemini:Model in the API's settings.", "ai_model_missing"),
+        _ => ("The AI service did not answer just now. Try again in a moment.", "ai_unavailable"),
+    };
 
     private static async Task<IResult> ListConversationsAsync(IMongoDatabase db, ClaimsPrincipalAccessor who, CancellationToken ct)
     {

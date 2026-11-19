@@ -275,4 +275,18 @@ public class ReplyGateTests
         Assert.Equal("a b", AssistantContextBuilder.Clip("  a\n\n b ", 10));
         Assert.Equal("abc…", AssistantContextBuilder.Clip("abcdef", 3));
     }
+
+    [Theory]
+    [InlineData(System.Net.HttpStatusCode.Unauthorized, "ai_key_invalid")]
+    [InlineData(System.Net.HttpStatusCode.Forbidden, "ai_key_invalid")]
+    [InlineData(System.Net.HttpStatusCode.TooManyRequests, "ai_rate_limited")]
+    [InlineData(System.Net.HttpStatusCode.NotFound, "ai_model_missing")]
+    [InlineData(System.Net.HttpStatusCode.InternalServerError, "ai_unavailable")]
+    public void An_ai_provider_failure_is_explained_in_terms_a_person_can_act_on(System.Net.HttpStatusCode status, string code)
+    {
+        var (title, actual) = AssistantModule.DescribeAiFailure(new HttpRequestException("x", null, status));
+        Assert.Equal(code, actual);
+        Assert.False(string.IsNullOrWhiteSpace(title));
+        Assert.Equal("ai_unavailable", AssistantModule.DescribeAiFailure(new InvalidOperationException()).Code);
+    }
 }
