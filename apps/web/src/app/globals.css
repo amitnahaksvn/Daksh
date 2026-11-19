@@ -84,6 +84,18 @@ h3 {
   outline-offset: 2px;
 }
 
+/* A field that sits inside a pill which shows its own focus state (the pill's border changes), so the field itself draws no ring. */
+.field-in-pill:focus,
+.field-in-pill:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.field-in-pill::-webkit-search-cancel-button,
+.field-in-pill::-webkit-search-decoration {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
 /* Form controls follow the theme (native checkbox colour, number spinners, date picker). */
 input[type="checkbox"] {
   accent-color: var(--accent);
