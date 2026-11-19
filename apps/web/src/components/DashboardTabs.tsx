@@ -129,7 +129,7 @@ export function DashboardTabs() {
       {state.status === "error" && !tabs && <ErrorState error={state.error} onRetry={reload} />}
 
       {current === ASK_TAB ? (
-        <div role="tabpanel" id="panel-ask" aria-labelledby="tab-ask" className="mx-auto w-full max-w-3xl"><AssistantChat tall /></div>
+        <div role="tabpanel" id="panel-ask" aria-labelledby="tab-ask" className="w-full"><AssistantChat tall /></div>
       ) : tab ? (
         <div role="tabpanel" id={`panel-${tab.id}`} aria-labelledby={`tab-${tab.id}`}><DashboardContent key={tab.id} widgets={tab.widgets} /></div>
       ) : null}

@@ -77,10 +77,10 @@ export function AssistantChat({ tall = false }: { tall?: boolean }) {
     <section aria-label="Conversation" className={`flex flex-col gap-4 p-4 ${tall ? "min-h-[calc(100vh-17rem)]" : ""} ${tileClass}`}>
       <ol aria-live="polite" className={`flex flex-1 flex-col gap-3 ${tall ? "min-h-[16rem]" : "min-h-64"}`}>
         {lines.length === 0 && !busy && (
-          <li className="flex flex-1 flex-col items-center justify-center gap-4 py-6 text-center">
-            <Orb size={64} />
-            <p className="text-lg font-bold">What can I do for you?</p>
-            <ul className="flex max-w-lg flex-wrap justify-center gap-2">
+          <li className={`flex flex-1 flex-col items-center justify-center gap-4 text-center ${tall ? "py-16" : "py-6"}`}>
+            <Orb size={tall ? 88 : 64} />
+            <p className={`font-bold ${tall ? "text-3xl" : "text-lg"}`}>What can I do for you?</p>
+            <ul className={`flex flex-wrap justify-center gap-2 ${tall ? "max-w-3xl" : "max-w-lg"}`}>
               {SUGGESTIONS.map((s) => (
                 <li key={s}>
                   <button type="button" onClick={() => setText(s)} className="rounded-full border border-line bg-surface-2 px-3.5 py-1.5 text-sm text-muted transition-colors hover:text-text">
