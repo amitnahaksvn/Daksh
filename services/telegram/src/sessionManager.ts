@@ -3,6 +3,9 @@ import bigInt from "big-integer";
 import { Api, TelegramClient } from "telegram";
 import { StringSession } from "telegram/sessions/index.js";
 import { NewMessage, type NewMessageEvent } from "telegram/events/index.js";
+import { Raw } from "telegram/events/Raw.js";
+import { CustomFile } from "telegram/client/uploads.js";
+import { STATUS, chatKey, onUpdate, presenceOf } from "./extras.js";
 import { reportEvent } from "./apiClient.js";
 import { config, telegramConfigured } from "./config.js";
 import { decrypt, encrypt } from "./crypto.js";
@@ -77,12 +80,60 @@ function isBroadcast(entity: unknown): boolean {
   return entity instanceof Api.Channel && entity.broadcast === true;
 }
 
-async function reportMessage(connectionId: string, msg: Api.Message, history: boolean): Promise<void> {
-  const text = msg.message;
+const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
+const MAX_FILE_BYTES = 14 * 1024 * 1024;
+
+export type MediaKind = "photo" | "video" | "audio" | "voice" | "document" | "sticker";
+
+/** What kind of attachment a message carries (known even when its bytes are not downloaded). */
+function mediaInfo(msg: Api.Message): { kind: MediaKind; mimeType: string; fileName?: string; size: number } | undefined {
+  const size = Number(msg.file?.size ?? 0);
+  const mime = msg.file?.mimeType;
+  if (msg.photo) return { kind: "photo", mimeType: "image/jpeg", size };
+  if (msg.sticker) return { kind: "sticker", mimeType: mime ?? "image/webp", size };
+  if (msg.voice) return { kind: "voice", mimeType: mime ?? "audio/ogg", size };
+  if (msg.audio) return { kind: "audio", mimeType: mime ?? "audio/mpeg", fileName: msg.file?.name ?? undefined, size };
+  if (msg.video || msg.videoNote || msg.gif) return { kind: "video", mimeType: mime ?? "video/mp4", size };
+  if (msg.document) return { kind: "document", mimeType: mime ?? "application/octet-stream", fileName: msg.file?.name ?? undefined, size };
+  return undefined;
+}
+
+/** What a message without text is shown as, so attachments still appear in the thread. */
+function mediaLabel(msg: Api.Message): string | undefined {
+  const k = mediaInfo(msg)?.kind;
+  return k === "photo" ? "📷 Photo" : k === "sticker" ? "Sticker" : k === "voice" ? "🎤 Voice message" : k === "audio" ? "🎵 Audio" : k === "video" ? "🎥 Video" : k === "document" ? "📄 Document" : undefined;
+}
+
+/** Downloads the attachment once and keeps it in "telegramMedia" so the thread can show or play it. Best-effort. */
+async function storeMedia(db: Db, connectionId: string, msg: Api.Message): Promise<boolean> {
+  const info = mediaInfo(msg);
+  if (!info || !msg.id || msg.chatId === undefined) return false;
+  if (info.mimeType === "application/x-tgsticker") return false; // animated stickers are not viewable as an image
+  const limit = info.kind === "photo" || info.kind === "sticker" ? MAX_PHOTO_BYTES : MAX_FILE_BYTES;
+  if (info.size > limit) return false;
+  const key = { connectionId, chatId: String(msg.chatId), messageId: String(msg.id) };
+  try {
+    if (await db.collection("telegramMedia").findOne(key, { projection: { _id: 1 } })) return true;
+    const data = (await msg.downloadMedia({})) as Buffer | string | undefined;
+    if (!Buffer.isBuffer(data) || data.length === 0 || data.length > limit) return false;
+    await db.collection("telegramMedia").updateOne(key, { $setOnInsert: { ...key, mimeType: info.mimeType, fileName: info.fileName, data, createdAt: new Date() } }, { upsert: true });
+    return true;
+  } catch (err) {
+    console.warn(`Could not download a Telegram ${info.kind} for ${connectionId}: ${(err as Error).message}`);
+    return false;
+  }
+}
+
+async function reportMessage(db: Db, connectionId: string, msg: Api.Message, history: boolean, mediaBudget = { left: Infinity }): Promise<void> {
+  const text = msg.message || mediaLabel(msg);
   if (!text || !msg.id || msg.chatId === undefined) return;
   const chat = await msg.getChat().catch(() => undefined);
   if (isBroadcast(chat)) return;
   const sender = msg.out ? undefined : await msg.getSender().catch(() => undefined);
+  const info = mediaInfo(msg);
+  // Attachments are downloaded before the event goes out, so the thread already has them when it learns about the message.
+  let hasMedia = false;
+  if (info && mediaBudget.left > 0) { mediaBudget.left--; hasMedia = await storeMedia(db, connectionId, msg); }
   await reportEvent({
     connectionId,
     eventType: "Message",
@@ -95,12 +146,18 @@ async function reportMessage(connectionId: string, msg: Api.Message, history: bo
     text,
     timestamp: new Date(msg.date * 1000).toISOString(),
     history,
+    hasMedia,
+    mediaKind: info?.kind,
+    mimeType: info?.mimeType,
+    fileName: info?.fileName,
+    replyToId: msg.replyToMsgId ? String(msg.replyToMsgId) : undefined,
   });
 }
 
 /** Seeds the chat list: pulls the most recent conversations so the screen isn't empty after connecting. It
  *  also warms GramJS's entity cache, which sending later relies on. */
-async function backfill(connectionId: string, client: TelegramClient): Promise<void> {
+async function backfill(db: Db, connectionId: string, client: TelegramClient): Promise<void> {
+  const photoBudget = { left: 30 }; // old attachments are fetched for the newest messages only
   try {
     const dialogs = await client.getDialogs({ limit: 25 });
     for (const dialog of dialogs) {
@@ -108,7 +165,7 @@ async function backfill(connectionId: string, client: TelegramClient): Promise<v
       // One unreadable chat (e.g. a private channel you were removed from → CHANNEL_PRIVATE) must not stop the rest.
       try {
         const messages = await client.getMessages(dialog.entity, { limit: 15 });
-        for (const m of [...messages].reverse()) await reportMessage(connectionId, m, true);
+        for (const m of [...messages].reverse()) await reportMessage(db, connectionId, m, true, photoBudget);
       } catch (err) {
         console.warn(`Telegram backfill skipped a chat for ${connectionId}: ${(err as Error).message}`);
       }
@@ -125,10 +182,11 @@ async function onConnected(db: Db, connectionId: string, entry: Entry, client: T
   entry.passwordRequired = false;
   entry.error = undefined;
   await saveSession(db, connectionId, client);
-  client.addEventHandler((event: NewMessageEvent) => void reportMessage(connectionId, event.message, false), new NewMessage({}));
+  client.addEventHandler((event: NewMessageEvent) => void reportMessage(db, connectionId, event.message, false), new NewMessage({}));
+  client.addEventHandler((update: unknown) => void onUpdate(db, connectionId, update), new Raw({}));
   const account = me.username ? `@${me.username}` : [me.firstName, me.lastName].filter(Boolean).join(" ") || me.phone || "Telegram";
   await reportEvent({ connectionId, eventType: "Status", status: "Connected", accountIdentifier: account });
-  void backfill(connectionId, client);
+  void backfill(db, connectionId, client);
 }
 
 /** Starts a fresh QR sign-in (or resumes a stored session when there is one). */
@@ -230,12 +288,111 @@ export async function disconnect(db: Db, connectionId: string): Promise<void> {
   await reportEvent({ connectionId, eventType: "Status", status: "Disconnected" });
 }
 
-export async function sendMessage(connectionId: string, chatId: string, text: string): Promise<{ messageId: string; timestamp: string }> {
+function liveClient(connectionId: string): TelegramClient {
   const entry = sessions.get(connectionId);
   if (!entry?.client || entry.status !== "Connected") throw new Error("Telegram is not connected.");
-  const sent = await entry.client.sendMessage(bigInt(chatId) as never, { message: text });
+  return entry.client;
+}
+const peerOf = (chatId: string) => bigInt(chatId) as never;
+
+export async function sendMessage(connectionId: string, chatId: string, text: string, replyToId?: string): Promise<{ messageId: string; timestamp: string }> {
+  const client = liveClient(connectionId);
+  const sent = await client.sendMessage(peerOf(chatId), { message: text, ...(replyToId ? { replyTo: Number(replyToId) } : {}) });
   return { messageId: String(sent.id), timestamp: new Date(sent.date * 1000).toISOString() };
 }
+
+export type OutgoingFile = { data: Buffer; fileName: string; mimeType: string; caption?: string; replyToId?: string; asDocument?: boolean };
+
+/** Sends a photo, video, voice note, audio or any file, and keeps a copy so the thread can show it straight away. */
+export async function sendMedia(db: Db, connectionId: string, chatId: string, f: OutgoingFile): Promise<{ messageId: string; timestamp: string; mediaKind: MediaKind; text: string }> {
+  const client = liveClient(connectionId);
+  const isImage = f.mimeType.startsWith("image/") && !f.asDocument;
+  const limit = isImage ? MAX_PHOTO_BYTES : MAX_FILE_BYTES;
+  if (f.data.length === 0) throw new Error("The file is empty.");
+  if (f.data.length > limit) throw new Error(`That file is too large to send (limit ${Math.round(limit / 1048576)} MB).`);
+  const voice = f.mimeType.startsWith("audio/ogg") && f.asDocument !== true;
+  const sent = await client.sendFile(peerOf(chatId), {
+    file: new CustomFile(f.fileName, f.data.length, "", f.data),
+    caption: f.caption,
+    forceDocument: f.asDocument === true || !(isImage || f.mimeType.startsWith("video/") || f.mimeType.startsWith("audio/")),
+    voiceNote: voice,
+    ...(f.replyToId ? { replyTo: Number(f.replyToId) } : {}),
+  });
+  const kind: MediaKind = isImage ? "photo" : f.mimeType.startsWith("video/") ? "video" : voice ? "voice" : f.mimeType.startsWith("audio/") ? "audio" : "document";
+  const key = { connectionId, chatId, messageId: String(sent.id) };
+  await db.collection("telegramMedia").updateOne(key, { $setOnInsert: { ...key, mimeType: f.mimeType, fileName: f.fileName, data: f.data, createdAt: new Date() } }, { upsert: true });
+  const label = f.caption || (kind === "photo" ? "📷 Photo" : kind === "voice" ? "🎤 Voice message" : kind === "audio" ? "🎵 Audio" : kind === "video" ? "🎥 Video" : "📄 Document");
+  return { messageId: String(sent.id), timestamp: new Date(sent.date * 1000).toISOString(), mediaKind: kind, text: label };
+}
+
+/** Marks the chat read (the other person's blue ticks). */
+export async function markRead(connectionId: string, chatId: string): Promise<void> {
+  await liveClient(connectionId).markAsRead(peerOf(chatId));
+}
+
+/** Delete for everyone (revoke) or only for you. */
+export async function deleteMessage(connectionId: string, chatId: string, messageId: string, forEveryone: boolean): Promise<void> {
+  await liveClient(connectionId).deleteMessages(peerOf(chatId), [Number(messageId)], { revoke: forEveryone });
+}
+
+export async function editMessage(connectionId: string, chatId: string, messageId: string, text: string): Promise<void> {
+  if (!text.trim()) throw new Error("The message cannot be empty.");
+  await liveClient(connectionId).editMessage(peerOf(chatId), { message: Number(messageId), text });
+}
+
+export async function forwardMessage(connectionId: string, fromChatId: string, messageId: string, toChatId: string): Promise<{ messageId: string; timestamp: string } | null> {
+  const sent = await liveClient(connectionId).forwardMessages(peerOf(toChatId), { messages: [Number(messageId)], fromPeer: peerOf(fromChatId) });
+  const first = sent?.[0];
+  return first ? { messageId: String(first.id), timestamp: new Date(first.date * 1000).toISOString() } : null;
+}
+
+/** Adds an emoji reaction to a message (an empty emoji removes yours). */
+export async function react(connectionId: string, chatId: string, messageId: string, emoji: string): Promise<void> {
+  const client = liveClient(connectionId);
+  await client.invoke(new Api.messages.SendReaction({ peer: await client.getInputEntity(peerOf(chatId)), msgId: Number(messageId), reaction: emoji ? [new Api.ReactionEmoji({ emoticon: emoji })] : [] }));
+}
+
+export async function setTyping(connectionId: string, chatId: string, typing: boolean): Promise<void> {
+  const client = liveClient(connectionId);
+  await client.invoke(new Api.messages.SetTyping({ peer: await client.getInputEntity(peerOf(chatId)), action: typing ? new Api.SendMessageTypingAction() : new Api.SendMessageCancelAction() }));
+}
+
+export function presence(connectionId: string, chatId: string) {
+  return presenceOf(connectionId, chatId);
+}
+
+/** Group or channel details: title, description and members. */
+export async function groupInfo(connectionId: string, chatId: string) {
+  const client = liveClient(connectionId);
+  const entity = await client.getEntity(peerOf(chatId));
+  const title = nameOf(entity) ?? "Group";
+  let about: string | null = null;
+  try {
+    if (entity instanceof Api.Channel) about = ((await client.invoke(new Api.channels.GetFullChannel({ channel: entity }))).fullChat as Api.ChannelFull).about ?? null;
+    else if (entity instanceof Api.Chat) about = ((await client.invoke(new Api.messages.GetFullChat({ chatId: entity.id }))).fullChat as Api.ChatFull).about ?? null;
+  } catch { /* the description is optional */ }
+  const people = await client.getParticipants(entity as never, { limit: 200 });
+  return {
+    subject: title,
+    description: about,
+    members: people.map((p) => ({
+      id: String(p.id),
+      name: [p.firstName, p.lastName].filter(Boolean).join(" ") || p.username || String(p.id),
+      isAdmin: /Admin|Creator/.test((p as unknown as { participant?: { className?: string } }).participant?.className ?? ""),
+    })),
+  };
+}
+
+/** Fetches older messages of one chat from Telegram and reports each (quietly) so they are stored; returns how many were fetched. */
+export async function loadOlder(db: Db, connectionId: string, chatId: string, beforeId?: string, limit = 30): Promise<number> {
+  const client = liveClient(connectionId);
+  const older = await client.getMessages(peerOf(chatId), { limit: Math.min(limit, 100), ...(beforeId ? { offsetId: Number(beforeId) } : {}) });
+  const budget = { left: 10 };
+  for (const m of [...older].reverse()) await reportMessage(db, connectionId, m, true, budget);
+  return older.length;
+}
+
+export { chatKey, STATUS };
 
 export async function restoreSessionsFromDatabase(db: Db): Promise<void> {
   if (!telegramConfigured) {
@@ -246,4 +403,41 @@ export async function restoreSessionsFromDatabase(db: Db): Promise<void> {
   for (const doc of docs) {
     try { await connect(db, doc.connectionId); } catch (err) { console.error(`Could not restore Telegram session ${doc.connectionId}:`, err); }
   }
+}
+
+// ── Profile pictures ─────────────────────────────────────────────────────────────────────────────────────────────────
+const PIC_TTL_MS = 24 * 3600 * 1000;
+const PIC_MISSING_TTL_MS = 6 * 3600 * 1000;
+const inflight = new Map<string, Promise<Buffer | null>>();
+
+/** The chat's profile (or group) photo, cached for a day. Returns null when there is none. */
+export function profilePicture(db: Db, connectionId: string, chatId: string): Promise<Buffer | null> {
+  const key = `${connectionId}:${chatId}`;
+  const running = inflight.get(key);
+  if (running) return running;
+  const job = (async () => {
+    const col = db.collection("telegramProfilePics");
+    const cached = await col.findOne({ connectionId, chatId });
+    if (cached) {
+      const age = Date.now() - new Date(cached.fetchedAt as Date).getTime();
+      if (cached.missing ? age < PIC_MISSING_TTL_MS : age < PIC_TTL_MS) {
+        const raw = cached.data as { buffer?: Buffer } | Buffer | undefined;
+        return cached.missing ? null : Buffer.isBuffer(raw) ? raw : (raw?.buffer ?? null);
+      }
+    }
+    const client = sessions.get(connectionId)?.client;
+    if (!client) return null;
+    try {
+      const entity = await client.getInputEntity(bigInt(chatId) as never);
+      const data = await client.downloadProfilePhoto(entity as never, { isBig: false });
+      if (!Buffer.isBuffer(data) || data.length === 0) throw new Error("none");
+      await col.updateOne({ connectionId, chatId }, { $set: { connectionId, chatId, data, fetchedAt: new Date(), missing: false } }, { upsert: true });
+      return data;
+    } catch {
+      await col.updateOne({ connectionId, chatId }, { $set: { connectionId, chatId, missing: true, fetchedAt: new Date() }, $unset: { data: "" } }, { upsert: true });
+      return null;
+    }
+  })().finally(() => inflight.delete(key));
+  inflight.set(key, job);
+  return job;
 }

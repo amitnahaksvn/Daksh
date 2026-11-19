@@ -137,8 +137,15 @@ export type ConnectionStatusDto = {
   autoReplyInGroups: boolean;
 };
 export type TelegramLoginState = { status: ConnectionStatusValue; qr: string | null; expiresAt: string | null; passwordRequired: boolean; error: string | null };
-export type TelegramChat = { chatId: string; name: string; isGroup: boolean; lastMessagePreview: string | null; lastMessageAt: string | null; unreadCount: number };
-export type TelegramMessage = { messageId: string; chatId: string; fromMe: boolean; isAiGenerated: boolean; senderName: string | null; text: string; timestamp: string };
+export type TelegramChat = { chatId: string; name: string; isGroup: boolean; lastMessagePreview: string | null; lastMessageAt: string | null; unreadCount: number; pinned?: boolean; archived?: boolean; mutedUntil?: string | null };
+export type TelegramMessage = { messageId: string; chatId: string; fromMe: boolean; isAiGenerated: boolean; senderName: string | null; text: string; timestamp: string; hasMedia?: boolean;
+  mediaKind?: "photo" | "video" | "audio" | "voice" | "document" | "sticker" | null; mimeType?: string | null; fileName?: string | null;
+  /** Outgoing only: 1 pending, 2 sent, 4 read. */
+  status?: number | null; deleted?: boolean; edited?: boolean; starred?: boolean; replyToId?: string | null; replyToText?: string | null;
+  reactions?: { emoji: string; count: number; mine: boolean }[] | null };
+export type TelegramPresence = { state: "typing" | "recording" | "uploading" | "online" | "offline" | "recently" | "unknown"; lastSeen?: number };
+export type TelegramGroupInfo = { subject: string; description: string | null; members: { id: string; name: string; isAdmin: boolean }[] };
+export type TelegramSearchHit = { messageId: string; chatId: string; chatName: string | null; fromMe: boolean; text: string; timestamp: string };
 export type WhatsAppReaction = { by: string; emoji: string };
 export type WhatsAppMessage = {
   messageId: string;
@@ -153,6 +160,16 @@ export type WhatsAppMessage = {
   quotedText: string | null;
   reactions: WhatsAppReaction[];
   timestamp: string;
+  mediaKind: "image" | "sticker" | "video" | "audio" | "document" | null;
+  mimeType: string | null;
+  fileName: string | null;
+  mediaSeconds: number | null;
+  voiceNote: boolean;
+  /** Outgoing only: 1 pending, 2 sent, 3 delivered, 4 read, 5 played. */
+  status: number | null;
+  deleted: boolean;
+  edited: boolean;
+  starred: boolean;
 };
 export type WhatsAppChat = {
   chatId: string;
@@ -161,7 +178,15 @@ export type WhatsAppChat = {
   lastMessagePreview: string;
   lastMessageAt: string;
   unreadCount: number;
+  pinned?: boolean;
+  archived?: boolean;
+  mutedUntil?: string | null;
 };
+export type WhatsAppPresence = { state: "composing" | "recording" | "available" | "unavailable" | "paused" | "unknown"; lastSeen?: number };
+export type WhatsAppGroupMember = { id: string; name: string | null; isAdmin: boolean; isMe: boolean };
+export type WhatsAppGroupInfo = { subject: string; description: string | null; createdAt: string | null; members: WhatsAppGroupMember[] };
+export type ChatAssistResult = { mode: "summary" | "suggest" | "translate"; text: string | null; suggestions: string[]; isSimulated: boolean };
+export type WhatsAppSearchHit = { messageId: string; chatId: string; chatName: string | null; fromMe: boolean; text: string; timestamp: string };
 export type ActivityItem = {
   integrationKey: string;
   connectionId: string;
@@ -387,10 +412,57 @@ export const api = {
   telegramState: (connectionId: string) => apiFetch<TelegramLoginState>(`/api/integrations/telegram/${connectionId}/state`),
   telegramPassword: (connectionId: string, password: string) => apiFetch<unknown>(`/api/integrations/telegram/${connectionId}/password`, json({ password })),
   telegramChats: (connectionId: string) => apiFetch<TelegramChat[]>(`/api/integrations/telegram/${connectionId}/chats`),
-  telegramMessages: (connectionId: string, chatId: string) =>
-    apiFetch<TelegramMessage[]>(`/api/integrations/telegram/${connectionId}/chats/${encodeURIComponent(chatId)}/messages`),
-  sendTelegramMessage: (connectionId: string, chatId: string, text: string) =>
-    apiFetch<TelegramMessage>(`/api/integrations/telegram/${connectionId}/chats/${encodeURIComponent(chatId)}/messages`, json({ text })),
+  telegramMessages: (connectionId: string, chatId: string, limit?: number) =>
+    apiFetch<TelegramMessage[]>(`/api/integrations/telegram/${connectionId}/chats/${encodeURIComponent(chatId)}/messages${limit ? `?limit=${limit}` : ""}`),
+  /** A Telegram chat's profile or group picture, or null when it has none. */
+  telegramPicture: async (connectionId: string, chatId: string): Promise<Blob | null> => {
+    const res = await fetch(`${API_URL}/api/integrations/telegram/${connectionId}/chats/${encodeURIComponent(chatId)}/picture`, { headers: authHeaders() });
+    if (res.status === 401) redirectToLogin();
+    return res.ok ? res.blob() : null;
+  },
+  telegramMedia: async (connectionId: string, chatId: string, messageId: string): Promise<Blob> => {
+    const res = await fetch(`${API_URL}/api/integrations/telegram/${connectionId}/media/${encodeURIComponent(chatId)}/${encodeURIComponent(messageId)}`, { headers: authHeaders() });
+    if (res.status === 401) redirectToLogin();
+    if (!res.ok) throw new ApiError(res.status, "Could not load the photo.");
+    return res.blob();
+  },
+  sendTelegramMessage: (connectionId: string, chatId: string, text: string, replyToId?: string) =>
+    apiFetch<TelegramMessage>(`/api/integrations/telegram/${connectionId}/chats/${encodeURIComponent(chatId)}/messages`, json({ text, replyToId })),
+  sendTelegramFile: async (connectionId: string, chatId: string, file: File, opts: { caption?: string; replyToId?: string } = {}): Promise<void> => {
+    const form = new FormData();
+    form.append("file", file);
+    if (opts.caption) form.append("caption", opts.caption);
+    if (opts.replyToId) form.append("replyToId", opts.replyToId);
+    let res: Response;
+    try { res = await fetch(`${API_URL}/api/integrations/telegram/${connectionId}/chats/${encodeURIComponent(chatId)}/media`, { method: "POST", headers: authHeaders(), body: form }); }
+    catch { throw new ApiError(0, "Cannot reach the Daksh API. Check your connection and try again."); }
+    if (res.status === 401) redirectToLogin();
+    if (!res.ok) { let title = `Could not send the file (${res.status}).`; try { title = (await res.json()).title ?? title; } catch { /* non-JSON */ } throw new ApiError(res.status, title); }
+  },
+  markTelegramChatRead: (connectionId: string, chatId: string) =>
+    apiFetch<void>(`/api/integrations/telegram/${connectionId}/chats/${encodeURIComponent(chatId)}/read`, { method: "POST" }),
+  telegramTyping: (connectionId: string, chatId: string, typing: boolean) =>
+    apiFetch<void>(`/api/integrations/telegram/${connectionId}/chats/${encodeURIComponent(chatId)}/typing`, json({ typing })),
+  telegramPresence: (connectionId: string, chatId: string) =>
+    apiFetch<TelegramPresence>(`/api/integrations/telegram/${connectionId}/chats/${encodeURIComponent(chatId)}/presence`),
+  telegramGroup: (connectionId: string, chatId: string) =>
+    apiFetch<TelegramGroupInfo>(`/api/integrations/telegram/${connectionId}/chats/${encodeURIComponent(chatId)}/group`),
+  telegramLoadOlder: (connectionId: string, chatId: string) =>
+    apiFetch<{ fetched: number }>(`/api/integrations/telegram/${connectionId}/chats/${encodeURIComponent(chatId)}/history`, json({})),
+  setTelegramChatPrefs: (connectionId: string, chatId: string, prefs: { pinned?: boolean; archived?: boolean; muteHours?: number }) =>
+    apiFetch<void>(`/api/integrations/telegram/${connectionId}/chats/${encodeURIComponent(chatId)}/prefs`, { method: "PUT", body: JSON.stringify(prefs) }),
+  deleteTelegramMessage: (connectionId: string, chatId: string, messageId: string, forEveryone: boolean) =>
+    apiFetch<void>(`/api/integrations/telegram/${connectionId}/chats/${encodeURIComponent(chatId)}/messages/${encodeURIComponent(messageId)}/delete`, json({ forEveryone })),
+  editTelegramMessage: (connectionId: string, chatId: string, messageId: string, text: string) =>
+    apiFetch<void>(`/api/integrations/telegram/${connectionId}/chats/${encodeURIComponent(chatId)}/messages/${encodeURIComponent(messageId)}/edit`, json({ text })),
+  forwardTelegramMessage: (connectionId: string, chatId: string, messageId: string, toChatId: string) =>
+    apiFetch<void>(`/api/integrations/telegram/${connectionId}/chats/${encodeURIComponent(chatId)}/messages/${encodeURIComponent(messageId)}/forward`, json({ toChatId })),
+  reactTelegramMessage: (connectionId: string, chatId: string, messageId: string, emoji: string) =>
+    apiFetch<void>(`/api/integrations/telegram/${connectionId}/chats/${encodeURIComponent(chatId)}/messages/${encodeURIComponent(messageId)}/react`, json({ emoji })),
+  starTelegramMessage: (connectionId: string, chatId: string, messageId: string, starred: boolean) =>
+    apiFetch<void>(`/api/integrations/telegram/${connectionId}/chats/${encodeURIComponent(chatId)}/messages/${encodeURIComponent(messageId)}/star`, json({ starred })),
+  searchTelegram: (connectionId: string, q: string) =>
+    apiFetch<TelegramSearchHit[]>(`/api/integrations/telegram/${connectionId}/search?q=${encodeURIComponent(q)}`),
   disconnectGmail: () => apiFetch<{ status: string }>("/api/integrations/gmail/disconnect", { method: "POST" }),
   getQr: (connectionId: string) => apiFetch<QrResponse>(`/api/integrations/${connectionId}/qr`),
   getConnectionStatus: (connectionId: string) => apiFetch<ConnectionStatusDto>(`/api/integrations/${connectionId}/status`),
@@ -413,6 +485,60 @@ export const api = {
     apiFetch<{ chatId: string }>(`/api/integrations/whatsapp/${connectionId}/send`, json({ to, text })),
   reactToWhatsAppMessage: (connectionId: string, messageId: string, emoji: string) =>
     apiFetch<void>(`/api/integrations/whatsapp/${connectionId}/messages/${encodeURIComponent(messageId)}/react`, json({ emoji })),
+  /** A photo, video, voice note or file. Goes as a form upload, not JSON. */
+  sendWhatsAppFile: async (connectionId: string, chatId: string, file: File, opts: { caption?: string; quotedMessageId?: string; voiceNote?: boolean } = {}): Promise<void> => {
+    const form = new FormData();
+    form.append("file", file);
+    if (opts.caption) form.append("caption", opts.caption);
+    if (opts.quotedMessageId) form.append("quotedMessageId", opts.quotedMessageId);
+    if (opts.voiceNote) form.append("voiceNote", "true");
+    let res: Response;
+    try { res = await fetch(`${API_URL}/api/integrations/whatsapp/${connectionId}/chats/${encodeURIComponent(chatId)}/media`, { method: "POST", headers: authHeaders(), body: form }); }
+    catch { throw new ApiError(0, "Cannot reach the Daksh API. Check your connection and try again."); }
+    if (res.status === 401) redirectToLogin();
+    if (!res.ok) {
+      let title = `Could not send the file (${res.status}).`;
+      try { title = (await res.json()).title ?? title; } catch { /* non-JSON */ }
+      throw new ApiError(res.status, title);
+    }
+  },
+  /** The chat's profile or group picture, or null when it has none. */
+  whatsAppPicture: async (connectionId: string, chatId: string): Promise<Blob | null> => {
+    const res = await fetch(`${API_URL}/api/integrations/whatsapp/${connectionId}/chats/${encodeURIComponent(chatId)}/picture`, { headers: authHeaders() });
+    if (res.status === 401) redirectToLogin();
+    return res.ok ? res.blob() : null;
+  },
+  markWhatsAppChatRead: (connectionId: string, chatId: string) =>
+    apiFetch<void>(`/api/integrations/whatsapp/${connectionId}/chats/${encodeURIComponent(chatId)}/read`, { method: "POST" }),
+  deleteWhatsAppMessage: (connectionId: string, messageId: string, forEveryone: boolean) =>
+    apiFetch<void>(`/api/integrations/whatsapp/${connectionId}/messages/${encodeURIComponent(messageId)}/delete`, json({ forEveryone })),
+  editWhatsAppMessage: (connectionId: string, messageId: string, text: string) =>
+    apiFetch<void>(`/api/integrations/whatsapp/${connectionId}/messages/${encodeURIComponent(messageId)}/edit`, json({ text })),
+  forwardWhatsAppMessage: (connectionId: string, messageId: string, toChatId: string) =>
+    apiFetch<void>(`/api/integrations/whatsapp/${connectionId}/messages/${encodeURIComponent(messageId)}/forward`, json({ toChatId })),
+  starWhatsAppMessage: (connectionId: string, messageId: string, starred: boolean) =>
+    apiFetch<void>(`/api/integrations/whatsapp/${connectionId}/messages/${encodeURIComponent(messageId)}/star`, json({ starred })),
+  whatsAppPresence: (connectionId: string, chatId: string) =>
+    apiFetch<WhatsAppPresence>(`/api/integrations/whatsapp/${connectionId}/chats/${encodeURIComponent(chatId)}/presence`),
+  setWhatsAppPresence: (connectionId: string, chatId: string, state: "composing" | "paused" | "available") =>
+    apiFetch<void>(`/api/integrations/whatsapp/${connectionId}/chats/${encodeURIComponent(chatId)}/presence`, json({ state })),
+  whatsAppGroup: (connectionId: string, chatId: string) =>
+    apiFetch<WhatsAppGroupInfo>(`/api/integrations/whatsapp/${connectionId}/chats/${encodeURIComponent(chatId)}/group`),
+  setWhatsAppChatPrefs: (connectionId: string, chatId: string, prefs: { pinned?: boolean; archived?: boolean; muteHours?: number }) =>
+    apiFetch<void>(`/api/integrations/whatsapp/${connectionId}/chats/${encodeURIComponent(chatId)}/prefs`, { method: "PUT", body: JSON.stringify(prefs) }),
+  /** AI help on one conversation, only when asked: a summary, suggested replies, or a translation of one message. */
+  chatAssist: (channel: "whatsapp" | "telegram", connectionId: string, chatId: string, mode: "summary" | "suggest" | "translate", opts: { messageId?: string; language?: string } = {}) =>
+    apiFetch<ChatAssistResult>("/api/integrations/ai/chat-assist", json({ channel, connectionId, chatId, mode, ...opts })),
+  whatsAppGroupAction: (connectionId: string, chatId: string, action: "rename" | "description" | "invite" | "leave" | "add" | "remove" | "promote" | "demote", opts: { text?: string; participants?: string[] } = {}) =>
+    apiFetch<{ link: string | null }>(`/api/integrations/whatsapp/${connectionId}/chats/${encodeURIComponent(chatId)}/group-action`, json({ action, ...opts })),
+  setWhatsAppDisappearing: (connectionId: string, chatId: string, seconds: number) =>
+    apiFetch<void>(`/api/integrations/whatsapp/${connectionId}/chats/${encodeURIComponent(chatId)}/disappearing`, json({ seconds })),
+  blockWhatsAppChat: (connectionId: string, chatId: string, blocked: boolean) =>
+    apiFetch<void>(`/api/integrations/whatsapp/${connectionId}/chats/${encodeURIComponent(chatId)}/block`, json({ blocked })),
+  clearWhatsAppChat: (connectionId: string, chatId: string) =>
+    apiFetch<void>(`/api/integrations/whatsapp/${connectionId}/chats/${encodeURIComponent(chatId)}/clear`, { method: "POST" }),
+  searchWhatsApp: (connectionId: string, q: string) =>
+    apiFetch<WhatsAppSearchHit[]>(`/api/integrations/whatsapp/${connectionId}/search?q=${encodeURIComponent(q)}`),
 
   whatsAppFullSettings: (connectionId: string) => apiFetch<WhatsAppFullSettings>(`/api/integrations/whatsapp/${connectionId}/full-settings`),
   updateWhatsAppFullSettings: (connectionId: string, update: WhatsAppFullSettingsUpdate) =>

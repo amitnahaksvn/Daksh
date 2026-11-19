@@ -88,7 +88,9 @@ public static class ReplyGate
         @"^(call( me)?( back)?|please call( me)?|pls call( me)?|call karo|ring me|missed call|urgent|very urgent|important|help|help me|need help|need you|need your help|talk|can we talk|let'?s talk|are you there|you there|busy|are you busy|free|are you free|reply|respond|please reply|pls reply|come|where|where are you|asap|baat karni hai|baat karo|zaroori kaam|urgent hai|jaldi call karo|\?+)$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
-    public static GateDecision Evaluate(string? text, bool isGroup)
+    /// <param name="inConversation">True when this chat has been busy in the last few minutes. A short fragment is then part of that
+    /// conversation, so it goes to the owner as it is instead of the sender being asked to explain it.</param>
+    public static GateDecision Evaluate(string? text, bool isGroup, bool inConversation = false)
     {
         var raw = (text ?? "").Trim();
         if (raw.Length == 0) return new(GateVerdict.Silent, "Empty message.");
@@ -105,7 +107,7 @@ public static class ReplyGate
         if (urls.Count > 0 && withoutUrls.Length == 0) return isGroup ? new(GateVerdict.Silent, "A link in a group.") : new(GateVerdict.Boss, "A link was shared; the boss should look at it.");
 
         // A bare "?" / "???" means "why no reply?" — it needs the boss, but there is nothing to pass on yet.
-        if (Regex.IsMatch(raw, @"^\s*\?+\s*$")) return isGroup ? new(GateVerdict.Silent, "A bare question mark in a group.") : new(GateVerdict.BossAskMore, "A bare question mark — ask what they need.");
+        if (Regex.IsMatch(raw, @"^\s*\?+\s*$")) return isGroup ? new(GateVerdict.Silent, "A bare question mark in a group.") : inConversation ? new(GateVerdict.Boss, "A bare question mark in the middle of a conversation.") : new(GateVerdict.BossAskMore, "A bare question mark — ask what they need.");
 
         // 2) Symbols and emoji only.
         if (!raw.Any(c => char.IsLetterOrDigit(c))) return new(GateVerdict.Silent, "Emoji or symbols only.");
@@ -130,6 +132,8 @@ public static class ReplyGate
         if (isGroup) return new(GateVerdict.Silent, "A group message that needs a decision — the boss will see it; no reply in the group.");
         var body = string.Join(" ", other);
         var words = body.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+        if (inConversation && words <= 4)
+            return new(GateVerdict.Boss, "A short message that is part of an ongoing conversation — the owner should read it in context.");
         if (words <= 2 || Vague.IsMatch(Clean(body)))
             return new(GateVerdict.BossAskMore, "A request with no detail — ask for more information before passing it on.");
         return new(GateVerdict.Boss, NeedsBoss.IsMatch(body) ? "Asks for a decision, commitment or information." : "Not a simple greeting — only the boss can answer this.");
@@ -198,11 +202,11 @@ public static class ReplyGateFlow
 {
     public static async Task<GateOutcome> ResolveAsync(
         IMongoDatabase db, WhatsAppSettings settings, string connectionId, string chatId, string? chatName, string text, bool isGroup,
-        Func<DateTime, Task<bool>> ownerRepliedSince, DateTime nowUtc, GateVerdict? forced = null, CancellationToken ct = default)
+        Func<DateTime, Task<bool>> ownerRepliedSince, DateTime nowUtc, GateVerdict? forced = null, CancellationToken ct = default, bool inConversation = false)
     {
         if (!settings.ReplyGateEnabled && forced is null) return new(GateAction.UseAi, null, "The reply gate is turned off.");
 
-        var decision = forced is { } f ? new GateDecision(f, "The AI said this needs the boss.") : ReplyGate.Evaluate(text, isGroup);
+        var decision = forced is { } f ? new GateDecision(f, "The AI said this needs the boss.") : ReplyGate.Evaluate(text, isGroup, inConversation);
         switch (decision.Verdict)
         {
             case GateVerdict.Silent: return new(GateAction.Silent, null, decision.Reason);

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { applyAppearance, readStylePref, readThemePref, setStylePref, setThemePref, STYLE_KEY, THEME_KEY } from "./theme";
+import { applyAppearance, DEFAULT_STYLE, readStylePref, readThemePref, setStylePref, setThemePref, STYLE_KEY, THEME_KEY, THEMES } from "./theme";
 
 /** A tiny in-memory localStorage: the one Node provides is unusable without a file, and jsdom's is shadowed by it. */
 function memoryStorage(): Storage {
@@ -27,11 +27,11 @@ describe("appearance", () => {
     mockSystem(false);
   });
 
-  it("defaults to Bento, following the system", () => {
-    expect(readStylePref()).toBe("bento");
+  it("defaults to the recommended hybrid theme, following the system", () => {
+    expect(readStylePref()).toBe(DEFAULT_STYLE);
     expect(readThemePref()).toBe("system");
     applyAppearance();
-    expect(document.documentElement.dataset.style).toBe("bento");
+    expect(document.documentElement.dataset.style).toBe("hybrid");
     expect(document.documentElement.classList.contains("dark")).toBe(false);
   });
 
@@ -43,19 +43,35 @@ describe("appearance", () => {
     expect(document.documentElement.classList.contains("dark")).toBe(false);
   });
 
-  it("Neural is always night, whatever Day or Auto says", () => {
-    setThemePref("light");
-    setStylePref("neural");
-    expect(document.documentElement.dataset.style).toBe("neural");
-    expect(document.documentElement.classList.contains("dark")).toBe(true);
-    setStylePref("bento");
-    expect(document.documentElement.classList.contains("dark")).toBe(false);
-  });
-
   it("ignores values it does not know", () => {
     window.localStorage.setItem(STYLE_KEY, "sparkle");
     window.localStorage.setItem(THEME_KEY, "purple");
-    expect(readStylePref()).toBe("bento");
+    expect(readStylePref()).toBe(DEFAULT_STYLE);
     expect(readThemePref()).toBe("system");
+  });
+
+  it("no longer offers the old Bento, Neural and Aurora styles", () => {
+    expect(THEMES.map((t) => t.id)).not.toContain("bento");
+    window.localStorage.setItem(STYLE_KEY, "neural");
+    expect(readStylePref()).toBe(DEFAULT_STYLE);
+  });
+
+  it("offers all ten new themes, each with a day and a night look", () => {
+    const ids = THEMES.map((t) => t.id);
+    for (const id of ["sandhya", "prana", "yantra", "hybrid", "rangoli", "ratna", "galaxy", "mitra", "nakshatra", "kavach"]) expect(ids).toContain(id);
+    setStylePref("galaxy");
+    expect(readStylePref()).toBe("galaxy");
+    expect(document.documentElement.dataset.style).toBe("galaxy");
+    setThemePref("dark");
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+    setThemePref("light");
+    expect(document.documentElement.classList.contains("dark")).toBe(false);
+  });
+
+  it("loads the active theme's fonts and swaps them when the theme changes", () => {
+    setStylePref("sandhya");
+    expect(document.getElementById("daksh-theme-fonts")?.getAttribute("href")).toContain("Fraunces");
+    setStylePref("prana");
+    expect(document.getElementById("daksh-theme-fonts")?.getAttribute("href")).toContain("Sora");
   });
 });

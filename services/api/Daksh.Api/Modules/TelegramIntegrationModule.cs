@@ -10,6 +10,9 @@ using MongoDB.Driver;
 
 namespace Daksh.Api.Modules;
 
+public sealed class TelegramReaction { public string Emoji { get; set; } = ""; public int Count { get; set; } public bool Mine { get; set; } }
+
+[BsonIgnoreExtraElements]
 public sealed class TelegramMessage
 {
     [BsonId, BsonRepresentation(BsonType.ObjectId)] public string Id { get; set; } = ObjectId.GenerateNewId().ToString();
@@ -24,13 +27,32 @@ public sealed class TelegramMessage
     public string? SenderName { get; set; }
     public List<string> Tags { get; set; } = [];
     public required string Text { get; set; }
+    /// <summary>True when the Node service stored the attachment's bytes in "telegramMedia".</summary>
+    public bool HasMedia { get; set; }
+    /// <summary>photo, video, audio, voice, document or sticker.</summary>
+    public string? MediaKind { get; set; }
+    public string? MimeType { get; set; }
+    public string? FileName { get; set; }
+    /// <summary>Outgoing only: 1 pending, 2 sent, 4 read.</summary>
+    public int? Status { get; set; }
+    public bool Deleted { get; set; }
+    public bool Edited { get; set; }
+    /// <summary>"Delete for me": hidden in Daksha only.</summary>
+    public bool Hidden { get; set; }
+    public bool Starred { get; set; }
+    public string? ReplyToId { get; set; }
+    public List<TelegramReaction> Reactions { get; set; } = [];
     public DateTime Timestamp { get; set; }
 }
 
 public sealed record TelegramPasswordRequest(string? Password);
-public sealed record TelegramSendRequest(string? Text);
-public sealed record TelegramChatDto(string ChatId, string Name, bool IsGroup, string? LastMessagePreview, DateTime? LastMessageAt, int UnreadCount);
-public sealed record TelegramMessageDto(string MessageId, string ChatId, bool FromMe, bool IsAiGenerated, string? SenderName, string Text, DateTime Timestamp);
+public sealed record TelegramSendRequest(string? Text, string? ReplyToId = null);
+public sealed record TelegramChatDto(string ChatId, string Name, bool IsGroup, string? LastMessagePreview, DateTime? LastMessageAt, int UnreadCount,
+    bool Pinned = false, bool Archived = false, DateTime? MutedUntil = null);
+public sealed record TelegramReactionDto(string Emoji, int Count, bool Mine);
+public sealed record TelegramMessageDto(string MessageId, string ChatId, bool FromMe, bool IsAiGenerated, string? SenderName, string Text, DateTime Timestamp, bool HasMedia = false,
+    string? MediaKind = null, string? MimeType = null, string? FileName = null, int? Status = null, bool Deleted = false, bool Edited = false, bool Starred = false,
+    string? ReplyToId = null, string? ReplyToText = null, IReadOnlyList<TelegramReactionDto>? Reactions = null);
 public sealed record TelegramState(string Status, string? Qr, DateTime? ExpiresAt, bool PasswordRequired, string? Error);
 
 /// <summary>What the Telegram Node service POSTs back: either a connection-status change or one message
@@ -38,7 +60,7 @@ public sealed record TelegramState(string Status, string? Qr, DateTime? ExpiresA
 public sealed record TelegramInternalEvent(
     string ConnectionId, string EventType, string? Status, string? AccountIdentifier, string? Error,
     string? MessageId, string? ChatId, string? ChatName, bool IsGroup, bool FromMe, string? SenderName,
-    string? Text, DateTime? Timestamp, bool History);
+    string? Text, DateTime? Timestamp, bool History, bool HasMedia = false, string? MediaKind = null, string? MimeType = null, string? FileName = null, string? ReplyToId = null);
 
 /// <summary>Talks to the Telegram Node service (GramJS / MTProto), which holds each user's signed-in session.</summary>
 public sealed class TelegramIntegrationProvider(HttpClient http) : IIntegrationProvider
@@ -96,9 +118,30 @@ public sealed class TelegramIntegrationProvider(HttpClient http) : IIntegrationP
     private sealed record SendReply(string MessageId, DateTime Timestamp);
     private sealed record ErrorBody(string? Error);
 
-    public async Task<(string MessageId, DateTime Timestamp)> SendAsync(string connectionId, string chatId, string text, CancellationToken ct)
+    /// <summary>One call to the Telegram service: POST a JSON body (or GET when <paramref name="body"/> is null and <paramref name="get"/> is set). Errors carry the service's own message.</summary>
+    public async Task<System.Text.Json.JsonElement> CallAsync(string path, object? body, CancellationToken ct, bool get = false)
     {
-        using var res = await http.PostAsJsonAsync($"/sessions/{connectionId}/send", new { chatId, text }, ct);
+        using var res = get ? await http.GetAsync(path, ct) : await http.PostAsJsonAsync(path, body ?? new { }, ct);
+        var text = await res.Content.ReadAsStringAsync(ct);
+        if (!res.IsSuccessStatusCode)
+        {
+            var message = text;
+            try { using var d = System.Text.Json.JsonDocument.Parse(text); if (d.RootElement.TryGetProperty("error", out var e) && e.ValueKind == System.Text.Json.JsonValueKind.String) message = e.GetString() ?? text; } catch { /* raw text */ }
+            throw new InvalidOperationException(message);
+        }
+        return string.IsNullOrWhiteSpace(text) ? default : System.Text.Json.JsonDocument.Parse(text).RootElement.Clone();
+    }
+
+    /// <summary>The chat's profile (or group) picture, or null when it has none.</summary>
+    public async Task<byte[]?> GetProfilePictureAsync(string connectionId, string chatId, CancellationToken ct)
+    {
+        using var res = await http.GetAsync($"/sessions/{connectionId}/profile-picture?chatId={Uri.EscapeDataString(chatId)}", ct);
+        return res.IsSuccessStatusCode ? await res.Content.ReadAsByteArrayAsync(ct) : null;
+    }
+
+    public async Task<(string MessageId, DateTime Timestamp)> SendAsync(string connectionId, string chatId, string text, CancellationToken ct, string? replyToId = null)
+    {
+        using var res = await http.PostAsJsonAsync($"/sessions/{connectionId}/send", new { chatId, text, replyToId }, ct);
         if (!res.IsSuccessStatusCode)
         {
             var err = await res.Content.ReadFromJsonAsync<ErrorBody>(cancellationToken: ct);
@@ -139,6 +182,9 @@ public static class TelegramIntegrationModule
         authed.MapGet("/{connectionId}/chats", ListChatsAsync);
         authed.MapGet("/{connectionId}/chats/{chatId}/messages", ListMessagesAsync);
         authed.MapPost("/{connectionId}/chats/{chatId}/messages", SendAsync);
+        authed.MapGet("/{connectionId}/chats/{chatId}/picture", PictureAsync);
+        authed.MapGet("/{connectionId}/media/{chatId}/{messageId}", MediaAsync);
+        TelegramFeaturesModule.Map(authed);
         // System-to-system only, authenticated by the shared internal key (never the user JWT).
         g.MapPost("/internal/events", ReceiveEventAsync).AllowAnonymous();
     }
@@ -156,7 +202,7 @@ public static class TelegramIntegrationModule
             Builders<IntegrationCatalogEntry>.Update.Set(c => c.IsEnabled, true), cancellationToken: ct);
     }
 
-    private static Task<IntegrationConnection?> OwnedAsync(IMongoDatabase db, string connectionId, string userId, CancellationToken ct) =>
+    internal static Task<IntegrationConnection?> OwnedAsync(IMongoDatabase db, string connectionId, string userId, CancellationToken ct) =>
         db.GetCollection<IntegrationConnection>("integrationConnections")
             .Find(c => c.Id == connectionId && c.UserId == userId && c.IntegrationKey == IntegrationKey).FirstOrDefaultAsync(ct)!;
 
@@ -212,27 +258,59 @@ public static class TelegramIntegrationModule
         var connection = await OwnedAsync(db, connectionId, who.UserId, ct);
         if (connection is null) return Results.NotFound();
         var recent = await db.GetCollection<TelegramMessage>("telegramMessages")
-            .Find(m => m.ConnectionId == connectionId).SortByDescending(m => m.Timestamp).Limit(1500).ToListAsync(ct);
+            .Find(m => m.ConnectionId == connectionId && !m.Hidden).SortByDescending(m => m.Timestamp).Limit(1500).ToListAsync(ct);
+        var prefs = (await db.GetCollection<WhatsAppChatPref>("telegramChatPrefs").Find(p => p.ConnectionId == connectionId).ToListAsync(ct)).ToDictionary(p => p.ChatId);
         var lastViewed = connection.LastViewedAt ?? DateTime.MinValue;
         var chats = recent.GroupBy(m => m.ChatId).Select(g =>
         {
             var last = g.First();
             var name = g.FirstOrDefault(m => !string.IsNullOrWhiteSpace(m.ChatName))?.ChatName ?? g.Key;
-            return new TelegramChatDto(g.Key, name, last.IsGroup, last.Text, last.Timestamp, g.Count(m => !m.FromMe && m.Timestamp > lastViewed));
-        }).OrderByDescending(c => c.LastMessageAt).ToList();
+            prefs.TryGetValue(g.Key, out var pref);
+            return new TelegramChatDto(g.Key, name, last.IsGroup, last.Text, last.Timestamp, g.Count(m => !m.FromMe && m.Timestamp > lastViewed), pref?.Pinned ?? false, pref?.Archived ?? false, pref?.MutedUntil);
+        }).OrderByDescending(c => c.Pinned).ThenByDescending(c => c.LastMessageAt).ToList();
         return Results.Ok(chats);
     }
 
-    private static async Task<IResult> ListMessagesAsync(string connectionId, string chatId, IMongoDatabase db, ClaimsPrincipalAccessor who, CancellationToken ct)
+    private static async Task<IResult> ListMessagesAsync(string connectionId, string chatId, int? limit, IMongoDatabase db, ClaimsPrincipalAccessor who, CancellationToken ct)
     {
         var connection = await OwnedAsync(db, connectionId, who.UserId, ct);
         if (connection is null) return Results.NotFound();
         var page = await db.GetCollection<TelegramMessage>("telegramMessages")
-            .Find(m => m.ConnectionId == connectionId && m.ChatId == chatId).SortByDescending(m => m.Timestamp).Limit(200).ToListAsync(ct);
+            .Find(m => m.ConnectionId == connectionId && m.ChatId == chatId && !m.Hidden).SortByDescending(m => m.Timestamp).Limit(Math.Clamp(limit ?? 200, 1, 1000)).ToListAsync(ct);
         page.Reverse();
         await db.GetCollection<IntegrationConnection>("integrationConnections").UpdateOneAsync(c => c.Id == connectionId,
             Builders<IntegrationConnection>.Update.Set(c => c.LastViewedAt, DateTime.UtcNow), cancellationToken: ct);
-        return Results.Ok(page.Select(m => new TelegramMessageDto(m.MessageId, m.ChatId, m.FromMe, m.IsAiGenerated, m.SenderName, m.Text, m.Timestamp)));
+        var byId = page.ToDictionary(m => m.MessageId, m => m.Text);
+        return Results.Ok(page.Select(m => ToDto(m, m.ReplyToId is not null ? byId.GetValueOrDefault(m.ReplyToId) : null)));
+    }
+
+    internal static TelegramMessageDto ToDto(TelegramMessage m, string? replyToText = null) => new(m.MessageId, m.ChatId, m.FromMe, m.IsAiGenerated, m.SenderName, m.Text, m.Timestamp, m.HasMedia,
+        m.MediaKind, m.MimeType, m.FileName, m.Status, m.Deleted, m.Edited, m.Starred, m.ReplyToId, replyToText, m.Reactions.Select(r => new TelegramReactionDto(r.Emoji, r.Count, r.Mine)).ToList());
+
+    private static async Task<IResult> PictureAsync(string connectionId, string chatId, IMongoDatabase db, TelegramIntegrationProvider provider, ClaimsPrincipalAccessor who, CancellationToken ct)
+    {
+        if (await OwnedAsync(db, connectionId, who.UserId, ct) is null) return Results.NotFound();
+        try
+        {
+            var data = await provider.GetProfilePictureAsync(connectionId, chatId, ct);
+            return data is null ? Results.NotFound() : Results.File(data, "image/jpeg");
+        }
+        catch (HttpRequestException) { return Results.NotFound(); } // the Telegram service is down: no picture, not an error
+    }
+
+    private static async Task<IResult> MediaAsync(string connectionId, string chatId, string messageId, IMongoDatabase db, ClaimsPrincipalAccessor who, CancellationToken ct)
+    {
+        if (await OwnedAsync(db, connectionId, who.UserId, ct) is null) return Results.NotFound();
+        var doc = await db.GetCollection<MongoDB.Bson.BsonDocument>("telegramMedia").Find(Builders<MongoDB.Bson.BsonDocument>.Filter.And(
+            Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("connectionId", connectionId),
+            Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("chatId", chatId),
+            Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("messageId", messageId))).FirstOrDefaultAsync(ct);
+        if (doc is null || !doc.TryGetValue("data", out var data) || !data.IsBsonBinaryData) return Results.NotFound();
+        var mime = doc.TryGetValue("mimeType", out var m) && m.IsString ? m.AsString : "image/jpeg";
+        var message = await db.GetCollection<TelegramMessage>("telegramMessages").Find(x => x.ConnectionId == connectionId && x.ChatId == chatId && x.MessageId == messageId).FirstOrDefaultAsync(ct);
+        return message?.MediaKind == "document"
+            ? Results.File(data.AsBsonBinaryData.Bytes, mime, message.FileName ?? "file")
+            : Results.File(data.AsBsonBinaryData.Bytes, mime, enableRangeProcessing: true);
     }
 
     private static async Task<IResult> SendAsync(string connectionId, string chatId, TelegramSendRequest req, IMongoDatabase db, TelegramIntegrationProvider provider, ClaimsPrincipalAccessor who, CancellationToken ct)
@@ -240,14 +318,14 @@ public static class TelegramIntegrationModule
         var connection = await OwnedAsync(db, connectionId, who.UserId, ct);
         if (connection is null) return Results.NotFound();
         if (string.IsNullOrWhiteSpace(req.Text)) return Results.Problem(statusCode: 400, title: "Message text is required.");
-        try { return Results.Ok(await SendAndStoreAsync(db, provider, connection.Id, chatId, req.Text.Trim(), isAiGenerated: false, ct)); }
+        try { return Results.Ok(await SendAndStoreAsync(db, provider, connection.Id, chatId, req.Text.Trim(), isAiGenerated: false, ct, req.ReplyToId)); }
         catch (InvalidOperationException ex) { return Results.Problem(statusCode: 409, title: ex.Message); }
         catch (HttpRequestException) { return Results.Problem(statusCode: 502, title: "The Telegram service is not running."); }
     }
 
-    internal static async Task<TelegramMessageDto> SendAndStoreAsync(IMongoDatabase db, TelegramIntegrationProvider provider, string connectionId, string chatId, string text, bool isAiGenerated, CancellationToken ct)
+    internal static async Task<TelegramMessageDto> SendAndStoreAsync(IMongoDatabase db, TelegramIntegrationProvider provider, string connectionId, string chatId, string text, bool isAiGenerated, CancellationToken ct, string? replyToId = null)
     {
-        var (messageId, timestamp) = await provider.SendAsync(connectionId, chatId, text, ct);
+        var (messageId, timestamp) = await provider.SendAsync(connectionId, chatId, text, ct, replyToId);
         var existing = await db.GetCollection<TelegramMessage>("telegramMessages").Find(m => m.ConnectionId == connectionId && m.ChatId == chatId).SortByDescending(m => m.Timestamp).Limit(1).FirstOrDefaultAsync(ct);
         var stored = new TelegramMessage
         {
@@ -261,7 +339,8 @@ public static class TelegramIntegrationModule
             Builders<TelegramMessage>.Update
                 .Set(m => m.IsAiGenerated, isAiGenerated).Set(m => m.FromMe, true)
                 .SetOnInsert(m => m.ChatName, stored.ChatName).SetOnInsert(m => m.IsGroup, stored.IsGroup)
-                .SetOnInsert(m => m.SenderName, "Me").SetOnInsert(m => m.Text, text).SetOnInsert(m => m.Timestamp, timestamp),
+                .SetOnInsert(m => m.SenderName, "Me").SetOnInsert(m => m.Text, text).SetOnInsert(m => m.Timestamp, timestamp)
+                .SetOnInsert(m => m.Status, 2).SetOnInsert(m => m.ReplyToId, replyToId),
             new UpdateOptions { IsUpsert = true }, ct);
         return new TelegramMessageDto(messageId, chatId, true, isAiGenerated, "Me", text, timestamp);
     }
@@ -294,12 +373,20 @@ public static class TelegramIntegrationModule
             return Results.Ok();
         }
 
+        // A stored message changed (read ticks, deleted, edited, reaction): tell open threads to refresh.
+        if (evt.EventType == "MessageUpdated")
+        {
+            await IntegrationEvents.PublishAsync(hub, connection.UserId, "TelegramMessageUpdated", new { connectionId = evt.ConnectionId, chatId = evt.ChatId, messageId = evt.MessageId });
+            return Results.Ok();
+        }
+
         if (evt.EventType != "Message" || evt.MessageId is null || evt.ChatId is null || string.IsNullOrEmpty(evt.Text)) return Results.Ok();
 
         var stored = new TelegramMessage
         {
             ConnectionId = connection.Id, ChatId = evt.ChatId, ChatName = evt.ChatName, IsGroup = evt.IsGroup, MessageId = evt.MessageId,
-            FromMe = evt.FromMe, SenderName = evt.SenderName, Text = evt.Text, Timestamp = (evt.Timestamp ?? DateTime.UtcNow).ToUniversalTime(),
+            FromMe = evt.FromMe, SenderName = evt.SenderName, Text = evt.Text, HasMedia = evt.HasMedia, MediaKind = evt.MediaKind, MimeType = evt.MimeType, FileName = evt.FileName,
+            ReplyToId = evt.ReplyToId, Status = evt.FromMe ? 2 : null, Timestamp = (evt.Timestamp ?? DateTime.UtcNow).ToUniversalTime(),
         };
         try { await db.GetCollection<TelegramMessage>("telegramMessages").InsertOneAsync(stored, cancellationToken: ct); }
         catch (MongoWriteException ex) when (ex.WriteError.Category == ServerErrorCategory.DuplicateKey)
@@ -308,6 +395,9 @@ public static class TelegramIntegrationModule
             if (!string.IsNullOrEmpty(evt.ChatName))
                 await db.GetCollection<TelegramMessage>("telegramMessages").UpdateOneAsync(m => m.ConnectionId == connection.Id && m.ChatId == evt.ChatId && m.MessageId == evt.MessageId,
                     Builders<TelegramMessage>.Update.Set(m => m.ChatName, evt.ChatName), cancellationToken: ct);
+            if (evt.HasMedia)
+                await db.GetCollection<TelegramMessage>("telegramMessages").UpdateOneAsync(m => m.ConnectionId == connection.Id && m.ChatId == evt.ChatId && m.MessageId == evt.MessageId,
+                    Builders<TelegramMessage>.Update.Set(m => m.HasMedia, true), cancellationToken: ct);
             return Results.Ok();
         }
 

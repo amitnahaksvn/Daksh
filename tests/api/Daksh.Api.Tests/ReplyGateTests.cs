@@ -154,4 +154,65 @@ public class ReplyGateTests
         Assert.Equal("my boss", s.BossReference);
         Assert.Equal(240, s.GateHoldingCooldownMinutes);
     }
+
+    [Fact]
+    public void A_short_fragment_in_a_busy_conversation_goes_to_the_owner_instead_of_asking_for_detail()
+    {
+        // "Office party" alone looks vague, but in the middle of a conversation it is a question about plans.
+        Assert.Equal(GateVerdict.BossAskMore, ReplyGate.Evaluate("Office party", false, inConversation: false).Verdict);
+        Assert.Equal(GateVerdict.Boss, ReplyGate.Evaluate("Office party", false, inConversation: true).Verdict);
+        Assert.Equal(GateVerdict.Boss, ReplyGate.Evaluate("?", false, inConversation: true).Verdict);
+    }
+
+    [Fact]
+    public void The_assistant_stays_out_of_a_chat_the_owner_just_wrote_in()
+    {
+        var now = new DateTime(2026, 11, 19, 12, 0, 0, DateTimeKind.Utc);
+        Assert.True(IntegrationsModule.IsOwnerActive(now.AddMinutes(-3), now));
+        Assert.False(IntegrationsModule.IsOwnerActive(now.AddMinutes(-16), now));
+        Assert.False(IntegrationsModule.IsOwnerActive(null, now));
+    }
+
+    [Fact]
+    public void The_prompt_tells_the_model_to_read_the_conversation_and_hand_over_questions_about_plans()
+    {
+        var prompt = IntegrationsModule.BuildAutoReplyPrompt(new WhatsAppSettings { ConnectionId = "c" }, "1@s.whatsapp.net", "Yaashicca", "Office party", false);
+        Assert.Contains("read them first", prompt);
+        Assert.Contains("NEED_BOSS", prompt);
+        Assert.Contains("plans", prompt);
+    }
+
+    [Fact]
+    public void The_name_saved_in_the_phone_beats_the_name_the_person_chose_and_our_own_name_is_never_used()
+    {
+        var saved = new Dictionary<string, string> { ["1@lid"] = "Yashika (saved)" };
+        var self = new Dictionary<string, string> { ["1@lid"] = "Yaashicca", ["2@lid"] = "Rohan K" };
+        var msgs = new[] { (FromMe: true, ChatName: (string?)"Aj"), (FromMe: false, ChatName: (string?)"Pushname") };
+        Assert.Equal("Yashika (saved)", IntegrationsModule.PickChatName("1@lid", saved, self, msgs));
+        Assert.Equal("Rohan K", IntegrationsModule.PickChatName("2@lid", saved, self, msgs));
+        Assert.Equal("Pushname", IntegrationsModule.PickChatName("3@lid", saved, self, msgs));
+        Assert.Null(IntegrationsModule.PickChatName("3@lid", saved, self, new[] { (FromMe: true, ChatName: (string?)"Aj") })); // never our own name
+        Assert.Null(IntegrationsModule.PickChatName("120@g.us", saved, self, msgs)); // a group message carries the sender's name
+    }
+
+    [Theory]
+    [InlineData("image/jpeg", "image")]
+    [InlineData("video/mp4", "video")]
+    [InlineData("audio/ogg", "audio")]
+    [InlineData("application/pdf", "document")]
+    public void Files_are_sent_as_the_right_kind_of_attachment(string mime, string kind) =>
+        Assert.Equal(kind, WhatsAppFeaturesModule.KindFor(mime));
+
+    [Fact]
+    public void Chat_assist_builds_a_labelled_transcript_and_parses_three_suggestions()
+    {
+        var t0 = new DateTime(2026, 11, 19, 10, 0, 0, DateTimeKind.Utc);
+        var transcript = ChatAssistModule.Transcript([(false, "Are you coming?", t0.AddMinutes(1)), (true, "Maybe", t0)]);
+        Assert.Equal("Me: Maybe\nThem: Are you coming?", transcript); // oldest first, who said what
+        Assert.Equal(["Sounds good", "Let me check", "Can't make it"], ChatAssistModule.ParseSuggestions("1. Sounds good\n2) \"Let me check\"\n- Can't make it\nextra four"));
+        Assert.Empty(ChatAssistModule.ParseSuggestions(null));
+        Assert.Contains("must not promise", ChatAssistModule.PromptFor("suggest", "Them: hi", null, null));
+        Assert.Contains("French", ChatAssistModule.PromptFor("translate", "", "Bonjour", "French"));
+        Assert.Throws<ArgumentException>(() => ChatAssistModule.PromptFor("nope", "", null, null));
+    }
 }

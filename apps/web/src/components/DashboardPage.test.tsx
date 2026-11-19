@@ -12,6 +12,7 @@ vi.mock("./DashboardWidgets", () => ({
     </div>
   ),
 }));
+vi.mock("./CommandCentre", () => ({ CommandCentre: () => null }));
 vi.mock("./GmailDashboardCard", () => ({
   GmailDashboardCard: () => <div>Gmail dashboard</div>, GmailCardPlaceholder: () => null, GMAIL_CARD_HINT_KEY: "test.hint",
 }));

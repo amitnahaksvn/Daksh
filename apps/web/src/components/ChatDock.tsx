@@ -1,6 +1,8 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { BrandIcon, BrandTile } from "@/components/integrations";
+import { ChatAvatar } from "@/components/ChatAvatar";
 import { ChatThread, chatDisplayName } from "@/components/WhatsAppChatsPanel";
 import { TelegramThread } from "@/components/TelegramChatsPanel";
 import { api, type TelegramChat, type WhatsAppChat } from "@/lib/api";
@@ -8,8 +10,8 @@ import { useHiddenChatConnections } from "@/lib/chatVisibility";
 import { getIntegrationsHub } from "@/lib/signalr";
 
 type Channel = "whatsapp" | "telegram";
-type Account = { connectionId: string; chats: WhatsAppChat[] | TelegramChat[] };
-type Row = { channel: Channel; connectionId: string; chatId: string; name: string; isGroup: boolean; preview: string; at: string; unread: number };
+type Account = { connectionId: string; chats: WhatsAppChat[] | TelegramChat[]; status: string; error: string | null };
+type Row = { channel: Channel; connectionId: string; chatId: string; name: string; isGroup: boolean; preview: string; at: string; unread: number; pinned?: boolean; muted?: boolean };
 
 const LABEL: Record<Channel, string> = { whatsapp: "WhatsApp", telegram: "Telegram" };
 // The real brand marks (the same ones the Apps page uses).
@@ -39,6 +41,14 @@ function useDesktop(): boolean {
   );
 }
 
+/** Plain-language description of a connection that is not healthy, or null when it is fine. */
+export function connectionIssue(status: string, error: string | null): string | null {
+  if (status === "Connected") return null;
+  if (status === "Connecting") return "Reconnecting…";
+  if (status === "Error") return error ? `Problem: ${error}` : "The connection reported an error.";
+  return "Not connected. New messages will not arrive.";
+}
+
 function shortTime(iso: string): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -61,15 +71,29 @@ export function ChatDock() {
   const [query, setQuery] = useState("");
   const [closedGroups, setClosedGroups] = useState<Set<Channel>>(new Set());
 
+  // The last accounts we successfully saw. A failed or in-between refresh must never make the panel vanish.
+  const accountsRef = useRef<Partial<Record<Channel, Account>>>({});
   const refresh = useCallback(async () => {
-    const [wa, tg] = await Promise.all([api.appDetail("whatsapp").catch(() => null), api.appDetail("telegram").catch(() => null)]);
+    type Probe = { ok: true; connection: { connectionId: string; status: string; lastError: string | null } | null } | { ok: false };
+    const probe = (key: Channel): Promise<Probe> => api.appDetail(key).then((d): Probe => ({ ok: true, connection: d.connection }), (): Probe => ({ ok: false }));
+    const [wa, tg] = await Promise.all([probe("whatsapp"), probe("telegram")]);
+    const previous = accountsRef.current;
     const next: Partial<Record<Channel, Account>> = {};
-    if (wa?.connection?.status === "Connected") {
-      next.whatsapp = { connectionId: wa.connection.connectionId, chats: await api.whatsAppChats(wa.connection.connectionId).catch(() => []) };
-    }
-    if (tg?.connection?.status === "Connected") {
-      next.telegram = { connectionId: tg.connection.connectionId, chats: await api.telegramChats(tg.connection.connectionId).catch(() => []) };
-    }
+    const settle = async (channel: Channel, p: Probe) => {
+      if (!p.ok) { if (previous[channel]) next[channel] = previous[channel]; return; } // transient failure: keep what we had
+      const c = p.connection;
+      if (!c) return; // never connected: nothing to show
+      // Any existing connection stays in the panel, so a problem is visible where the chats are. Chats are only fetched
+      // while the connection is up; otherwise the last known ones stay (dimmed) next to the problem.
+      const fallback = previous[channel]?.connectionId === c.connectionId ? previous[channel]!.chats : [];
+      const up = c.status === "Connected" || c.status === "Connecting";
+      const chats = !up ? fallback : channel === "whatsapp"
+        ? await api.whatsAppChats(c.connectionId).catch(() => fallback)
+        : await api.telegramChats(c.connectionId).catch(() => fallback);
+      next[channel] = { connectionId: c.connectionId, chats, status: c.status, error: c.lastError } as Account;
+    };
+    await Promise.all([settle("whatsapp", wa), settle("telegram", tg)]);
+    accountsRef.current = next;
     setAccounts(next);
   }, []);
 
@@ -131,10 +155,10 @@ export function ChatDock() {
       .map((channel) => {
         const account = accounts[channel]!;
         const rows: Row[] = channel === "whatsapp"
-          ? (account.chats as WhatsAppChat[]).map((c) => ({ channel, connectionId: account.connectionId, chatId: c.chatId, name: chatDisplayName(c), isGroup: c.isGroup, preview: c.lastMessagePreview, at: c.lastMessageAt, unread: c.unreadCount }))
+          ? (account.chats as WhatsAppChat[]).filter((c) => !c.archived).map((c) => ({ channel, connectionId: account.connectionId, chatId: c.chatId, name: chatDisplayName(c), isGroup: c.isGroup, preview: c.lastMessagePreview, at: c.lastMessageAt, unread: c.unreadCount, pinned: c.pinned, muted: Boolean(c.mutedUntil && new Date(c.mutedUntil).getTime() > Date.now()) }))
           : (account.chats as TelegramChat[]).map((c) => ({ channel, connectionId: account.connectionId, chatId: c.chatId, name: c.name, isGroup: c.isGroup, preview: c.lastMessagePreview ?? "", at: c.lastMessageAt ?? "", unread: c.unreadCount }));
         const filtered = q ? rows.filter((r) => r.name.toLowerCase().includes(q) || r.preview.toLowerCase().includes(q)) : rows;
-        return { channel, connectionId: account.connectionId, rows: filtered, unread: rows.reduce((n, r) => n + r.unread, 0) };
+        return { channel, connectionId: account.connectionId, rows: filtered, unread: rows.reduce((n, r) => n + r.unread, 0), status: account.status, error: account.error };
       });
   }, [accounts, hidden, query]);
 
@@ -220,6 +244,7 @@ export function ChatDock() {
           <button key={g.channel} type="button" onClick={() => { setCollapsedPersisted(false); setClosedGroups((c) => { const n = new Set(c); n.delete(g.channel); return n; }); }} aria-label={`${LABEL[g.channel]}, ${g.unread} unread`} className="relative flex h-10 w-10 items-center justify-center rounded-full bg-surface-2 text-lg hover:bg-line">
             <BrandIcon icon={BRAND[g.channel].icon} color={BRAND[g.channel].color} size={22} />
             {g.unread > 0 && <span className="absolute -right-1 -top-1">{badge(g.unread)}</span>}
+            {g.status !== "Connected" && <span aria-label="Connection problem" className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-danger ring-2 ring-[var(--surface)]" />}
           </button>
         ))}
       </aside>
@@ -274,15 +299,21 @@ export function ChatDock() {
                     <span className="flex-1">{LABEL[g.channel]}</span>
                     {badge(g.unread)}
                   </button>
+                  {connectionIssue(g.status, g.error) && (
+                    <div role="alert" className="mx-2 mb-1 flex items-center gap-2 rounded-xl bg-danger-bg px-3 py-2 text-xs text-danger">
+                      <span className="min-w-0 flex-1">{connectionIssue(g.status, g.error)}</span>
+                      {g.status !== "Connecting" && <Link href={`/apps/${g.channel}`} className="shrink-0 rounded-full border border-current px-2.5 py-1 font-semibold">Reconnect</Link>}
+                    </div>
+                  )}
                   {open && (g.rows.length === 0 ? (
-                    <p className="px-3 py-2 text-xs text-muted">{query ? "No matches." : "No chats yet."}</p>
+                    <p className="px-3 py-2 text-xs text-muted">{query ? "No matches." : g.status === "Connected" ? "No chats yet." : "No chats to show."}</p>
                   ) : (
-                    <ul>
+                    <ul className={g.status === "Connected" ? "" : "opacity-60"}>
                       {g.rows.map((r) => (
                         <li key={r.chatId}>
                           <button type="button" onClick={() => openWindow(r.channel, r.chatId)} className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-surface-2">
                             <span className="relative shrink-0">
-                              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-lime text-sm font-bold text-on-tint">{r.name.slice(0, 1).toUpperCase()}</span>
+                              <ChatAvatar channel={r.channel} connectionId={r.connectionId} chatId={r.chatId} name={r.name} isGroup={r.isGroup} size={40} />
                               <span className="absolute -bottom-0.5 -right-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-white ring-2 ring-[var(--surface)]">
                                 <BrandIcon icon={BRAND[r.channel].icon} color={BRAND[r.channel].color} size={11} />
                               </span>
@@ -291,6 +322,8 @@ export function ChatDock() {
                               <span className="flex items-center gap-1.5">
                                 <span className={`truncate text-sm ${r.unread > 0 ? "font-extrabold" : "font-semibold"}`}>{r.name}</span>
                                 {r.isGroup && <span className="ai-mono rounded-full bg-surface-2 px-1.5 py-0.5 text-[9px] font-semibold text-muted">GROUP</span>}
+                                {r.pinned && <span aria-label="Pinned" className="text-[10px]">📌</span>}
+                                {r.muted && <span aria-label="Muted" className="text-[10px]">🔕</span>}
                               </span>
                               <span className={`block truncate text-xs ${r.unread > 0 ? "text-text" : "text-muted"}`}>{r.preview}</span>
                             </span>

@@ -2,7 +2,7 @@ import { config } from "./config.js";
 
 export type TelegramEvent = {
   connectionId: string;
-  eventType: "Status" | "Message";
+  eventType: "Status" | "Message" | "MessageUpdated";
   status?: string;
   accountIdentifier?: string;
   error?: string;
@@ -17,6 +17,14 @@ export type TelegramEvent = {
   timestamp?: string;
   /** Backfilled history: stored, but never notified or auto-replied to. */
   history?: boolean;
+  /** The photo's bytes are stored in the telegramMedia collection. */
+  hasMedia?: boolean;
+  /** photo, video, audio, voice, document or sticker, known even when the bytes were not downloaded. */
+  mediaKind?: string;
+  mimeType?: string;
+  fileName?: string;
+  /** The id of the message this one replies to. */
+  replyToId?: string;
 };
 
 export async function reportEvent(evt: TelegramEvent): Promise<void> {

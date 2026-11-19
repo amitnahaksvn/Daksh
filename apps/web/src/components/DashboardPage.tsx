@@ -5,6 +5,7 @@ import { DashboardAppCard } from "@/components/integrations";
 import { buttonClass, EmptyState, ErrorState, Loading, PageHeader } from "@/components/ui";
 import { GMAIL_CARD_HINT_KEY, GmailCardPlaceholder, GmailDashboardCard } from "@/components/GmailDashboardCard";
 import { DashboardHero } from "@/components/DashboardWidgets";
+import { CommandCentre } from "@/components/CommandCentre";
 import { api, type DashboardApp, type DashboardLayoutItem } from "@/lib/api";
 import { DashboardTile, getActiveTileDrag, getGrabOffsetX, type TileDrag } from "@/components/DashboardTile";
 import { GRID_COLUMNS, applySize, colOf, effectiveStart, heightOf, isCustomized, moveTile, placeTile, setTileCol, sortTiles, spanOf, startFromPointer, toLayoutPayload } from "@/lib/dashboardLayout";
@@ -13,7 +14,7 @@ import { useApi } from "@/lib/useApi";
 /** Messaging apps (WhatsApp, Telegram) live in the Chats sidebar on every page, so they are not tiles here. */
 const MESSAGING = new Set(["whatsapp", "telegram"]);
 
-function DashboardBody({ apps, onRemove, onReload }: { apps: DashboardApp[]; onRemove: (id: string) => void; onReload: () => void }) {
+function DashboardBody({ apps, allApps, onRemove, onReload }: { apps: DashboardApp[]; allApps: DashboardApp[]; onRemove: (id: string) => void; onReload: () => void }) {
   // The arrangement is local state seeded from the saved layout; every change is saved to the user's account after a short pause.
   const [tiles, setTiles] = useState(() => sortTiles(apps));
   const [seen, setSeen] = useState(apps);
@@ -117,6 +118,7 @@ function DashboardBody({ apps, onRemove, onReload }: { apps: DashboardApp[]; onR
   return (
     <>
       <DashboardHero apps={tiles} canResetLayout={isCustomized(tiles)} onResetLayout={() => void reset()} layoutSaveFailed={saveState === "error"} onRetryLayoutSave={() => schedule(tilesRef.current)} />
+      <CommandCentre apps={allApps} />
       <p className="sr-only" role="status" aria-live="polite">{announce}{saveState === "saved" ? " Layout saved." : ""}</p>
       <div className="relative" onDragOver={onGridDragOver} onDrop={onGridDrop}>
         {/* While a tile is being dragged or resized, the grid's columns show as dashed shadows so the empty places and snap points are visible. */}
@@ -183,7 +185,7 @@ export function DashboardPage() {
             </EmptyState>
           </>
         ) : (
-          <DashboardBody apps={state.data.filter((a) => !MESSAGING.has(a.integrationKey))} onRemove={remove} onReload={reload} />
+          <DashboardBody apps={state.data.filter((a) => !MESSAGING.has(a.integrationKey))} allApps={state.data} onRemove={remove} onReload={reload} />
         ))}
     </>
   );

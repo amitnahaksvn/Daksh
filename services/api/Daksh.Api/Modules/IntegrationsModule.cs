@@ -78,6 +78,19 @@ public sealed class WhatsAppMessage
     [BsonElement("text")] public required string Text { get; set; }
     /// <summary>True when the Node service stored the photo/sticker bytes in "whatsappMedia".</summary>
     [BsonElement("hasMedia")] public bool HasMedia { get; set; }
+    /// <summary>image, sticker, video, audio or document: known even before the bytes are downloaded.</summary>
+    [BsonElement("mediaKind")] public string? MediaKind { get; set; }
+    [BsonElement("mimeType")] public string? MimeType { get; set; }
+    [BsonElement("fileName")] public string? FileName { get; set; }
+    [BsonElement("mediaSeconds")] public int? MediaSeconds { get; set; }
+    [BsonElement("voiceNote")] public bool VoiceNote { get; set; }
+    /// <summary>Outgoing only: 1 pending, 2 sent, 3 delivered, 4 read, 5 played.</summary>
+    [BsonElement("status")] public int? Status { get; set; }
+    [BsonElement("deleted")] public bool Deleted { get; set; }
+    [BsonElement("edited")] public bool Edited { get; set; }
+    /// <summary>"Delete for me": hidden in Daksha only.</summary>
+    [BsonElement("hidden")] public bool Hidden { get; set; }
+    [BsonElement("starred")] public bool Starred { get; set; }
     [BsonElement("quotedMessageId")] public string? QuotedMessageId { get; set; }
     [BsonElement("quotedText")] public string? QuotedText { get; set; }
     [BsonElement("reactions")] public List<WhatsAppReaction> Reactions { get; set; } = [];
@@ -96,6 +109,7 @@ public sealed class WhatsAppContact
     [BsonElement("connectionId")] public required string ConnectionId { get; set; }
     [BsonElement("contactId")] public required string ContactId { get; set; }
     [BsonElement("lid")] public string? Lid { get; set; }
+    [BsonElement("phoneNumber")] public string? PhoneNumber { get; set; }
     [BsonElement("name")] public string? Name { get; set; }
     [BsonElement("notify")] public string? Notify { get; set; }
     [BsonElement("isBusiness")] public bool IsBusiness { get; set; }
@@ -158,8 +172,11 @@ public sealed record ConnectResponse(string ConnectionId, string Status);
 public sealed record WhatsAppReactionDto(string By, string Emoji);
 public sealed record WhatsAppMessageDto(
     string MessageId, string ChatId, string? ChatName, bool FromMe, bool IsAiGenerated, bool IsGroup, string Text,
-    string? QuotedMessageId, string? QuotedText, IReadOnlyList<WhatsAppReactionDto> Reactions, DateTime Timestamp, bool HasMedia = false);
-public sealed record WhatsAppChatDto(string ChatId, string? ChatName, bool IsGroup, string LastMessagePreview, DateTime LastMessageAt, int UnreadCount);
+    string? QuotedMessageId, string? QuotedText, IReadOnlyList<WhatsAppReactionDto> Reactions, DateTime Timestamp, bool HasMedia = false,
+    string? MediaKind = null, string? MimeType = null, string? FileName = null, int? MediaSeconds = null, bool VoiceNote = false,
+    int? Status = null, bool Deleted = false, bool Edited = false, bool Starred = false);
+public sealed record WhatsAppChatDto(string ChatId, string? ChatName, bool IsGroup, string LastMessagePreview, DateTime LastMessageAt, int UnreadCount,
+    bool Pinned = false, bool Archived = false, DateTime? MutedUntil = null);
 public sealed record SendWhatsAppMessageRequest(string Text, string? QuotedMessageId = null);
 public sealed record SendNewWhatsAppMessageRequest(string To, string Text);
 public sealed record ReactToWhatsAppMessageRequest(string Emoji);
@@ -230,6 +247,7 @@ public static class IntegrationsModule
         authed.MapPost("/whatsapp/{connectionId}/chats/{chatId}/messages", SendWhatsAppChatMessageAsync);
         authed.MapPost("/whatsapp/{connectionId}/send", SendNewWhatsAppMessageAsync);
         authed.MapPost("/whatsapp/{connectionId}/messages/{messageId}/react", ReactToWhatsAppMessageAsync);
+        WhatsAppFeaturesModule.Map(authed);
 
         // System-to-system only: the WhatsApp Node service reports connection events here, authenticated by a
         // shared secret header (never the user JWT scheme — this isn't called on behalf of any one browser).
@@ -671,7 +689,7 @@ public static class IntegrationsModule
             {
                 if (action.Type == "AiReply")
                 {
-                    await TryAutoReplyAsync(connection, settings, chatRule, isBusiness, force: true, evt.ChatId!, evt.ChatName, evt.Preview!, isGroup, db, orchestrator, whatsApp, logger, ct);
+                    await TryAutoReplyAsync(connection, settings, chatRule, isBusiness, force: true, evt.ChatId!, evt.ChatName, evt.Preview!, isGroup, db, orchestrator, whatsApp, logger, CancellationToken.None);
                     repliedByRule = true;
                 }
                 else if (action.Type == "FixedReply" && !settings.Paused && !string.IsNullOrWhiteSpace(action.Text))
@@ -691,7 +709,10 @@ public static class IntegrationsModule
             _ => connection.AutoReplyEnabled && (!isGroup || connection.AutoReplyInGroups),
         };
         if (!repliedByRule && autoReplyAllowed && passesMonitoring && !IsCallNotice(evt.Preview))
-            await TryAutoReplyAsync(connection, settings, chatRule, isBusiness, force: false, evt.ChatId!, evt.ChatName, evt.Preview!, isGroup, db, orchestrator, whatsApp, logger, ct);
+            // The reply can legitimately take minutes (response delay, batching, the AI call). If the caller hangs up meanwhile -- the
+        // WhatsApp service's HTTP client gives up after ~5 minutes, or it restarts -- the request token is cancelled; the reply must
+        // still go out, so it deliberately does not observe that token (Telegram's auto-reply already works this way).
+        await TryAutoReplyAsync(connection, settings, chatRule, isBusiness, force: false, evt.ChatId!, evt.ChatName, evt.Preview!, isGroup, db, orchestrator, whatsApp, logger, CancellationToken.None);
 
         return Results.Ok();
     }
@@ -734,6 +755,19 @@ public static class IntegrationsModule
                 if (state is not null && (DateTime.UtcNow - state.LastRepliedAt).TotalSeconds < settings.CooldownSeconds) return;
             }
 
+            // If the owner has been typing in this chat themselves a moment ago, they are in the conversation: the assistant must not
+            // butt in with a reply that ignores what the two of them were just saying. (An automation rule is still allowed to answer.)
+            if (!forcedIn)
+            {
+                var lastByOwner = await messages.Find(m => m.ConnectionId == connection.Id && m.ChatId == chatId && m.FromMe && !m.IsAiGenerated)
+                    .SortByDescending(m => m.Timestamp).Limit(1).FirstOrDefaultAsync(ct);
+                if (IsOwnerActive(lastByOwner?.Timestamp, DateTime.UtcNow))
+                {
+                    logger.LogInformation("Auto-reply skipped for {ChatId}: the owner was chatting here moments ago.", chatId);
+                    return;
+                }
+            }
+
             // Several messages in a row → one reply. Each message takes a ticket for its chat and waits out the
             // batch window; only the newest ticket carries on, and it answers everything unanswered so far.
             var batchKey = $"{connection.Id}:{chatId}";
@@ -772,7 +806,7 @@ public static class IntegrationsModule
                 // decision or information is held for the boss (a task is created) and the sender gets a holding reply instead.
                 var gate = await ReplyGateFlow.ResolveAsync(db, settings, connection.Id, chatId, chatName, messageText, isGroup,
                     since => messages.Find(m => m.ConnectionId == connection.Id && m.ChatId == chatId && m.FromMe && !m.IsAiGenerated && m.Timestamp > since).AnyAsync(ct),
-                    DateTime.UtcNow, forced: null, ct);
+                    DateTime.UtcNow, forced: null, ct, inConversation: await IsConversationBusyAsync(messages, connection.Id, chatId, ct));
                 if (gate.Action == GateAction.Silent)
                 {
                     logger.LogInformation("Reply gate: no reply for {ChatId} ({Reason})", chatId, gate.Reason);
@@ -862,6 +896,20 @@ public static class IntegrationsModule
         pending.Reverse();
         return string.Join("\n", pending.Select(m => m.Text));
     }
+
+    /// <summary>True when this chat has had at least three messages (either side) in the last 30 minutes.</summary>
+    private static async Task<bool> IsConversationBusyAsync(IMongoCollection<WhatsAppMessage> messages, string connectionId, string chatId, CancellationToken ct)
+    {
+        var since = DateTime.UtcNow.AddMinutes(-30);
+        return await messages.CountDocumentsAsync(m => m.ConnectionId == connectionId && m.ChatId == chatId && m.Timestamp > since, new CountOptions { Limit = 3 }, ct) >= 3;
+    }
+
+    /// <summary>How long after the owner's own (non-AI) message in a chat the assistant stays out of it.</summary>
+    public static readonly TimeSpan OwnerActiveQuiet = TimeSpan.FromMinutes(15);
+
+    /// <summary>True when the owner wrote in this chat themselves within <see cref="OwnerActiveQuiet"/> of now.</summary>
+    public static bool IsOwnerActive(DateTime? lastOwnerMessageUtc, DateTime nowUtc) =>
+        lastOwnerMessageUtc is { } last && nowUtc - last >= TimeSpan.Zero && nowUtc - last < OwnerActiveQuiet;
 
     internal static bool IsWithinActiveHours(WhatsAppSettings settings) => IsWithinActiveHours(settings, DateTime.UtcNow);
 
@@ -997,6 +1045,9 @@ public static class IntegrationsModule
             "You must NEVER make a decision, promise, commitment or confirmation, agree to anything, share any information or opinion, answer a " +
             "question of substance, discuss money, time, availability, documents or plans, or speak as if you were the owner. " +
             $"If the message needs any of that, output exactly NEED_BOSS and nothing else. Never reply to photos, reels, videos, stickers or voice notes. " +
+            "The earlier messages in this conversation are shown to you: always read them first. A short or fragmentary message (for example just \"Office party\") " +
+            "usually answers or asks about what was just discussed, so work out what it means from that context. If, in context, it asks a question, " +
+            "is about plans, a favour, a ride, time or availability, or you are not sure what it means, output exactly NEED_BOSS. " +
             $"Tone: {personality}. {length}";
 
         if (!string.IsNullOrWhiteSpace(settings.CustomInstructions))
@@ -1043,6 +1094,16 @@ public static class IntegrationsModule
     /// <summary>One row per chat the connection has ever exchanged messages with, most recently active first —
     /// the Manage panel's chat list. Unread is relative to when the user last opened any chat on this connection
     /// (one read marker per connection, not per chat — same simplification the dashboard widget uses).</summary>
+    /// <summary>
+    /// The name to show for a chat: the name saved in the owner's phone, else the name the person chose for themselves, else (one-to-one chats
+    /// only) the name on one of their own messages. A message we sent carries OUR name, and a group message carries the sender's, so those
+    /// are never used for the chat.
+    /// </summary>
+    public static string? PickChatName(string chatId, IReadOnlyDictionary<string, string> saved, IReadOnlyDictionary<string, string> selfChosen, IEnumerable<(bool FromMe, string? ChatName)> messages) =>
+        saved.GetValueOrDefault(chatId)
+        ?? selfChosen.GetValueOrDefault(chatId)
+        ?? (WhatsAppChat.IsGroup(chatId) ? null : messages.FirstOrDefault(m => !m.FromMe && !string.IsNullOrWhiteSpace(m.ChatName)).ChatName);
+
     private static async Task<IResult> GetWhatsAppChatsAsync(string connectionId, IMongoDatabase db, ClaimsPrincipalAccessor who, CancellationToken ct)
     {
         var connection = await OwnedConnectionAsync(db, connectionId, who.UserId, ct);
@@ -1050,19 +1111,21 @@ public static class IntegrationsModule
 
         var lastViewedAt = connection.LastViewedAt ?? DateTime.MinValue;
         var all = await db.GetCollection<WhatsAppMessage>("whatsappMessages")
-            .Find(m => m.ConnectionId == connectionId).SortByDescending(m => m.Timestamp).ToListAsync(ct);
+            .Find(m => m.ConnectionId == connectionId && !m.Hidden).SortByDescending(m => m.Timestamp).ToListAsync(ct);
 
-        // Saved address-book name / group subject / self-chosen display name, looked up by either the chat's
-        // own id or its linked-device (@lid) id, whichever the contact record happens to be keyed on.
+        // The name you saved in your phone beats the name the person chose for themselves, which beats the name on one of their
+        // messages. A person can be known by a phone id or a linked-device (@lid) id, so every id on a contact record points at the
+        // same name.
         var contacts = await db.GetCollection<WhatsAppContact>("whatsappContacts").Find(c => c.ConnectionId == connectionId).ToListAsync(ct);
-        var namesById = new Dictionary<string, string>();
+        var saved = new Dictionary<string, string>();
+        var selfChosen = new Dictionary<string, string>();
         foreach (var c in contacts)
         {
-            var name = !string.IsNullOrWhiteSpace(c.Name) ? c.Name : c.Notify;
-            if (string.IsNullOrWhiteSpace(name)) continue;
-            namesById[c.ContactId] = name;
-            if (!string.IsNullOrEmpty(c.Lid)) namesById[c.Lid] = name;
+            var ids = new[] { c.ContactId, c.Lid, c.PhoneNumber }.Where(x => !string.IsNullOrEmpty(x)).Cast<string>().ToList();
+            if (!string.IsNullOrWhiteSpace(c.Name)) foreach (var id in ids) saved[id] = c.Name!;
+            if (!string.IsNullOrWhiteSpace(c.Notify)) foreach (var id in ids) selfChosen[id] = c.Notify!;
         }
+        var prefs = (await db.GetCollection<WhatsAppChatPref>("whatsappChatPrefs").Find(p => p.ConnectionId == connectionId).ToListAsync(ct)).ToDictionary(p => p.ChatId);
 
         var chats = all
             .GroupBy(m => m.ChatId)
@@ -1071,12 +1134,13 @@ public static class IntegrationsModule
                 var latest = g.First(); // the group's messages are already sorted newest-first
                 var unread = g.Count(m => !m.FromMe && m.Timestamp > lastViewedAt);
                 // An outgoing message's pushName is *our own* name, and a group message's is the sender's, so
-                // only a 1:1 chat's incoming messages are a trustworthy fallback for the other person's name.
-                var name = namesById.GetValueOrDefault(g.Key)
-                    ?? (WhatsAppChat.IsGroup(g.Key) ? null : g.FirstOrDefault(m => !m.FromMe && !string.IsNullOrWhiteSpace(m.ChatName))?.ChatName);
-                return new WhatsAppChatDto(g.Key, name, WhatsAppChat.IsGroup(g.Key), latest.Text, latest.Timestamp, unread);
+                // only a 1:1 chat's incoming messages are a trustworthy last resort for the other person's name.
+                var name = PickChatName(g.Key, saved, selfChosen, g.Select(m => (m.FromMe, m.ChatName)));
+                prefs.TryGetValue(g.Key, out var pref);
+                return new WhatsAppChatDto(g.Key, name, WhatsAppChat.IsGroup(g.Key), latest.Text, latest.Timestamp, unread,
+                    pref?.Pinned ?? false, pref?.Archived ?? false, pref?.MutedUntil);
             })
-            .OrderByDescending(c => c.LastMessageAt);
+            .OrderByDescending(c => c.Pinned).ThenByDescending(c => c.LastMessageAt);
 
         return Results.Ok(chats);
     }
@@ -1088,7 +1152,7 @@ public static class IntegrationsModule
         if (connection is null) return Results.NotFound();
 
         var messages = await db.GetCollection<WhatsAppMessage>("whatsappMessages")
-            .Find(m => m.ConnectionId == connectionId && m.ChatId == chatId)
+            .Find(m => m.ConnectionId == connectionId && m.ChatId == chatId && !m.Hidden)
             .SortByDescending(m => m.Timestamp).Limit(200).ToListAsync(ct);
 
         await db.GetCollection<IntegrationConnection>("integrationConnections").UpdateOneAsync(
@@ -1110,7 +1174,11 @@ public static class IntegrationsModule
             .FirstOrDefaultAsync(ct);
         if (doc is null || !doc.TryGetValue("data", out var data) || !data.IsBsonBinaryData) return Results.NotFound();
         var mime = doc.TryGetValue("mimeType", out var m) && m.IsString ? m.AsString : "image/jpeg";
-        return Results.File(data.AsBsonBinaryData.Bytes, mime);
+        // Documents are offered as a download under their own file name; everything else plays or shows inline.
+        var message = await db.GetCollection<WhatsAppMessage>("whatsappMessages").Find(x => x.ConnectionId == connectionId && x.MessageId == messageId).FirstOrDefaultAsync(ct);
+        return message?.MediaKind == "document"
+            ? Results.File(data.AsBsonBinaryData.Bytes, mime, message.FileName ?? "file")
+            : Results.File(data.AsBsonBinaryData.Bytes, mime, enableRangeProcessing: true);
     }
 
     private static async Task<IResult> SendWhatsAppChatMessageAsync(
@@ -1193,7 +1261,7 @@ public static class IntegrationsModule
         return incoming?.ChatName;
     }
 
-    private static Task<IntegrationConnection?> OwnedConnectionAsync(IMongoDatabase db, string connectionId, string userId, CancellationToken ct) =>
+    internal static Task<IntegrationConnection?> OwnedConnectionAsync(IMongoDatabase db, string connectionId, string userId, CancellationToken ct) =>
         db.GetCollection<IntegrationConnection>("integrationConnections")
             .Find(c => c.Id == connectionId && c.UserId == userId)
             .FirstOrDefaultAsync(ct)!;
@@ -1202,7 +1270,8 @@ public static class IntegrationsModule
     private static ConnectionStatusDto ToStatusDto(IntegrationConnection c) => new(c.Id, c.IntegrationKey, c.Status.ToString(), c.AccountIdentifier, c.ConnectedAt, c.LastActiveAt, c.LastError, c.NotificationsEnabled, c.AutoReplyEnabled, c.AutoReplyInGroups);
     private static WhatsAppMessageDto ToMessageDto(WhatsAppMessage m, bool isGroup) => new(
         m.MessageId, m.ChatId, m.ChatName, m.FromMe, m.IsAiGenerated, isGroup, m.Text,
-        m.QuotedMessageId, m.QuotedText, m.Reactions.Select(r => new WhatsAppReactionDto(r.By, r.Emoji)).ToList(), m.Timestamp, m.HasMedia);
+        m.QuotedMessageId, m.QuotedText, m.Reactions.Select(r => new WhatsAppReactionDto(r.By, r.Emoji)).ToList(), m.Timestamp, m.HasMedia,
+        m.MediaKind, m.MimeType, m.FileName, m.MediaSeconds, m.VoiceNote, m.Status, m.Deleted, m.Edited, m.Starred);
 }
 
 /// <summary>Tiny DI-bindable wrapper so endpoint handlers can take the caller's user id as a parameter like any other service.</summary>
@@ -1271,6 +1340,85 @@ public sealed class WhatsAppIntegrationProvider(HttpClient http, IMongoDatabase 
             var body = await res.Content.ReadAsStringAsync(ct);
             throw new InvalidOperationException($"Could not send the WhatsApp message: {body}");
         }
+    }
+
+    // ── Everything beyond text: media, read receipts, delete/edit/forward, typing, groups, pictures ─────────────────────────────
+
+    /// <summary>One POST to the WhatsApp service; errors carry the service's own message.</summary>
+    public async Task<System.Text.Json.JsonElement> CallAsync(string path, object body, CancellationToken ct)
+    {
+        using var res = await http.PostAsJsonAsync(path, body, ct);
+        await EnsureOkAsync(res, ct);
+        var text = await res.Content.ReadAsStringAsync(ct);
+        return string.IsNullOrWhiteSpace(text) ? default : System.Text.Json.JsonDocument.Parse(text).RootElement.Clone();
+    }
+
+    private static async Task EnsureOkAsync(HttpResponseMessage res, CancellationToken ct)
+    {
+        if (res.IsSuccessStatusCode) return;
+        var body = await res.Content.ReadAsStringAsync(ct);
+        var message = body;
+        try { using var doc = System.Text.Json.JsonDocument.Parse(body); if (doc.RootElement.TryGetProperty("error", out var e) && e.ValueKind == System.Text.Json.JsonValueKind.String) message = e.GetString() ?? body; } catch { /* not JSON: use the raw text */ }
+        throw new InvalidOperationException(message);
+    }
+
+    public async Task SendMediaAsync(string connectionId, string chatId, string kind, byte[] data, string mimeType, string? fileName, string? caption, string? quotedMessageId, bool voiceNote, CancellationToken ct)
+    {
+        using var res = await http.PostAsJsonAsync($"/sessions/{connectionId}/send-media",
+            new { chatId, kind, data = Convert.ToBase64String(data), mimeType, fileName, caption, quotedMessageId, voiceNote }, ct);
+        await EnsureOkAsync(res, ct);
+    }
+
+    public async Task MarkReadAsync(string connectionId, string chatId, CancellationToken ct)
+    {
+        using var res = await http.PostAsJsonAsync($"/sessions/{connectionId}/read", new { chatId }, ct);
+        await EnsureOkAsync(res, ct);
+    }
+
+    public async Task DeleteMessageAsync(string connectionId, string chatId, string messageId, bool forEveryone, CancellationToken ct)
+    {
+        using var res = await http.PostAsJsonAsync($"/sessions/{connectionId}/delete", new { chatId, messageId, forEveryone }, ct);
+        await EnsureOkAsync(res, ct);
+    }
+
+    public async Task EditMessageAsync(string connectionId, string chatId, string messageId, string text, CancellationToken ct)
+    {
+        using var res = await http.PostAsJsonAsync($"/sessions/{connectionId}/edit", new { chatId, messageId, text }, ct);
+        await EnsureOkAsync(res, ct);
+    }
+
+    public async Task ForwardMessageAsync(string connectionId, string toChatId, string messageId, CancellationToken ct)
+    {
+        using var res = await http.PostAsJsonAsync($"/sessions/{connectionId}/forward", new { toChatId, messageId }, ct);
+        await EnsureOkAsync(res, ct);
+    }
+
+    public async Task SetPresenceAsync(string connectionId, string chatId, string state, CancellationToken ct)
+    {
+        using var res = await http.PostAsJsonAsync($"/sessions/{connectionId}/presence", new { chatId, state }, ct);
+        await EnsureOkAsync(res, ct);
+    }
+
+    public async Task<System.Text.Json.JsonElement> GetPresenceAsync(string connectionId, string chatId, CancellationToken ct)
+    {
+        using var res = await http.GetAsync($"/sessions/{connectionId}/presence?chatId={Uri.EscapeDataString(chatId)}", ct);
+        await EnsureOkAsync(res, ct);
+        return await res.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(cancellationToken: ct);
+    }
+
+    public async Task<System.Text.Json.JsonElement> GetGroupAsync(string connectionId, string chatId, CancellationToken ct)
+    {
+        using var res = await http.GetAsync($"/sessions/{connectionId}/group?chatId={Uri.EscapeDataString(chatId)}", ct);
+        await EnsureOkAsync(res, ct);
+        return await res.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(cancellationToken: ct);
+    }
+
+    /// <summary>The chat's profile (or group) picture, or null when it has none or hides it.</summary>
+    public async Task<(byte[] Data, string MimeType)?> GetProfilePictureAsync(string connectionId, string chatId, CancellationToken ct)
+    {
+        using var res = await http.GetAsync($"/sessions/{connectionId}/profile-picture?chatId={Uri.EscapeDataString(chatId)}", ct);
+        if (!res.IsSuccessStatusCode) return null;
+        return (await res.Content.ReadAsByteArrayAsync(ct), res.Content.Headers.ContentType?.MediaType ?? "image/jpeg");
     }
 
     /// <summary>Reacts to an existing message with an emoji, or clears a prior reaction by passing "".</summary>

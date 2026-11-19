@@ -45,8 +45,25 @@ export type WhatsAppMessageDoc = {
    *  typed by the account owner through Manage, so the UI can style the two differently. */
   isAiGenerated?: boolean;
   text: string;
-  /** True once the photo/sticker bytes are stored in the whatsappMedia collection. */
+  /** True once the photo/sticker/video/voice note/document bytes are stored in the whatsappMedia collection. */
   hasMedia?: boolean;
+  /** What kind of attachment the message carries, even before its bytes have been downloaded. */
+  mediaKind?: "image" | "sticker" | "video" | "audio" | "document";
+  mimeType?: string;
+  fileName?: string;
+  mediaSeconds?: number;
+  voiceNote?: boolean;
+  /** Outgoing messages only. 1 pending, 2 sent, 3 delivered, 4 read, 5 played. */
+  status?: number;
+  /** Deleted for everyone by the sender (the text is replaced by a tombstone and any stored media is erased). */
+  deleted?: boolean;
+  deletedAt?: Date;
+  edited?: boolean;
+  /** Hidden from Daksha only ("delete for me"); it still exists in WhatsApp. */
+  hidden?: boolean;
+  starred?: boolean;
+  /** We already told WhatsApp this incoming message was read, so we do not send the receipt twice. */
+  readSent?: boolean;
   quotedMessageId?: string;
   quotedText?: string;
   reactions: WhatsAppReaction[];
@@ -58,6 +75,8 @@ export type WhatsAppContactDoc = {
   connectionId: string;
   contactId: string;
   lid?: string;
+  /** The phone-number id of the same person (the other half of the lid mapping). */
+  phoneNumber?: string;
   /** The name saved in the phone's address book (or the group subject for a @g.us id). */
   name?: string;
   /** The contact's own self-chosen WhatsApp display name. */

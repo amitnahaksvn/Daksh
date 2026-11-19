@@ -5,7 +5,7 @@ import {
   DisconnectReason,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
-  downloadMediaMessage,
+  normalizeMessageContent,
   makeWASocket,
   type WAMessage,
   type WASocket,
@@ -13,6 +13,10 @@ import {
 import { removeAllCredentials, useMongoAuthState } from "./authStateMongo.js";
 import { contactsCollection, messagesCollection } from "./db.js";
 import { reportEvent } from "./apiClient.js";
+import {
+  STATUS, applyEdit, detectMedia, forgetProfilePicture, getProfilePicture, handleProtocolMessage, markRevoked, mediaLimit,
+  onMessagesUpdate, onReceipts, saveContacts, saveLidMapping, saveMediaBytes, storeMedia, type MediaKind,
+} from "./extras.js";
 
 export type ConnectionStatus = "Connecting" | "Connected" | "Disconnected" | "Error";
 
@@ -77,33 +81,24 @@ async function startSocket(db: Db, connectionId: string): Promise<void> {
     sock.ev.on("contacts.upsert", (contacts) => void saveContacts(db, connectionId, contacts));
     sock.ev.on("contacts.update", (contacts) => void saveContacts(db, connectionId, contacts));
     sock.ev.on("call", (calls) => void onCalls(db, connectionId, calls));
+    sock.ev.on("messages.update", (updates) => void onMessagesUpdate(db, connectionId, updates as never).catch((err) => logger.error({ err }, "messages.update failed")));
+    sock.ev.on("message-receipt.update", (receipts) => void onReceipts(db, connectionId, receipts as never).catch((err) => logger.error({ err }, "receipt update failed")));
+    sock.ev.on("lid-mapping.update", (m) => void saveLidMapping(db, connectionId, m.lid, m.pn).catch(() => undefined));
+    sock.ev.on("messaging-history.set", (h) => void onHistory(db, connectionId, h as never).catch((err) => logger.error({ err }, "history sync failed")));
+    sock.ev.on("chats.upsert", (chats) => void saveChatNames(db, connectionId, chats as never));
+    sock.ev.on("chats.update", (chats) => void saveChatNames(db, connectionId, chats as never));
+    sock.ev.on("presence.update", (p) => onPresence(connectionId, p as never));
+    sock.ev.on("contacts.update", (contacts) => {
+      // A changed or removed profile picture invalidates the cached copy.
+      for (const c of contacts) if (c.id && c.imgUrl !== undefined) void forgetProfilePicture(db, connectionId, c.id);
+    });
+    sock.ev.on("connection.update", (u) => { if (u.connection === "open") void resyncNames(db, connectionId, entry); });
   })();
 
   try {
     await entry.starting;
   } finally {
     entry.starting = null;
-  }
-}
-
-type ContactLike = { id?: string; lid?: string; name?: string; notify?: string; verifiedName?: string };
-
-/** Stores address-book names / display names so the UI can show a person instead of a raw WhatsApp id.
- *  Partial updates only set the fields they actually carry, so a name-less update never erases a saved name. */
-async function saveContacts(db: Db, connectionId: string, contacts: ContactLike[]): Promise<void> {
-  for (const c of contacts) {
-    if (!c.id) continue;
-    const set: Record<string, unknown> = { updatedAt: new Date() };
-    if (c.lid) set.lid = c.lid;
-    if (c.name) set.name = c.name;
-    const notify = c.notify ?? c.verifiedName;
-    if (notify) set.notify = notify;
-    if (c.verifiedName) set.isBusiness = true; // a verified name only exists on business accounts
-    try {
-      await contactsCollection(db).updateOne({ connectionId, contactId: c.id }, { $set: set }, { upsert: true });
-    } catch (err) {
-      console.error(`Failed to save WhatsApp contact for connection ${connectionId}:`, err);
-    }
   }
 }
 
@@ -243,7 +238,9 @@ async function onConnectionUpdate(
   }
 }
 
-function extractMessageText(message: WAMessage["message"] | null | undefined): string {
+function extractMessageText(raw: WAMessage["message"] | null | undefined): string {
+  // View-once, disappearing-message and caption wrappers hide the real content one level down.
+  const message = normalizeMessageContent(raw);
   if (!message) return "";
   return (
     message.conversation ??
@@ -265,7 +262,8 @@ function extractMessageText(message: WAMessage["message"] | null | undefined): s
 
 /** A reply-to quote lives in `contextInfo`, which hangs off whichever message-type field is actually set
  *  (extendedTextMessage, imageMessage, ...) — there's no single shared field for it. */
-function extractContextInfo(message: WAMessage["message"] | null | undefined) {
+function extractContextInfo(raw: WAMessage["message"] | null | undefined) {
+  const message = normalizeMessageContent(raw);
   if (!message) return undefined;
   return (
     message.extendedTextMessage?.contextInfo ??
@@ -288,6 +286,7 @@ async function persistMessage(
   m: WAMessage,
   text: string,
   isAiGenerated = false,
+  skipMedia = false,
 ): Promise<{ chatId: string; chatName?: string; timestamp: Date } | null> {
   if (!m.key.id || !m.key.remoteJid || !text) return null;
   // A phone-synced copy of an AI reply carries the signature; store it clean and keep the AI flag.
@@ -302,17 +301,21 @@ async function persistMessage(
   const fromMe = m.key.fromMe ?? false;
   const timestamp = m.messageTimestamp ? new Date(Number(m.messageTimestamp) * 1000) : new Date();
   const contextInfo = extractContextInfo(m.message);
+  const media = detectMedia(m.message);
   const doc = {
     connectionId,
     messageId: m.key.id,
     chatId: m.key.remoteJid,
-    chatName: m.pushName ?? undefined,
+    // pushName is the *sender's* name: on our own messages that is us, so it must never become the chat's name.
+    chatName: fromMe ? undefined : (m.pushName ?? undefined),
     participant: m.key.participant ?? undefined,
     fromMe,
     isAiGenerated: fromMe && isAiGenerated,
     text,
     quotedMessageId: contextInfo?.stanzaId ?? undefined,
     quotedText: contextInfo?.quotedMessage ? extractMessageText(contextInfo.quotedMessage) : undefined,
+    ...(media ? { mediaKind: media.kind, mimeType: media.mimeType, fileName: media.fileName, mediaSeconds: media.seconds, voiceNote: media.voiceNote } : {}),
+    ...(fromMe ? { status: STATUS.pending } : {}),
     reactions: [],
     timestamp,
     createdAt: new Date(),
@@ -324,7 +327,7 @@ async function persistMessage(
     console.error(`Failed to persist WhatsApp message for connection ${connectionId}:`, err);
   }
   void ensureGroupName(db, connectionId, doc.chatId);
-  await storeImage(db, connectionId, m);
+  if (!skipMedia) await storeMedia(db, connectionId, m);
   return { chatId: doc.chatId, chatName: doc.chatName, timestamp };
 }
 
@@ -332,31 +335,6 @@ async function persistMessage(
  *  Stripped again before storing — Daksha's own UI shows it as a caption instead. */
 const AI_SIGNATURE = "\n\n_🤖 Reply by AI Assistant_";
 const LEGACY_AI_SIGNATURES = ["\n\n_Reply by AI Assistant_", "\n\n_ʀᴇᴘʟʏ ʙʏ ᴀɪ ᴀꜱꜱɪꜱᴛᴀɴᴛ_"];
-
-const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
-
-/** Photos and stickers are downloaded once and kept in "whatsappMedia" so the chat can render them; the
- *  message document gets `hasMedia` only after the bytes are safely stored. Best-effort: a failed download
- *  leaves the "📷 Photo" text label. */
-async function storeImage(db: Db, connectionId: string, m: WAMessage): Promise<void> {
-  const img = m.message?.imageMessage ?? m.message?.stickerMessage;
-  if (!img || !m.key.id) return;
-  try {
-    const existing = await db.collection("whatsappMedia").findOne({ connectionId, messageId: m.key.id }, { projection: { _id: 1 } });
-    if (!existing) {
-      const buffer = (await downloadMediaMessage(m, "buffer", {})) as Buffer;
-      if (buffer.length === 0 || buffer.length > MAX_IMAGE_BYTES) return;
-      await db.collection("whatsappMedia").updateOne(
-        { connectionId, messageId: m.key.id },
-        { $setOnInsert: { connectionId, messageId: m.key.id, mimeType: img.mimetype ?? "image/jpeg", data: buffer, createdAt: new Date() } },
-        { upsert: true },
-      );
-    }
-    await messagesCollection(db).updateOne({ connectionId, messageId: m.key.id }, { $set: { hasMedia: true } });
-  } catch (err) {
-    console.error(`Failed to download WhatsApp image for connection ${connectionId}:`, err);
-  }
-}
 
 /** A reaction arrives as its own "message" whose `reactionMessage.key` points at the message being
  *  reacted to (not this event's own key) — handled separately from persistMessage, which is for actual
@@ -395,6 +373,7 @@ async function onMessagesUpsert(
     // Status updates ("stories") and broadcast/newsletter posts aren't conversations — never store or notify.
     const jid = m.key.remoteJid ?? "";
     if (jid === "status@broadcast" || jid.endsWith("@broadcast") || jid.endsWith("@newsletter")) continue;
+    if (await handleProtocolMessage(db, connectionId, m)) continue; // "deleted for everyone" / "edited"
     if (m.message?.reactionMessage) {
       await onReaction(db, connectionId, m);
       continue;
@@ -556,4 +535,237 @@ export async function restoreSessionsFromDatabase(db: Db): Promise<void> {
       }
     }),
   );
+}
+
+// ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// More of WhatsApp: history, names, presence, media, read receipts, delete/edit, forward, groups, profile pictures
+// ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+type HistoryLike = { contacts?: Parameters<typeof saveContacts>[2]; lidPnMappings?: { lid: string; pn: string }[]; chats?: { id?: string; name?: string | null }[]; messages?: WAMessage[] };
+
+/** What WhatsApp hands over when a device is linked: contacts (with address-book names), lid mappings and recent messages. */
+async function onHistory(db: Db, connectionId: string, h: HistoryLike): Promise<void> {
+  if (h.contacts?.length) await saveContacts(db, connectionId, h.contacts);
+  for (const m of h.lidPnMappings ?? []) await saveLidMapping(db, connectionId, m.lid, m.pn);
+  if (h.chats?.length) await saveChatNames(db, connectionId, h.chats);
+  // Old messages are stored quietly (no notifications, no auto-replies, no media downloads), newest first, capped.
+  let stored = 0;
+  for (const m of h.messages ?? []) {
+    if (stored >= 3000) break;
+    const jid = m.key.remoteJid ?? "";
+    if (!jid || jid === "status@broadcast" || jid.endsWith("@broadcast") || jid.endsWith("@newsletter")) continue;
+    if (normalizeMessageContent(m.message)?.protocolMessage || m.message?.reactionMessage) continue;
+    const text = extractMessageText(m.message);
+    if (await persistMessage(db, connectionId, m, text, false, true)) stored++;
+  }
+}
+
+/** Group subjects arrive as chat names; a one-to-one chat's `name` may be a self-chosen display name, so it is not saved as an address-book name. */
+async function saveChatNames(db: Db, connectionId: string, chats: { id?: string | null; name?: string | null }[]): Promise<void> {
+  const groups = chats.filter((c) => c.id?.endsWith("@g.us") && c.name).map((c) => ({ id: c.id as string, name: c.name as string }));
+  if (groups.length) await saveContacts(db, connectionId, groups);
+}
+
+/** Asks WhatsApp to re-send the phone's address book (the names you saved), at most once every 12 hours. */
+async function resyncNames(db: Db, connectionId: string, entry: SessionEntry): Promise<void> {
+  try {
+    const state = db.collection("whatsappServiceState");
+    const doc = await state.findOne({ connectionId });
+    if (doc?.lastNameSync && Date.now() - new Date(doc.lastNameSync as Date).getTime() < 12 * 3600 * 1000) return;
+    if (!entry.sock) return;
+    // WhatsApp only re-sends what changed since the last sync, so the saved names (the "contact" collection) would never
+    // arrive again. Forgetting the stored version makes it send the whole address book once.
+    await entry.sock.authState.keys.set({ "app-state-sync-version": { critical_unblock_low: null } } as never);
+    await entry.sock.resyncAppState(["critical_unblock_low"], true);
+    await state.updateOne({ connectionId }, { $set: { connectionId, lastNameSync: new Date() } }, { upsert: true });
+  } catch (err) {
+    logger.warn({ err }, "Could not resync the address book names");
+  }
+}
+
+// ── Typing / online ───────────────────────────────────────────────────────────────────────────────────────────────
+type PresenceKind = "composing" | "recording" | "available" | "unavailable" | "paused";
+const presenceByChat = new Map<string, { state: PresenceKind; lastSeen?: number; at: number }>();
+
+function onPresence(connectionId: string, p: { id: string; presences?: Record<string, { lastKnownPresence?: PresenceKind; lastSeen?: number }> }): void {
+  const all = Object.values(p.presences ?? {});
+  const active = all.find((v) => v.lastKnownPresence === "composing" || v.lastKnownPresence === "recording") ?? all[0];
+  if (active?.lastKnownPresence) presenceByChat.set(`${connectionId}:${p.id}`, { state: active.lastKnownPresence, lastSeen: active.lastSeen, at: Date.now() });
+}
+
+/** Subscribes to the chat's presence (WhatsApp only reports it to subscribers) and returns the latest known state. */
+export async function getPresence(connectionId: string, chatId: string): Promise<{ state: PresenceKind | "unknown"; lastSeen?: number }> {
+  const sock = sessions.get(connectionId)?.sock;
+  if (!sock || chatId.endsWith("@broadcast")) return { state: "unknown" };
+  const key = `${connectionId}:${chatId}`;
+  const known = presenceByChat.get(key);
+  if (!known) void sock.presenceSubscribe(chatId).catch(() => undefined);
+  if (!known) return { state: "unknown" };
+  // "typing…" is only believable for a few seconds after it was reported.
+  if ((known.state === "composing" || known.state === "recording") && Date.now() - known.at > 12_000) return { state: "available", lastSeen: known.lastSeen };
+  return { state: known.state, lastSeen: known.lastSeen };
+}
+
+/** Tells the other person we are typing (or stopped). */
+export async function setPresence(connectionId: string, chatId: string, state: "composing" | "paused" | "available"): Promise<void> {
+  const sock = sessions.get(connectionId)?.sock;
+  if (!sock) throw new Error("WhatsApp is not connected.");
+  await sock.sendPresenceUpdate(state, chatId);
+}
+
+// ── Sending media ─────────────────────────────────────────────────────────────────────────────────────────────────
+async function quotedFor(db: Db, connectionId: string, quotedMessageId?: string): Promise<WAMessage | undefined> {
+  if (!quotedMessageId) return undefined;
+  const q = await messagesCollection(db).findOne({ connectionId, messageId: quotedMessageId });
+  if (!q) return undefined;
+  return { key: { remoteJid: q.chatId, id: q.messageId, fromMe: q.fromMe, participant: q.participant }, message: { conversation: q.text } } as WAMessage;
+}
+
+export type OutgoingMedia = { kind: MediaKind; data: Buffer; mimeType: string; fileName?: string; caption?: string; quotedMessageId?: string; voiceNote?: boolean };
+
+/** Sends a photo, video, voice note, file or sticker, and keeps a copy so the thread can show it straight away. */
+export async function sendMedia(db: Db, connectionId: string, chatId: string, media: OutgoingMedia): Promise<void> {
+  const entry = sessions.get(connectionId);
+  if (!entry?.sock || entry.status !== "Connected") throw new Error("WhatsApp is not connected.");
+  if (media.data.length === 0) throw new Error("The file is empty.");
+  if (media.data.length > mediaLimit(media.kind)) throw new Error(`That file is too large to send (limit ${Math.round(mediaLimit(media.kind) / 1048576)} MB).`);
+  const quoted = await quotedFor(db, connectionId, media.quotedMessageId);
+  const { kind, data, mimeType, fileName, caption } = media;
+  const content =
+    kind === "image" ? { image: data, caption, mimetype: mimeType }
+    : kind === "video" ? { video: data, caption, mimetype: mimeType }
+    : kind === "audio" ? { audio: data, mimetype: mimeType, ptt: Boolean(media.voiceNote) }
+    : kind === "sticker" ? { sticker: data }
+    : { document: data, mimetype: mimeType, fileName: fileName ?? "file", caption };
+  const sent = await entry.sock.sendMessage(chatId, content as never, quoted ? { quoted } : undefined);
+  if (!sent) return;
+  const label = caption || (kind === "image" ? "📷 Photo" : kind === "video" ? "🎥 Video" : kind === "audio" ? "🎤 Voice message" : kind === "sticker" ? "Sticker" : "📄 Document");
+  const stored = await persistMessage(db, connectionId, sent, label, false, true);
+  if (!stored) return;
+  await saveMediaBytes(db, connectionId, sent.key.id!, data, mimeType);
+  await messagesCollection(db).updateOne({ connectionId, messageId: sent.key.id! }, { $set: { hasMedia: true, mediaKind: kind, mimeType, ...(fileName ? { fileName } : {}) } });
+  await reportEvent(connectionId, "WhatsAppMessageSent", { messageId: sent.key.id!, chatId: stored.chatId, chatName: stored.chatName, preview: label, timestamp: stored.timestamp });
+}
+
+// ── Read receipts, delete, edit, forward ──────────────────────────────────────────────────────────────────────────
+/** Tells WhatsApp the incoming messages in this chat were read (the blue ticks on the sender's side). Only called when a person opens the chat. */
+export async function markChatRead(db: Db, connectionId: string, chatId: string): Promise<number> {
+  const sock = sessions.get(connectionId)?.sock;
+  if (!sock) throw new Error("WhatsApp is not connected.");
+  const unread = await messagesCollection(db).find({ connectionId, chatId, fromMe: false, readSent: { $ne: true }, deleted: { $ne: true } }).sort({ timestamp: -1 }).limit(100).toArray();
+  if (unread.length === 0) return 0;
+  await sock.readMessages(unread.map((m) => ({ remoteJid: m.chatId, id: m.messageId, fromMe: false, participant: m.participant })));
+  await messagesCollection(db).updateMany({ connectionId, messageId: { $in: unread.map((m) => m.messageId) } }, { $set: { readSent: true } });
+  return unread.length;
+}
+
+/** Delete for everyone (WhatsApp removes it for the other person too) or delete for me (hidden in Daksha only). */
+export async function deleteMessage(db: Db, connectionId: string, chatId: string, messageId: string, forEveryone: boolean): Promise<void> {
+  const doc = await messagesCollection(db).findOne({ connectionId, messageId });
+  if (!doc) throw new Error("Message not found.");
+  if (forEveryone) {
+    const sock = sessions.get(connectionId)?.sock;
+    if (!sock) throw new Error("WhatsApp is not connected.");
+    if (!doc.fromMe) throw new Error("You can only delete your own messages for everyone.");
+    await sock.sendMessage(chatId, { delete: { remoteJid: doc.chatId, id: doc.messageId, fromMe: true, participant: doc.participant } });
+    await markRevoked(db, connectionId, messageId);
+  } else {
+    await messagesCollection(db).updateOne({ connectionId, messageId }, { $set: { hidden: true } });
+  }
+  await reportEvent(connectionId, "WhatsAppMessageUpdated", { messageId, chatId });
+}
+
+/** WhatsApp lets you edit a message for 15 minutes after sending it. */
+export async function editMessage(db: Db, connectionId: string, chatId: string, messageId: string, text: string): Promise<void> {
+  const sock = sessions.get(connectionId)?.sock;
+  if (!sock) throw new Error("WhatsApp is not connected.");
+  const doc = await messagesCollection(db).findOne({ connectionId, messageId });
+  if (!doc || !doc.fromMe || doc.deleted) throw new Error("Only your own messages can be edited.");
+  if (doc.mediaKind && doc.mediaKind !== "image" && doc.mediaKind !== "video" && doc.mediaKind !== "document") throw new Error("This kind of message cannot be edited.");
+  if (Date.now() - doc.timestamp.getTime() > 15 * 60 * 1000) throw new Error("Messages can only be edited within 15 minutes of sending.");
+  if (!text.trim()) throw new Error("The message cannot be empty.");
+  await sock.sendMessage(chatId, { text, edit: { remoteJid: doc.chatId, id: doc.messageId, fromMe: true, participant: doc.participant } } as never);
+  await applyEdit(db, connectionId, messageId, text);
+  await reportEvent(connectionId, "WhatsAppMessageUpdated", { messageId, chatId });
+}
+
+/** Sends an existing message (text or its attachment) to another chat. */
+export async function forwardMessage(db: Db, connectionId: string, toChatId: string, messageId: string): Promise<void> {
+  const doc = await messagesCollection(db).findOne({ connectionId, messageId });
+  if (!doc || doc.deleted) throw new Error("Message not found.");
+  if (doc.hasMedia && doc.mediaKind) {
+    const media = await db.collection("whatsappMedia").findOne({ connectionId, messageId });
+    const bytes = media?.data as { buffer?: Buffer } | Buffer | undefined;
+    const data = Buffer.isBuffer(bytes) ? bytes : bytes?.buffer;
+    if (!data) throw new Error("The file is no longer available to forward.");
+    const caption = doc.text && !["📷 Photo", "🎥 Video", "🎤 Voice message", "📄 Document", "Sticker"].includes(doc.text) ? doc.text : undefined;
+    await sendMedia(db, connectionId, toChatId, { kind: doc.mediaKind, data, mimeType: doc.mimeType ?? "application/octet-stream", fileName: doc.fileName, caption, voiceNote: doc.voiceNote });
+    return;
+  }
+  await sendMessage(db, connectionId, toChatId, doc.text);
+}
+
+// ── Groups and profile pictures ───────────────────────────────────────────────────────────────────────────────────
+export async function groupInfo(connectionId: string, chatId: string) {
+  const sock = sessions.get(connectionId)?.sock;
+  if (!sock) throw new Error("WhatsApp is not connected.");
+  const meta = await sock.groupMetadata(chatId);
+  return {
+    subject: meta.subject,
+    description: meta.desc ?? null,
+    owner: meta.owner ?? null,
+    createdAt: meta.creation ? new Date(Number(meta.creation) * 1000).toISOString() : null,
+    participants: meta.participants.map((p) => ({ id: p.id, phoneNumber: (p as { phoneNumber?: string }).phoneNumber ?? null, admin: p.admin ?? null })),
+  };
+}
+
+export async function profilePicture(db: Db, connectionId: string, chatId: string) {
+  const sock = sessions.get(connectionId)?.sock;
+  if (!sock) return null;
+  return getProfilePicture(db, sock, connectionId, chatId);
+}
+
+// ── Group admin, disappearing messages, block ─────────────────────────────────────────────────────────────────────────
+export type GroupAction = "rename" | "description" | "invite" | "leave" | "add" | "remove" | "promote" | "demote";
+
+/** Admin actions on a group. Only works when this account is an admin (WhatsApp refuses otherwise, and that message is passed on). */
+export async function groupAction(connectionId: string, chatId: string, action: GroupAction, opts: { text?: string; participants?: string[] }): Promise<{ link?: string }> {
+  const sock = sessions.get(connectionId)?.sock;
+  if (!sock) throw new Error("WhatsApp is not connected.");
+  if (!chatId.endsWith("@g.us")) throw new Error("That chat is not a group.");
+  const people = opts.participants ?? [];
+  try { return await runGroupAction(sock, chatId, action, opts.text, people); }
+  catch (err) {
+    const m = err instanceof Error ? err.message : "";
+    if (/not-authorized|forbidden|403/i.test(m)) throw new Error("Only group admins can do that.");
+    throw err;
+  }
+}
+
+async function runGroupAction(sock: WASocket, chatId: string, action: GroupAction, text: string | undefined, people: string[]): Promise<{ link?: string }> {
+  const opts = { text };
+  switch (action) {
+    case "rename": if (!opts.text?.trim()) throw new Error("Enter a group name."); await sock.groupUpdateSubject(chatId, opts.text.trim()); return {};
+    case "description": await sock.groupUpdateDescription(chatId, opts.text?.trim() || undefined); return {};
+    case "invite": { const code = await sock.groupInviteCode(chatId); return { link: code ? `https://chat.whatsapp.com/${code}` : undefined }; }
+    case "leave": await sock.groupLeave(chatId); return {};
+    case "add": case "remove": case "promote": case "demote":
+      if (people.length === 0) throw new Error("Choose who to change.");
+      await sock.groupParticipantsUpdate(chatId, people, action);
+      return {};
+  }
+}
+
+/** Turns disappearing messages on for a chat (seconds) or off (0). */
+export async function setDisappearing(connectionId: string, chatId: string, seconds: number): Promise<void> {
+  const sock = sessions.get(connectionId)?.sock;
+  if (!sock) throw new Error("WhatsApp is not connected.");
+  await sock.sendMessage(chatId, { disappearingMessagesInChat: seconds > 0 ? seconds : false } as never);
+}
+
+export async function setBlocked(connectionId: string, chatId: string, blocked: boolean): Promise<void> {
+  const sock = sessions.get(connectionId)?.sock;
+  if (!sock) throw new Error("WhatsApp is not connected.");
+  if (chatId.endsWith("@g.us")) throw new Error("A group cannot be blocked. Leave it instead.");
+  await sock.updateBlockStatus(chatId, blocked ? "block" : "unblock");
 }

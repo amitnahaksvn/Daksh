@@ -57,11 +57,6 @@ export function useWhatsAppOverview(connectionId: string | null): [Overview, () 
   return [data, () => void load()];
 }
 
-function greeting(): string {
-  const h = new Date().getHours();
-  return h < 5 ? "Working late" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
-}
-
 export function DashboardHero({ apps, canResetLayout = false, onResetLayout, layoutSaveFailed = false, onRetryLayoutSave }: {
   apps: DashboardApp[];
   /** True when tiles have been moved or resized, so "Reset layout" would do something. */
@@ -73,36 +68,25 @@ export function DashboardHero({ apps, canResetLayout = false, onResetLayout, lay
 }) {
   const connected = apps.filter((a) => a.status === "Connected").length;
   const unread = apps.reduce((n, a) => n + a.unreadCount, 0);
-  const bits = [`${apps.length} on your dashboard`, unread > 0 ? `${unread} unread message${unread === 1 ? "" : "s"}` : "inbox is clear"];
   return (
-    <section className="relative mb-4 overflow-hidden rounded-[1.25rem] border border-line bg-lime p-6 text-on-tint shadow-[var(--shadow)] sm:p-8">
-      <div aria-hidden className="pointer-events-none absolute -right-10 -top-16 h-56 w-56 rounded-full bg-pink/70 blur-2xl" />
-      <div aria-hidden className="pointer-events-none absolute -bottom-20 right-24 h-48 w-48 rounded-full bg-white/40 blur-2xl" />
-      <div className="relative flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="ai-mono text-xs font-semibold uppercase tracking-widest opacity-70">
-            {new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}
-          </p>
-          <h1 className="mt-1 text-3xl font-extrabold sm:text-4xl">{greeting()}.</h1>
-          <p className="mt-1 max-w-xl text-sm font-medium opacity-80">
-            {connected} connected · {bits.join(" · ")}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {layoutSaveFailed && (
-            <button type="button" onClick={onRetryLayoutSave} className="rounded-full border border-black/40 bg-white/60 px-5 py-2 text-sm font-semibold text-black hover:bg-white/80">
-              Couldn&apos;t save layout — retry
-            </button>
-          )}
-          {canResetLayout && (
-            <button type="button" onClick={onResetLayout} className="rounded-full border border-black/40 px-5 py-2 text-sm font-semibold text-black hover:bg-black/10">
-              Reset layout
-            </button>
-          )}
-          <Link href="/apps" className="rounded-full bg-black/85 px-5 py-2 text-sm font-semibold text-white hover:bg-black">
-            Add or manage apps
-          </Link>
-        </div>
+    <section className={`mb-4 flex flex-wrap items-center justify-between gap-3 p-4 ${tileClass}`}>
+      <p className="text-sm text-muted">
+        <span className="font-semibold text-text">Your apps</span> · {connected} connected · {unread > 0 ? `${unread} unread message${unread === 1 ? "" : "s"}` : "inbox is clear"}
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        {layoutSaveFailed && (
+          <button type="button" onClick={onRetryLayoutSave} className="rounded-full border border-danger px-4 py-2 text-sm font-semibold text-danger hover:bg-danger-bg">
+            Couldn&apos;t save layout — retry
+          </button>
+        )}
+        {canResetLayout && (
+          <button type="button" onClick={onResetLayout} className="rounded-full border border-line px-4 py-2 text-sm font-semibold hover:bg-surface-2">
+            Reset layout
+          </button>
+        )}
+        <Link href="/apps" className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-accent-contrast hover:opacity-90">
+          Add or manage apps
+        </Link>
       </div>
     </section>
   );

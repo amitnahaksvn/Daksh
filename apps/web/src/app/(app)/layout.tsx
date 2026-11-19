@@ -1,22 +1,7 @@
-import { DakshaBrand } from "@/components/DakshaBrand";
-import { AppNav } from "@/components/AppNav";
-import { AppearanceControls } from "@/components/ThemeToggle";
-import { NotificationBell } from "@/components/NotificationBell";
-import { UserBadge } from "@/components/UserBadge";
+import { AppShell } from "@/components/AppShell";
 import { ToastHost } from "@/components/ToastHost";
 import { ChatDock } from "@/components/ChatDock";
 import { RequireAuth } from "@/components/RequireAuth";
-import { tileClass } from "@/components/ui";
 export default function AppLayout({children}:{children:React.ReactNode}){
- return <RequireAuth><ToastHost/><ChatDock/><div className="grid w-full flex-1 grid-cols-[minmax(0,1fr)] content-start gap-3 p-3 md:grid-cols-[15rem_minmax(0,1fr)] md:gap-4 md:p-4 lg:pr-[calc(var(--chat-rail-w,0rem)+1rem)] transition-[padding] duration-300">
-  <aside className={`flex min-w-0 flex-col gap-4 p-4 md:sticky md:top-4 md:h-[calc(100vh-2rem)] md:self-start md:overflow-y-auto ${tileClass}`}>
-   <div className="flex items-center justify-between gap-3"><DakshaBrand/><AppearanceControls className="justify-end md:hidden"/></div>
-   <AppNav/>
-   <div className="mt-auto hidden md:block"><p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted">Appearance</p><AppearanceControls className="flex-col !items-start"/></div>
-  </aside>
-  <main id="main" className="flex min-w-0 flex-col gap-3 md:gap-4">
-   <header className={`flex items-center justify-end gap-3 p-3 ${tileClass}`}><NotificationBell/><UserBadge/></header>
-   {children}
-  </main>
- </div></RequireAuth>;
+ return <RequireAuth><ToastHost/><ChatDock/><AppShell>{children}</AppShell></RequireAuth>;
 }

@@ -65,6 +65,7 @@ app.MapAccount();
 app.MapIntegrations();
 app.MapGmailIntegration();
 app.MapTelegramIntegration();
+app.MapChatAssist();
 app.MapDashboardApps();
 app.MapWhatsAppSettings();
 app.MapWhatsAppAutomation();
