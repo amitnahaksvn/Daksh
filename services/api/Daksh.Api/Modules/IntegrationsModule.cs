@@ -64,6 +64,7 @@ public sealed class IntegrationConnection
 /// the shared "whatsappMessages" collection — this API only ever reads it, to answer "what came in" for the
 /// Manage panel and the dashboard widget, the same read-only relationship it has with IntegrationCredential.
 /// </summary>
+[BsonIgnoreExtraElements]
 public sealed class WhatsAppMessage
 {
     [BsonId, BsonRepresentation(BsonType.ObjectId)]
@@ -91,6 +92,9 @@ public sealed class WhatsAppMessage
     /// <summary>"Delete for me": hidden in Daksha only.</summary>
     [BsonElement("hidden")] public bool Hidden { get; set; }
     [BsonElement("starred")] public bool Starred { get; set; }
+    /// <summary>We already told WhatsApp this incoming message was read.</summary>
+    [BsonElement("readSent")] public bool ReadSent { get; set; }
+    [BsonElement("deletedAt")] public DateTime? DeletedAt { get; set; }
     [BsonElement("quotedMessageId")] public string? QuotedMessageId { get; set; }
     [BsonElement("quotedText")] public string? QuotedText { get; set; }
     [BsonElement("reactions")] public List<WhatsAppReaction> Reactions { get; set; } = [];

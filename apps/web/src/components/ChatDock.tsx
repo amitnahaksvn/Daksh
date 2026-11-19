@@ -21,7 +21,6 @@ const BRAND: Record<Channel, { icon: string; color: string }> = {
 };
 const MAX_WINDOWS = 3;
 type ChatWindow = { channel: Channel; chatId: string; minimized: boolean };
-const COLLAPSED_KEY = "daksh.chatRail.collapsed";
 export const OPEN_CHAT_EVENT = "daksh:open-chat";
 
 /** Ask the chat sidebar to open (optionally on a given channel) from anywhere in the app. */
@@ -63,9 +62,10 @@ export function ChatDock() {
   const desktop = useDesktop();
   const hidden = useHiddenChatConnections();
   const [accounts, setAccounts] = useState<Partial<Record<Channel, Account>>>({});
-  const [collapsed, setCollapsed] = useState(() => {
-    try { return window.localStorage.getItem(COLLAPSED_KEY) === "1"; } catch { return false; }
-  });
+  // The panel is always there but minimized to a slim strip. It opens by itself only when there is something unread (and
+  // stays open while you use it), and the person can open or minimize it by hand. Nothing is remembered between visits.
+  const [userOpen, setUserOpen] = useState(false);
+  const [dismissedUnread, setDismissedUnread] = useState(0);
   const [overlayOpen, setOverlayOpen] = useState(false);
   const [windows, setWindows] = useState<ChatWindow[]>([]);
   const [query, setQuery] = useState("");
@@ -122,7 +122,7 @@ export function ChatDock() {
   useEffect(() => {
     const onOpen = (e: Event) => {
       const channel = (e as CustomEvent<{ channel?: Channel }>).detail?.channel;
-      setCollapsed(false);
+      setUserOpen(true);
       setOverlayOpen(true);
       if (channel) setClosedGroups((g) => { const n = new Set(g); n.delete(channel); return n; });
       void refresh();
@@ -130,11 +130,6 @@ export function ChatDock() {
     window.addEventListener(OPEN_CHAT_EVENT, onOpen);
     return () => window.removeEventListener(OPEN_CHAT_EVENT, onOpen);
   }, [refresh]);
-
-  function setCollapsedPersisted(value: boolean) {
-    setCollapsed(value);
-    try { window.localStorage.setItem(COLLAPSED_KEY, value ? "1" : "0"); } catch { /* storage unavailable */ }
-  }
 
   /** Opens a conversation as its own window next to the sidebar (or brings the existing one forward). */
   function openWindow(channel: Channel, chatId: string) {
@@ -163,6 +158,14 @@ export function ChatDock() {
   }, [accounts, hidden, query]);
 
   const totalUnread = groups.reduce((n, g) => n + g.unread, 0);
+  // What should pull the panel open: unread messages in chats that are not muted (archived chats are already left out).
+  const attentionUnread = groups.reduce((n, g) => n + g.rows.reduce((m, r) => m + (r.muted ? 0 : r.unread), 0), 0);
+  // If the unread count fell below what was dismissed, the next new message must open the panel again.
+  if (attentionUnread < dismissedUnread) setDismissedUnread(attentionUnread);
+  const collapsed = !(userOpen || attentionUnread > dismissedUnread);
+  const setCollapsedPersisted = (minimize: boolean) => {
+    if (minimize) { setUserOpen(false); setDismissedUnread(attentionUnread); } else setUserOpen(true);
+  };
   const visible = desktop || overlayOpen;
 
   // Let the page make room for the fixed sidebar on desktop.

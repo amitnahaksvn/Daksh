@@ -215,4 +215,19 @@ public class ReplyGateTests
         Assert.Contains("French", ChatAssistModule.PromptFor("translate", "", "Bonjour", "French"));
         Assert.Throws<ArgumentException>(() => ChatAssistModule.PromptFor("nope", "", null, null));
     }
+
+    [Fact]
+    public void A_message_document_with_fields_the_api_does_not_know_still_loads()
+    {
+        // The WhatsApp service adds bookkeeping fields (read marker, deleted time, and whatever comes next). Reading a chat must never
+        // fail because of a field this class has not heard of -- that once made every opened chat show no messages.
+        var doc = new MongoDB.Bson.BsonDocument
+        {
+            { "connectionId", "c" }, { "messageId", "m" }, { "chatId", "1@lid" }, { "fromMe", false }, { "text", "hi" },
+            { "timestamp", DateTime.UtcNow }, { "readSent", true }, { "deletedAt", DateTime.UtcNow }, { "someFutureField", 7 },
+        };
+        var message = MongoDB.Bson.Serialization.BsonSerializer.Deserialize<WhatsAppMessage>(doc);
+        Assert.True(message.ReadSent);
+        Assert.Equal("hi", message.Text);
+    }
 }

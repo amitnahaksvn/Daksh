@@ -69,4 +69,45 @@ describe("Chats panel stays put", () => {
     await tick(10);
     expect(screen.queryByLabelText("Chats")).toBeNull();
   });
+
+  it("is always there but minimized, and opens by itself only for unread messages", async () => {
+    const read = { ...chat, unreadCount: 0 };
+    vi.spyOn(api, "appDetail").mockImplementation((key) => key === "whatsapp" ? Promise.resolve(detail("Connected")) : Promise.reject(new Error("x")));
+    const chats = vi.spyOn(api, "whatsAppChats").mockResolvedValue([read] as never);
+    render(<ChatDock />);
+    await tick(10);
+    expect(screen.getByLabelText("Chats")).toBeTruthy(); // present from the start...
+    expect(screen.getByRole("button", { name: "Expand chats" })).toBeTruthy(); // ...as the slim strip
+    expect(screen.queryByText("Aj")).toBeNull();
+
+    chats.mockResolvedValue([{ ...chat, unreadCount: 2 }] as never);
+    await tick(8100);
+    expect(screen.getByText("Aj")).toBeTruthy(); // an unread message opens it
+    expect(screen.queryByRole("button", { name: "Expand chats" })).toBeNull();
+
+    chats.mockResolvedValue([read] as never);
+    await tick(8100);
+    expect(screen.getByRole("button", { name: "Expand chats" })).toBeTruthy(); // read everything: back to the strip
+  });
+
+  it("stays minimized when you minimize it, until something new arrives; muted chats never open it", async () => {
+    vi.spyOn(api, "appDetail").mockImplementation((key) => key === "whatsapp" ? Promise.resolve(detail("Connected")) : Promise.reject(new Error("x")));
+    const chats = vi.spyOn(api, "whatsAppChats").mockResolvedValue([{ ...chat, unreadCount: 1 }] as never);
+    render(<ChatDock />);
+    await tick(10);
+    await act(async () => { screen.getByRole("button", { name: "Collapse chats" }).click(); });
+    expect(screen.getByRole("button", { name: "Expand chats" })).toBeTruthy();
+    await tick(8100);
+    expect(screen.getByRole("button", { name: "Expand chats" })).toBeTruthy(); // the same unread message does not reopen it
+    chats.mockResolvedValue([{ ...chat, unreadCount: 2 }] as never);
+    await tick(8100);
+    expect(screen.queryByRole("button", { name: "Expand chats" })).toBeNull(); // a newer one does
+
+    chats.mockResolvedValue([{ ...chat, unreadCount: 0 }] as never);
+    await tick(8100);
+    expect(screen.getByRole("button", { name: "Expand chats" })).toBeTruthy();
+    chats.mockResolvedValue([{ ...chat, unreadCount: 3, mutedUntil: new Date(Date.now() + 3600000).toISOString() }] as never);
+    await tick(8100);
+    expect(screen.getByRole("button", { name: "Expand chats" })).toBeTruthy(); // muted: shown on the strip, but does not pull it open
+  });
 });
