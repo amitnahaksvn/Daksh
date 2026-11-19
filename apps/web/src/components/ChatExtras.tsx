@@ -46,7 +46,7 @@ export function exportChat(name: string, messages: { fromMe: boolean; text: stri
 }
 
 /** AI help for the open conversation, only on request: a summary, or three suggested replies to pick from (nothing is sent by itself). */
-export function AssistBar({ channel, connectionId, chatId, onUse }: { channel: "whatsapp" | "telegram"; connectionId: string; chatId: string; onUse: (text: string) => void }) {
+export function AssistBar({ channel, connectionId, chatId, onUse, compact = false }: { channel: "whatsapp" | "telegram"; connectionId: string; chatId: string; onUse: (text: string) => void; compact?: boolean }) {
   const [busy, setBusy] = useState<"summary" | "suggest" | null>(null);
   const [result, setResult] = useState<ChatAssistResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -56,12 +56,13 @@ export function AssistBar({ channel, connectionId, chatId, onUse }: { channel: "
     catch (e) { setError(e instanceof ApiError ? e.message : "The AI could not help right now."); }
     finally { setBusy(null); }
   }
-  const btn = "rounded-full border border-line px-3 py-1 text-xs font-semibold text-muted hover:bg-surface-2 hover:text-text disabled:opacity-50";
+  // In a small chat window the two buttons share one slim row instead of wrapping and eating the message area.
+  const btn = `shrink-0 rounded-full border border-line font-semibold text-muted hover:bg-surface-2 hover:text-text disabled:opacity-50 ${compact ? "px-2.5 py-0.5 text-[11px]" : "px-3 py-1 text-xs"}`;
   return (
-    <div className="border-t border-line px-3 py-2">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className={`shrink-0 border-t border-line px-3 ${compact ? "max-h-32 overflow-y-auto py-1.5" : "py-2"}`}>
+      <div className={`flex items-center gap-2 ${compact ? "flex-nowrap" : "flex-wrap"}`}>
         <button type="button" onClick={() => void ask("summary")} disabled={busy !== null} className={btn}>{busy === "summary" ? "Summarizing…" : "✨ Summarize"}</button>
-        <button type="button" onClick={() => void ask("suggest")} disabled={busy !== null} className={btn}>{busy === "suggest" ? "Thinking…" : "✨ Suggest replies"}</button>
+        <button type="button" onClick={() => void ask("suggest")} disabled={busy !== null} className={btn}>{busy === "suggest" ? "Thinking…" : compact ? "✨ Suggest" : "✨ Suggest replies"}</button>
         {(result || error) && <button type="button" onClick={() => { setResult(null); setError(null); }} aria-label="Dismiss" className="ml-auto text-xs text-muted hover:text-text">✕</button>}
       </div>
       {error && <p role="alert" className="mt-2 text-xs text-danger">{error}</p>}

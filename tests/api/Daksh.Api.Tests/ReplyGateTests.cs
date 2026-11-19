@@ -244,4 +244,35 @@ public class ReplyGateTests
         Assert.Equal("Dashboard 2", DashboardTabs.NextDefaultName(["Dashboard"]));
         Assert.Equal("Dashboard 3", DashboardTabs.NextDefaultName(["dashboard", "Dashboard 2"]));
     }
+
+    [Fact]
+    public void The_assistant_works_out_which_apps_a_question_is_about()
+    {
+        var names = new[] { "Yaashicca", "Rohan Kumar", "PSW Advertisements", "Mom" };
+        var chat = AssistantIntent.Detect("What did Rohan say on WhatsApp?", names);
+        Assert.True(chat.Messages);
+        Assert.Equal(["Rohan Kumar"], chat.Names); // a first name is enough
+        Assert.True(AssistantIntent.Detect("Any new emails from the bank in my inbox?", names).Mail);
+        Assert.True(AssistantIntent.Detect("What tasks are overdue?", names).Tasks);
+        Assert.True(AssistantIntent.Detect("Catch me up on today", names).Overview);
+        Assert.False(AssistantIntent.Detect("What is the capital of France?", names).AnyApp);
+        Assert.Equal(["Mom"], AssistantIntent.Detect("what did mom say?", names).Names); // a chat really named Mom matches
+        Assert.Empty(AssistantIntent.Detect("the team group", ["Team Alpha"]).Names); // a generic first word alone does not pick a chat
+        Assert.Equal(["Yaashicca"], AssistantIntent.Detect("did yaashicca reply?", names).Names); // case does not matter
+        Assert.Empty(AssistantIntent.Detect("the roha situation", names).Names); // only whole words match
+    }
+
+    [Fact]
+    public void Chat_context_is_one_labelled_line_per_message_oldest_first_and_long_text_is_clipped()
+    {
+        var t = new DateTime(2026, 11, 19, 10, 0, 0, DateTimeKind.Utc);
+        var text = AssistantContextBuilder.FormatChat("Rohan", [(t.AddMinutes(5), false, "Rohan", "Still on tonight?"), (t, true, "Me", new string('x', 500))]);
+        var lines = text.Split('\n');
+        Assert.Equal("Chat with Rohan:", lines[0]);
+        Assert.Contains("Me:", lines[1]); // the older one first
+        Assert.Contains("Rohan: Still on tonight?", lines[2]);
+        Assert.True(lines[1].Length < 360);
+        Assert.Equal("a b", AssistantContextBuilder.Clip("  a\n\n b ", 10));
+        Assert.Equal("abc…", AssistantContextBuilder.Clip("abcdef", 3));
+    }
 }

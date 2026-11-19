@@ -11,14 +11,6 @@ public class AssistantTests : IClassFixture<DakshApiFactory>
     private readonly DakshApiFactory _f;
     public AssistantTests(DakshApiFactory f) => _f = f;
 
-    [Fact]
-    public async Task Message_returns_not_implemented_pending_mongodb_rebuild()
-    {
-        var client = _f.ClientFor("alice");
-        var res = await client.PostAsJsonAsync("/api/v1/assistant/messages", new { message = "hello daksh" });
-        Assert.Equal(HttpStatusCode.NotImplemented, res.StatusCode);
-    }
-
     [Theory]
     [InlineData("")]
     [InlineData("   ")]

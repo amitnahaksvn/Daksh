@@ -206,7 +206,7 @@ export function ChatDock() {
           <section
             key={`${w.channel}:${w.chatId}`}
             aria-label={`Chat with ${name}`}
-            className={`chat-window pointer-events-auto flex w-[min(16rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-t-2xl border border-b-0 border-line bg-surface shadow-[0_-6px_28px_rgb(0_0_0/0.22)] ${w.minimized ? "" : "h-[min(25rem,calc(100vh-5rem))]"}`}
+            className={`chat-window pointer-events-auto flex w-[min(16rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-t-2xl border border-b-0 border-line bg-surface shadow-[0_-6px_28px_rgb(0_0_0/0.22)] ${w.minimized ? "" : "h-[min(32rem,calc(100vh-3rem))]"}`}
           >
             <header className="flex shrink-0 items-center gap-2 border-b border-line bg-surface-2 px-3 py-2">
               <button type="button" onClick={() => toggleMinimize(w.channel, w.chatId)} className="flex min-w-0 flex-1 items-center gap-2 text-left" aria-label={w.minimized ? `Expand chat with ${name}` : `Minimise chat with ${name}`}>
@@ -217,7 +217,7 @@ export function ChatDock() {
               <button type="button" onClick={() => closeWindow(w.channel, w.chatId)} aria-label="Close chat" className="rounded-full px-2 text-muted hover:bg-line hover:text-text">✕</button>
             </header>
             {!w.minimized && (
-              <div className="min-h-0 flex-1 overflow-hidden">
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 {w.channel === "whatsapp" && wa ? (
                   <ChatThread connectionId={group.connectionId} chat={wa} onClose={() => closeWindow(w.channel, w.chatId)} onSent={() => void refresh()} embedded bodyHeightClass="h-[min(14rem,calc(100vh-17rem))]" />
                 ) : tg ? (

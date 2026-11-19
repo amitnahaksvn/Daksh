@@ -93,6 +93,8 @@ export type AssistantReply = {
   reply: string;
   provider: string;
   isSimulated: boolean;
+  /** The connected apps the assistant looked at to answer (for example WhatsApp, Gmail). */
+  sources?: string[];
 };
 export type ConversationSummary = { id: string; createdAt: string; messageCount: number };
 export type ChatMessage = { id: string; role: "user" | "assistant"; content: string; createdAt: string };

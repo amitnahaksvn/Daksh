@@ -245,7 +245,7 @@ export function TelegramThreadView({ connectionId, chat, onClose, onSent, bodyHe
   const status = presenceText(presence);
 
   return (
-    <div className={`flex min-h-0 flex-col ${embedded ? "" : "rounded-[1.25rem] border border-line"}`} onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }} onDrop={(e) => { const f = e.dataTransfer.files?.[0]; if (f) { e.preventDefault(); pickFile(f); } }}>
+    <div className={`flex min-h-0 flex-col ${embedded ? "h-full" : "rounded-[1.25rem] border border-line"}`} onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }} onDrop={(e) => { const f = e.dataTransfer.files?.[0]; if (f) { e.preventDefault(); pickFile(f); } }}>
       {!embedded && (
         <div className="flex items-center justify-between gap-2 border-b border-line p-3">
           <div className="flex min-w-0 items-center gap-3"><ChatAvatar channel="telegram" connectionId={connectionId} chatId={chat.chatId} name={chat.name} isGroup={chat.isGroup} size={40} />
@@ -287,7 +287,7 @@ export function TelegramThreadView({ connectionId, chat, onClose, onSent, bodyHe
           <button onClick={() => { setReplyingTo(null); setEditing(null); setFile(null); if (editing) setText(""); }} aria-label="Cancel" className="shrink-0 text-muted hover:text-text">✕</button>
         </div>
       )}
-      <AssistBar channel="telegram" connectionId={connectionId} chatId={chat.chatId} onUse={(t) => { setText(t); setEditing(null); }} />
+      <AssistBar compact={embedded} channel="telegram" connectionId={connectionId} chatId={chat.chatId} onUse={(t) => { setText(t); setEditing(null); }} />
       <div className="flex items-center gap-2 border-t border-line p-3">
         <input ref={fileInput} type="file" className="sr-only" aria-label="Attach a file" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setFile(f); setEditing(null); } e.target.value = ""; }} />
         <button type="button" onClick={() => fileInput.current?.click()} disabled={busy || editing !== null} aria-label="Attach a photo, video, voice note or file" title="Attach" className={`${secondaryButtonClass} !px-3 !py-2`}>📎</button>

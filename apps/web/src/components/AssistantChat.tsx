@@ -4,9 +4,9 @@ import { api, ApiError } from "@/lib/api";
 import { Orb } from "./Orb";
 import { buttonClass, tileClass } from "./ui";
 
-type Line = { role: "user" | "assistant"; text: string; simulated?: boolean; typed?: boolean };
+type Line = { role: "user" | "assistant"; text: string; simulated?: boolean; typed?: boolean; sources?: string[] };
 
-const SUGGESTIONS = ["Plan my day", "What is on my task list?", "Remind me to call mum tomorrow", "Summarise what I did this week"];
+const SUGGESTIONS = ["Catch me up on today", "What's unread on WhatsApp?", "Any new emails in my inbox?", "What tasks are open?", "Summarise my latest chats"];
 
 /** Types the reply out. Screen readers get the whole reply at once; people who prefer less motion (and tests) see it instantly. */
 function Reply({ text, animate }: { text: string; animate: boolean }) {
@@ -38,6 +38,8 @@ export function AssistantChat({ tall = false }: { tall?: boolean }) {
   const [conversationId, setConversationId] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  // The owner has not yet allowed the AI provider to see their data: hold the question and ask once.
+  const [consent, setConsent] = useState(false);
   const box = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLLIElement>(null);
 
@@ -62,16 +64,33 @@ export function AssistantChat({ tall = false }: { tall?: boolean }) {
       const r = await api.sendMessage(message, conversationId);
       setConversationId(r.conversationId);
       const motionOk = typeof window.matchMedia === "function" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      setLines((l) => [...l, { role: "assistant", text: r.reply, simulated: r.isSimulated, typed: motionOk }]);
+      setLines((l) => [...l, { role: "assistant", text: r.reply, simulated: r.isSimulated, typed: motionOk, sources: r.sources }]);
     } catch (err) {
       setText(message);
       setLines((l) => l.slice(0, -1));
-      setError(err instanceof ApiError ? err.message : "Unexpected error.");
+      if (err instanceof ApiError && err.code === "ai_consent_required") setConsent(true);
+      else setError(err instanceof ApiError ? err.message : "Unexpected error.");
     } finally {
       setBusy(false);
     }
   }
   const submit = (e: React.FormEvent) => { e.preventDefault(); void send(); };
+
+  /** One-time permission: let Daksha's AI provider see the question and the app data it needs, then send the held question. */
+  async function allowAndSend() {
+    setBusy(true); setError(undefined);
+    try {
+      const current = await api.privacy().catch(() => ({ memoryEnabled: false, allowProviderDataSharing: false, retentionDays: 365 }));
+      await api.updatePrivacy({ ...current, allowProviderDataSharing: true });
+      setConsent(false);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not save that choice.");
+      setBusy(false);
+      return;
+    }
+    setBusy(false);
+    await send();
+  }
 
   return (
     <section aria-label="Conversation" className={`flex flex-col gap-4 p-4 ${tall ? "min-h-[calc(100dvh-15rem)] md:min-h-[calc(100dvh-12rem)]" : ""} ${tileClass}`}>
@@ -104,6 +123,7 @@ export function AssistantChat({ tall = false }: { tall?: boolean }) {
                 <span className="sr-only">Daksh: </span>
                 <Reply text={l.text} animate={!!l.typed} />
                 {l.simulated && <span className="ai-mono mt-1.5 block text-xs italic text-muted">(simulated reply)</span>}
+                {!!l.sources?.length && <span className="ai-mono mt-1.5 block text-xs text-muted">Checked: {l.sources.join(", ")}</span>}
               </div>
             </li>
           ),
@@ -117,6 +137,16 @@ export function AssistantChat({ tall = false }: { tall?: boolean }) {
         )}
         <li ref={endRef} aria-hidden className="h-0" />
       </ol>
+      {consent && (
+        <div role="alert" className="rounded-2xl border border-line bg-surface-2 p-4 text-sm">
+          <p className="font-semibold">Allow Daksha to use its AI provider?</p>
+          <p className="mt-1 text-muted">To answer, your question and any app data it needs (for example the chat or the mail you ask about) are sent to the AI provider. Daksha only reads; it never sends or changes anything from here. You can turn this off later in your privacy settings.</p>
+          <div className="mt-3 flex gap-2">
+            <button type="button" onClick={() => void allowAndSend()} disabled={busy} className={buttonClass}>Allow and continue</button>
+            <button type="button" onClick={() => setConsent(false)} className="rounded-full border border-line px-4 py-2 text-sm font-semibold hover:bg-surface">Not now</button>
+          </div>
+        </div>
+      )}
       {error && <p role="alert" className="text-sm font-medium text-danger">{error}</p>}
       <form onSubmit={submit} className="flex items-end gap-2 rounded-2xl border border-line bg-surface-2 p-2">
         <label htmlFor="message" className="sr-only">Message</label>

@@ -389,7 +389,7 @@ export function ChatThread({ connectionId, chat, onClose, onSent, bodyHeightClas
   const name = chatDisplayName(chat);
 
   return (
-    <div className={embedded ? "" : "rounded-[1.25rem] border border-line"} onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }} onDrop={(e) => { const f = e.dataTransfer.files?.[0]; if (f) { e.preventDefault(); pickFile(f); } }}>
+    <div className={embedded ? "flex h-full min-h-0 flex-col" : "rounded-[1.25rem] border border-line"} onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }} onDrop={(e) => { const f = e.dataTransfer.files?.[0]; if (f) { e.preventDefault(); pickFile(f); } }}>
       {!embedded && (
         <div className="flex items-center justify-between gap-2 border-b border-line p-3">
           <div className="flex min-w-0 items-center gap-3">
@@ -426,7 +426,7 @@ export function ChatThread({ connectionId, chat, onClose, onSent, bodyHeightClas
       </div>
       {showGroup && chat.isGroup && <GroupInfoPanel connectionId={connectionId} chat={chat} onClose={() => setShowGroup(false)} />}
       {search !== null && <div className="border-b border-line p-2"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search in this chat…" aria-label="Search in this chat" className={inputClass} autoFocus /></div>}
-      <div ref={scrollRef} className={`${bodyHeightClass} space-y-2 overflow-y-auto p-3`}>
+      <div ref={scrollRef} className={`${embedded ? "min-h-0 flex-1" : bodyHeightClass} space-y-2 overflow-y-auto p-3`}>
         {!visible ? <p className="text-sm text-muted">Loading…</p>
           : visible.length === 0 ? <p className="text-sm text-muted">{query ? "No messages match." : "No messages yet."}</p>
           : visible.map((m, i) => (
@@ -453,7 +453,7 @@ export function ChatThread({ connectionId, chat, onClose, onSent, bodyHeightClas
           <button onClick={() => { setReplyingTo(null); setEditing(null); setFile(null); if (editing) setText(""); }} aria-label="Cancel" className="shrink-0 text-muted hover:text-text">✕</button>
         </div>
       )}
-      <AssistBar channel="whatsapp" connectionId={connectionId} chatId={chat.chatId} onUse={(t) => { setText(t); setEditing(null); }} />
+      <AssistBar compact={embedded} channel="whatsapp" connectionId={connectionId} chatId={chat.chatId} onUse={(t) => { setText(t); setEditing(null); }} />
       <div className="flex items-center gap-2 border-t border-line p-3">
         <input ref={fileInput} type="file" className="sr-only" aria-label="Attach a file" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setFile(f); setEditing(null); } e.target.value = ""; }} />
         <button type="button" onClick={() => fileInput.current?.click()} disabled={busy || editing !== null} aria-label="Attach a photo, video, voice note or file" title="Attach" className={`${secondaryButtonClass} !px-3 !py-2`}>📎</button>
