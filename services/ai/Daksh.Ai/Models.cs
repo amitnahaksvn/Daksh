@@ -8,7 +8,8 @@ public enum ModelLocality { Local, Cloud }
 /// <summary>Per-user choices that constrain every AI call. Sourced from the user's privacy settings.</summary>
 public sealed record UserAiContext(string UserId, bool MemoryEnabled, bool AllowProviderDataSharing);
 
-public sealed record AssistantRequest(UserAiContext User, string Message, IReadOnlyList<(string Role, string Content)>? History = null);
+/// <param name="Context">Data pulled from the user's connected apps for this question. It is given to the model as data, never as instructions.</param>
+public sealed record AssistantRequest(UserAiContext User, string Message, IReadOnlyList<(string Role, string Content)>? History = null, string? Context = null);
 
 public sealed record AssistantResult(
     string Text,

@@ -5,9 +5,9 @@ import { DashboardContent } from "@/components/DashboardPage";
 import { ErrorState } from "@/components/ui";
 import { api, ApiError, type DashboardTab, type DashboardWidget } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
+import { announceDashboardsChanged, ASK_TAB, OPEN_TAB_EVENT, TAB_KEY } from "@/lib/dashboardTabsState";
 
-export const TAB_KEY = "daksh.dashboard.tab";
-export const ASK_TAB = "ask";
+export { TAB_KEY, ASK_TAB };
 const MAX_TABS = 12;
 const WIDGET_LABELS: Record<DashboardWidget, string> = { command: "Command Centre", apps: "App tiles" };
 
@@ -36,18 +36,27 @@ export function DashboardTabs() {
   const renameBox = useRef<HTMLInputElement>(null);
   useEffect(() => { if (renaming) renameBox.current?.select(); }, [renaming]);
 
+  // The sidebar can ask for a particular tab ("New chat", or one of the listed dashboards).
+  useEffect(() => {
+    const onOpen = (e: Event) => { const id = (e as CustomEvent<string>).detail; if (typeof id === "string") { setPicked(id); setMenuFor(null); setError(null); } };
+    window.addEventListener(OPEN_TAB_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_TAB_EVENT, onOpen);
+  }, []);
+
+
   function select(id: string) {
     setPicked(id); setMenuFor(null); setError(null);
     try { localStorage.setItem(TAB_KEY, id); } catch { /* storage unavailable */ }
   }
   const fail = (e: unknown, fallback: string) => setError(e instanceof ApiError ? e.message : fallback);
-  const replace = (next: DashboardTab) => setTabs((all) => all?.map((t) => (t.id === next.id ? next : t)) ?? all);
+  const replace = (next: DashboardTab) => { setTabs((all) => all?.map((t) => (t.id === next.id ? next : t)) ?? all); announceDashboardsChanged(); };
 
   async function add() {
     setBusy(true); setError(null);
     try {
       const created = await api.createDashboard();
       setTabs((all) => [...(all ?? []), created]);
+      announceDashboardsChanged();
       select(created.id);
       setRenaming(created.id); setDraft(created.name); // name it straight away
     } catch (e) { fail(e, "Could not add a dashboard."); }
@@ -76,6 +85,7 @@ export function DashboardTabs() {
     try {
       await api.deleteDashboard(t.id);
       setTabs((all) => all?.filter((x) => x.id !== t.id) ?? all);
+      announceDashboardsChanged();
       select(ASK_TAB);
     } catch (e) { fail(e, "Could not delete the dashboard."); }
   }

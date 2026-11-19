@@ -305,6 +305,32 @@ public static partial class GmailIntegrationModule
         return RedirectToFrontend(attempt.FrontendUrl, "status", "connected");
     }
 
+    /// <summary>A short list of recent mail (sender, subject, a snippet) for the assistant. Returns null when Gmail is not connected or cannot be read.</summary>
+    internal static async Task<IReadOnlyList<GmailMessageSummary>?> RecentForAssistantAsync(string userId, string query, int max, IMongoDatabase db, ISecretProtector protector, IConfiguration config, IHttpClientFactory clients, CancellationToken ct)
+    {
+        try
+        {
+            var path = QueryHelpers.AddQueryString("users/me/messages", new Dictionary<string, string?> { ["maxResults"] = Math.Clamp(max, 1, 15).ToString(), ["q"] = query });
+            using var list = await GmailApiAsync(userId, path, HttpMethod.Get, null, db, protector, config, clients, ct);
+            var ids = list.RootElement.TryGetProperty("messages", out var items) ? items.EnumerateArray().Select(m => m.GetProperty("id").GetString() ?? "").Where(i => i.Length > 0).ToArray() : [];
+            var rows = await Task.WhenAll(ids.Select(async id =>
+            {
+                try
+                {
+                    using var detail = await GmailApiAsync(userId, $"users/me/messages/{Uri.EscapeDataString(id)}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date", HttpMethod.Get, null, db, protector, config, clients, ct);
+                    var root = detail.RootElement;
+                    var headers = root.TryGetProperty("payload", out var payload) && payload.TryGetProperty("headers", out var values) ? values.EnumerateArray().ToArray() : [];
+                    var date = root.TryGetProperty("internalDate", out var d) && long.TryParse(d.GetString(), out var ms) ? DateTimeOffset.FromUnixTimeMilliseconds(ms) : (DateTimeOffset?)null;
+                    var labels = root.TryGetProperty("labelIds", out var l) ? l.EnumerateArray().Select(x => x.GetString()).ToHashSet() : new HashSet<string?>();
+                    return new GmailMessageSummary(id, "", Header(headers, "From"), Header(headers, "Subject"), root.TryGetProperty("snippet", out var sn) ? sn.GetString() ?? "" : "", date, labels.Contains("UNREAD"), labels.Contains("STARRED"));
+                }
+                catch (Exception) { return null; }
+            }));
+            return rows.OfType<GmailMessageSummary>().ToArray();
+        }
+        catch (Exception) { return null; } // not connected, token problem, offline: the assistant simply has no mail to look at
+    }
+
     private static async Task<IResult> ListMessagesAsync(
         string? q,
         string? pageToken,

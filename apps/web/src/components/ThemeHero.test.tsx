@@ -47,8 +47,8 @@ describe("every theme has its own dashboard hero", () => {
   });
 });
 
-describe("every theme has a sidebar menu of its own", () => {
-  it.each(THEMES.map((t) => t.id))("%s renders a sidebar with its own menu and both destinations", (id) => {
+describe("every theme has the same sidebar", () => {
+  it.each(THEMES.map((t) => t.id))("%s renders the sidebar with its destinations", (id) => {
     window.localStorage.setItem(STYLE_KEY, id);
     const { container } = render(<AppShell><p>page</p></AppShell>);
     expect(container.querySelector(`[data-nav="${id}"]`)).not.toBeNull();
@@ -92,14 +92,23 @@ describe("every theme has a sidebar menu of its own", () => {
     expect(screen.getAllByText("Fake").length).toBeGreaterThan(0);
   });
 
-  it("draws the menu differently in each theme", () => {
-    const seen = new Set<string>();
-    for (const t of THEMES) {
-      window.localStorage.setItem(STYLE_KEY, t.id);
-      const { container, unmount } = render(<AppShell><p>x</p></AppShell>);
-      seen.add(container.querySelector("aside nav")!.innerHTML);
-      unmount();
-    }
-    expect(seen.size).toBe(THEMES.length);
+  it("is laid out like a chat app's: logo with search and collapse icons, icon rows, and a list of your dashboards", async () => {
+    window.localStorage.setItem(STYLE_KEY, "hybrid");
+    vi.spyOn(api, "dashboards").mockResolvedValue([{ id: "d1", name: "Dashboard", order: 0, widgets: ["command", "apps"] }, { id: "d2", name: "Sales", order: 1, widgets: ["apps"] }]);
+    const seen: string[] = [];
+    const onOpen = (e: Event) => seen.push((e as CustomEvent<string>).detail);
+    window.addEventListener("daksh:open-tab", onOpen);
+    render(<AppShell><p>page</p></AppShell>);
+    expect(screen.getByRole("button", { name: "Search" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Minimize sidebar" })).toBeTruthy();
+    const nav = screen.getAllByRole("navigation", { name: "Main" })[0];
+    for (const label of ["New chat", "Dashboard", "Apps", "Chats"]) expect(nav.textContent).toContain(label);
+    await userEvent.click(await screen.findByRole("button", { name: "Sales" })); // the dashboards list
+    expect(seen).toEqual(["d2"]);
+    expect(window.localStorage.getItem("daksh.dashboard.tab")).toBe("d2");
+    await userEvent.click(screen.getByRole("button", { name: "New chat" }));
+    expect(seen).toEqual(["d2", "ask"]);
+    window.removeEventListener("daksh:open-tab", onOpen);
   });
+
 });
