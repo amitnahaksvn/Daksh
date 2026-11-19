@@ -65,17 +65,6 @@ describe("Telegram thread", () => {
     await waitFor(() => expect(older).toHaveBeenCalledWith("c1", "42"));
   });
 
-  it("suggests replies on request and puts the chosen one in the box without sending", async () => {
-    const assist = vi.spyOn(api, "chatAssist").mockResolvedValue({ mode: "suggest", text: null, suggestions: ["Sounds good!", "Let me check."], isSimulated: false });
-    const send = vi.spyOn(api, "sendTelegramMessage");
-    mount([msg({ fromMe: false, text: "Dinner?" })]);
-    await screen.findByText("Dinner?");
-    await userEvent.click(screen.getByRole("button", { name: /Suggest replies/ }));
-    await userEvent.click(await screen.findByText("Let me check."));
-    expect((screen.getByPlaceholderText("Write a message…") as HTMLInputElement).value).toBe("Let me check.");
-    expect(assist).toHaveBeenCalledWith("telegram", "c1", "42", "suggest");
-    expect(send).not.toHaveBeenCalled();
-  });
 });
 
 describe("chat helpers", () => {

@@ -246,6 +246,16 @@ public class ReplyGateTests
     }
 
     [Fact]
+    public void A_real_question_with_no_app_named_still_searches_the_apps_for_its_words()
+    {
+        Assert.Equal(["coming", "party", "Saturday"], AssistantIntent.Keywords("Who is coming to the party on Saturday?"));
+        Assert.Empty(AssistantIntent.Keywords("what did you say"));
+        Assert.True(AssistantIntent.IsSubstantive("Who is coming to the party?"));
+        Assert.False(AssistantIntent.IsSubstantive("hi"));
+        Assert.False(AssistantIntent.IsSubstantive("ok thanks"));
+    }
+
+    [Fact]
     public void The_assistant_works_out_which_apps_a_question_is_about()
     {
         var names = new[] { "Yaashicca", "Rohan Kumar", "PSW Advertisements", "Mom" };

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { tileClass } from "@/components/ui";
 
 /** A large centered overlay dialog. Closes on Escape or a click outside the panel. */
@@ -20,7 +21,8 @@ export function Modal({ open, onClose, children, wide = false, fixedHeight = fal
 
   if (!open) return null;
 
-  return (
+  // Rendered on the page itself, not inside whatever opened it, so a draggable tile never lends the pop-up its move cursor.
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -42,6 +44,7 @@ export function Modal({ open, onClose, children, wide = false, fixedHeight = fal
         </button>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

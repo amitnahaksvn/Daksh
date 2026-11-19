@@ -7,6 +7,10 @@ namespace Daksh.Api.Modules;
 
 public static partial class GmailIntegrationModule
 {
+    /// <summary>The dashboard card is refreshed every minute by every open tab and tile; Gmail has a per-minute quota per account, so one answer is shared for a short time.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime ExpiresUtc, object Payload)> DashboardCache = new();
+    private static readonly TimeSpan DashboardCacheFor = TimeSpan.FromSeconds(45);
+
     /// <summary>The badge a priority email gets, from what the classifier found. Order matters: the most actionable label wins.</summary>
     public static string PriorityLabel(GmailMessageDoc d) =>
         d.Urgent || d.ActionItems.Count > 0 ? "Action Required"
@@ -20,10 +24,12 @@ public static partial class GmailIntegrationModule
     private static void MapDashboard(RouteGroupBuilder g)
     {
         // `since` = the start of the user's local day (unix seconds), so "today" means today where they are.
-        g.MapGet("/dashboard", (string? accountId, long? since, GmailServices svc, ClaimsPrincipalAccessor who, CancellationToken ct) => Run(svc, async () =>
+        g.MapGet("/dashboard", (string? accountId, long? since, bool? fresh, GmailServices svc, ClaimsPrincipalAccessor who, CancellationToken ct) => Run(svc, async () =>
         {
             var auth = await GmailGuard.AuthorizeAsync(svc.Db, who.UserId, accountId, GmailPermission.Read, ct);
             var userId = who.UserId; var id = auth.Connection.Id;
+            var cacheKey = $"{userId}:{id}";
+            if (fresh != true && DashboardCache.TryGetValue(cacheKey, out var hit) && hit.ExpiresUtc > DateTime.UtcNow) return Results.Ok(hit.Payload);
             var now = DateTimeOffset.UtcNow;
             var dayStart = since is { } s && s >= now.AddHours(-26).ToUnixTimeSeconds() && s <= now.AddHours(1).ToUnixTimeSeconds()
                 ? DateTimeOffset.FromUnixTimeSeconds(s) : new DateTimeOffset(now.UtcDateTime.Date, TimeSpan.Zero);
@@ -88,7 +94,7 @@ public static partial class GmailIntegrationModule
             }
 
             var synced = state?.InitialSyncDone == true;
-            return Results.Ok(new
+            var payload = new
             {
                 generatedAtUtc = now.UtcDateTime,
                 account = new { id, email = auth.Account.Email, auth.Account.Nickname, auth.Account.Enabled },
@@ -107,7 +113,9 @@ public static partial class GmailIntegrationModule
                 },
                 sync = new { status = state?.Status ?? "Idle", state?.LastSuccessUtc, state?.LastFailureUtc, state?.LastError, initialSyncDone = synced, analysedToday },
                 aiEnabled = auth.Config.Ai.Enabled,
-            });
+            };
+            DashboardCache[cacheKey] = (DateTime.UtcNow + DashboardCacheFor, payload);
+            return Results.Ok(payload);
         }));
     }
 }

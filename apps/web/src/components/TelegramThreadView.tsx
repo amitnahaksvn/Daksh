@@ -3,9 +3,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChatAvatar } from "@/components/ChatAvatar";
 import { Linkified } from "@/components/Linkified";
-import { AssistBar, DayDivider, EmojiButton, exportChat, sameDay } from "@/components/ChatExtras";
+import { DayDivider, EmojiButton, exportChat, sameDay } from "@/components/ChatExtras";
 import { MessageTicks } from "@/components/WhatsAppThread";
-import { buttonClass, inputClass, secondaryButtonClass } from "@/components/ui";
+import { buttonClass, inputClass } from "@/components/ui";
 import { api, ApiError, type TelegramChat, type TelegramGroupInfo, type TelegramMessage, type TelegramPresence } from "@/lib/api";
 import { getIntegrationsHub } from "@/lib/signalr";
 
@@ -287,13 +287,12 @@ export function TelegramThreadView({ connectionId, chat, onClose, onSent, bodyHe
           <button onClick={() => { setReplyingTo(null); setEditing(null); setFile(null); if (editing) setText(""); }} aria-label="Cancel" className="shrink-0 text-muted hover:text-text">✕</button>
         </div>
       )}
-      <AssistBar compact={embedded} channel="telegram" connectionId={connectionId} chatId={chat.chatId} onUse={(t) => { setText(t); setEditing(null); }} />
-      <div className="flex items-center gap-2 border-t border-line p-3">
+      <div className="flex items-center gap-1.5 border-t border-line p-2.5">
         <input ref={fileInput} type="file" className="sr-only" aria-label="Attach a file" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setFile(f); setEditing(null); } e.target.value = ""; }} />
-        <button type="button" onClick={() => fileInput.current?.click()} disabled={busy || editing !== null} aria-label="Attach a photo, video, voice note or file" title="Attach" className={`${secondaryButtonClass} !px-3 !py-2`}>📎</button>
-        <EmojiButton disabled={busy} onPick={(e) => onType(text + e)} />
-        <input value={text} onChange={(e) => onType(e.target.value)} onBlur={stopTyping} onPaste={(e) => { const f = e.clipboardData.files?.[0]; if (f) { e.preventDefault(); pickFile(f); } }} onKeyDown={(e) => { if (e.key === "Enter") void send(); }} placeholder={file ? "Add a caption…" : editing ? "Edit your message…" : "Write a message…"} className={inputClass} />
-        <button onClick={() => void send()} disabled={busy || (!file && !text.trim())} className={`${buttonClass} px-4`}>{busy ? "…" : editing ? "Save" : "Send"}</button>
+        <button type="button" onClick={() => fileInput.current?.click()} disabled={busy || editing !== null} aria-label="Attach a photo, video, voice note or file" title="Attach" className="shrink-0 rounded-full p-2 text-lg leading-none opacity-70 hover:bg-surface-2 hover:opacity-100 disabled:opacity-40">📎</button>
+        <EmojiButton plain disabled={busy} onPick={(e) => onType(text + e)} />
+        <input value={text} onChange={(e) => onType(e.target.value)} onBlur={stopTyping} onPaste={(e) => { const f = e.clipboardData.files?.[0]; if (f) { e.preventDefault(); pickFile(f); } }} onKeyDown={(e) => { if (e.key === "Enter") void send(); }} placeholder={file ? "Add a caption…" : editing ? "Edit your message…" : "Write a message…"} aria-label="Message" className={`${inputClass} min-w-0 flex-1 !rounded-full`} />
+        <button onClick={() => void send()} disabled={busy || (!file && !text.trim())} className={`${buttonClass} shrink-0 !px-4 !py-2`}>{busy ? "…" : editing ? "Save" : "Send"}</button>
       </div>
       {notice && <p role="status" className="px-3 pb-2 text-xs text-accent">{notice}</p>}
       {error && <p role="alert" className="px-3 pb-3 text-sm text-danger">{error}</p>}

@@ -206,7 +206,7 @@ export function ChatDock() {
           <section
             key={`${w.channel}:${w.chatId}`}
             aria-label={`Chat with ${name}`}
-            className={`chat-window pointer-events-auto flex ${w.channel === "whatsapp" ? "w-[min(19rem,calc(100vw-1.5rem))]" : "w-[min(16rem,calc(100vw-1.5rem))]"} flex-col overflow-hidden rounded-t-2xl border border-b-0 border-line bg-surface shadow-[0_-6px_28px_rgb(0_0_0/0.22)] ${w.minimized ? "" : "h-[min(32rem,calc(100vh-3rem))]"}`}
+            className={`chat-window pointer-events-auto flex w-[min(24rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-t-2xl border border-b-0 border-line bg-surface shadow-[0_-6px_28px_rgb(0_0_0/0.22)] ${w.minimized ? "" : "h-[min(32rem,calc(100vh-3rem))]"}`}
           >
             {(w.minimized || w.channel !== "whatsapp") && <header className="flex shrink-0 items-center gap-2 border-b border-line bg-surface-2 px-3 py-2">
               <button type="button" onClick={() => toggleMinimize(w.channel, w.chatId)} className="flex min-w-0 flex-1 items-center gap-2 text-left" aria-label={w.minimized ? `Expand chat with ${name}` : `Minimise chat with ${name}`}>

@@ -11,7 +11,7 @@ namespace Daksh.Api.Modules;
 
 public sealed record SendMessageRequest(string? Message, Guid? ConversationId);
 public sealed record AssistantReply(Guid ConversationId, Guid MessageId, string Reply, string Provider, bool IsSimulated, IReadOnlyList<string>? Sources = null);
-public sealed record ConversationSummary(Guid Id, DateTimeOffset CreatedAt, int MessageCount);
+public sealed record ConversationSummary(Guid Id, DateTimeOffset CreatedAt, int MessageCount, string? Title = null);
 public sealed record MessageDto(Guid Id, string Role, string Content, DateTimeOffset CreatedAt);
 
 public sealed class SendMessageValidator : AbstractValidator<SendMessageRequest>
@@ -50,10 +50,11 @@ public static class AssistantModule
 
     public static void MapAssistant(this IEndpointRouteBuilder app)
     {
-        var g = app.MapGroup("/api/v1/assistant").RequireAuthorization().WithTags("Assistant");
+        var g = app.MapGroup("/api/v1/assistant").RequireAuthorization(AuthSetup.UserScheme).WithTags("Assistant");
         g.MapPost("/messages", SendAsync).Validate<SendMessageRequest>();
         g.MapGet("/conversations", ListConversationsAsync);
         g.MapGet("/conversations/{id:guid}/messages", ListMessagesAsync);
+        g.MapDelete("/conversations/{id:guid}", DeleteConversationAsync);
     }
 
     private static async Task<IResult> SendAsync(SendMessageRequest req, IMongoDatabase db, ClaimsPrincipalAccessor who, IAssistantOrchestrator orchestrator,
@@ -118,9 +119,17 @@ public static class AssistantModule
     {
         var list = await db.GetCollection<AssistantConversationDoc>("assistantConversations").Find(c => c.UserId == who.UserId).SortByDescending(c => c.CreatedAt).Limit(50).ToListAsync(ct);
         var counts = new List<ConversationSummary>();
+        var msgs = db.GetCollection<AssistantMessageDoc>("assistantMessages");
         foreach (var c in list)
-            counts.Add(new ConversationSummary(Guid.Parse(c.Id), new DateTimeOffset(DateTime.SpecifyKind(c.CreatedAt, DateTimeKind.Utc)),
-                (int)await db.GetCollection<AssistantMessageDoc>("assistantMessages").CountDocumentsAsync(m => m.ConversationId == c.Id, cancellationToken: ct)));
+        {
+            var count = (int)await msgs.CountDocumentsAsync(m => m.ConversationId == c.Id, cancellationToken: ct);
+            if (count == 0) continue; // a chat nobody has written in yet is not history
+            // Like ChatGPT, a chat is titled by what it began with.
+            var first = await msgs.Find(m => m.ConversationId == c.Id && m.Role == "user").SortBy(m => m.CreatedAt).Limit(1).FirstOrDefaultAsync(ct);
+            var title = first is null ? null : first.Content.Replace('\n', ' ').Trim();
+            if (title is { Length: > 60 }) title = title[..60].TrimEnd() + "…";
+            counts.Add(new ConversationSummary(Guid.Parse(c.Id), new DateTimeOffset(DateTime.SpecifyKind(c.CreatedAt, DateTimeKind.Utc)), count, title));
+        }
         return Results.Ok(counts);
     }
 
@@ -130,5 +139,14 @@ public static class AssistantModule
         if (await db.GetCollection<AssistantConversationDoc>("assistantConversations").Find(c => c.Id == key && c.UserId == who.UserId).AnyAsync(ct) is false) return Results.NotFound();
         var list = await db.GetCollection<AssistantMessageDoc>("assistantMessages").Find(m => m.ConversationId == key && m.UserId == who.UserId).SortBy(m => m.CreatedAt).ToListAsync(ct);
         return Results.Ok(list.Select(m => new MessageDto(Guid.Parse(m.Id), m.Role, m.Content, new DateTimeOffset(DateTime.SpecifyKind(m.CreatedAt, DateTimeKind.Utc)))));
+    }
+
+    private static async Task<IResult> DeleteConversationAsync(Guid id, IMongoDatabase db, ClaimsPrincipalAccessor who, CancellationToken ct)
+    {
+        var key = id.ToString();
+        var gone = await db.GetCollection<AssistantConversationDoc>("assistantConversations").DeleteOneAsync(c => c.Id == key && c.UserId == who.UserId, ct);
+        if (gone.DeletedCount == 0) return Results.NotFound();
+        await db.GetCollection<AssistantMessageDoc>("assistantMessages").DeleteManyAsync(m => m.ConversationId == key && m.UserId == who.UserId, ct);
+        return Results.NoContent();
     }
 }

@@ -104,7 +104,7 @@ describe("GmailDashboard", () => {
     const star = vi.spyOn(gmailControl, "messageAction").mockRejectedValue(new ApiError(403, "Google hasn't been asked for permission to star messages yet.", {}, "scope_upgrade_required", "modify"));
     const list = within(await screen.findByRole("region", { name: "Priority emails" }));
     await userEvent.click(list.getAllByRole("button", { name: "Star this email" })[0]);
-    await waitFor(() => expect(star).toHaveBeenCalledWith("m1", "star"));
+    await waitFor(() => expect(star).toHaveBeenCalledWith("m1", "star", undefined));
     expect(await screen.findByRole("status")).toHaveTextContent("Open Settings → Security");
     expect(list.getAllByRole("button", { name: "Star this email" })).toHaveLength(5); // rolled back
   });

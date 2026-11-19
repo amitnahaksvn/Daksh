@@ -96,7 +96,7 @@ export type AssistantReply = {
   /** The connected apps the assistant looked at to answer (for example WhatsApp, Gmail). */
   sources?: string[];
 };
-export type ConversationSummary = { id: string; createdAt: string; messageCount: number };
+export type ConversationSummary = { id: string; createdAt: string; messageCount: number; title?: string | null };
 export type ChatMessage = { id: string; role: "user" | "assistant"; content: string; createdAt: string };
 export type TaskDto = { id: string; title: string; dueAt: string | null; completed: boolean };
 export type ReminderDto = { id: string; text: string; remindAt: string };
@@ -243,6 +243,7 @@ export type DashboardApp = {
 };
 export type DashboardWidget = "command" | "apps";
 export type DashboardTab = { id: string; name: string; order: number; widgets: DashboardWidget[] };
+export type AvailableDashboardApp = { connectionId: string; integrationKey: string; name: string; icon: string; color: string; accountIdentifier: string | null; dashboardId: string | null };
 export type DashboardLayoutItem = { id: string; displayOrder: number; cols: number; height: number; col: number };
 
 export type WhatsAppGeneralSettings = {
@@ -380,6 +381,7 @@ export const api = {
     apiFetch<AssistantReply>("/api/v1/assistant/messages", json({ message, conversationId })),
   conversations: () => apiFetch<ConversationSummary[]>("/api/v1/assistant/conversations"),
   messages: (id: string) => apiFetch<ChatMessage[]>(`/api/v1/assistant/conversations/${id}/messages`),
+  deleteConversation: (id: string) => apiFetch<void>(`/api/v1/assistant/conversations/${id}`, { method: "DELETE" }),
   tasks: () => apiFetch<TaskDto[]>("/api/v1/tasks"),
   createTask: (title: string) => apiFetch<TaskDto>("/api/v1/tasks", json({ title })),
   completeTask: (id: string) => apiFetch<TaskDto>(`/api/v1/tasks/${id}/complete`, { method: "POST" }),
@@ -570,6 +572,7 @@ export const api = {
     apiFetch<void>(`/api/integrations/whatsapp/${connectionId}/insights/${insightId}`, { method: "DELETE" }),
   purgeWhatsAppMessages: (connectionId: string) => apiFetch<void>(`/api/integrations/whatsapp/${connectionId}/purge-messages`, { method: "POST" }),
 
+  availableDashboardApps: () => apiFetch<AvailableDashboardApp[]>("/api/dashboard/apps/available"),
   dashboardApps: () => apiFetch<DashboardApp[]>("/api/dashboard/apps"),
   addToDashboard: (connectionId: string) => apiFetch<{ id: string }>("/api/dashboard/apps", json({ connectionId })),
   removeFromDashboard: (id: string) => apiFetch<void>(`/api/dashboard/apps/${id}`, { method: "DELETE" }),

@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api";
+import { announceChatsChanged, OPEN_CHAT_EVENT, takePendingChat } from "@/lib/dashboardTabsState";
+import { Markdown } from "./Markdown";
 import { Orb } from "./Orb";
 import { buttonClass, tileClass } from "./ui";
 
@@ -22,11 +24,11 @@ function Reply({ text, animate }: { text: string; animate: boolean }) {
     return () => window.clearInterval(id);
   }, [text, animate]);
 
-  if (!animate) return <>{text}</>;
+  if (!animate) return <Markdown text={text} />;
   return (
     <>
-      <span aria-hidden="true" className={shown < text.length ? "type-caret" : ""}>{text.slice(0, shown)}</span>
-      <span className="sr-only">{text}</span>
+      <div aria-hidden="true" className={shown < text.length ? "type-caret" : ""}><Markdown text={text.slice(0, shown)} /></div>
+      <div className="sr-only">{text}</div>
     </>
   );
 }
@@ -43,6 +45,22 @@ export function AssistantChat({ tall = false }: { tall?: boolean }) {
   const box = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLLIElement>(null);
 
+  // The sidebar's chat history opens a past chat here, or starts a fresh one (no id).
+  useEffect(() => {
+    const open = (id: string | null) => {
+      setError(undefined); setConsent(false); setText("");
+      if (!id) { setConversationId(undefined); setLines([]); return; }
+      void api.messages(id).then(
+        (all) => { setConversationId(id); setLines(all.map((m) => ({ role: m.role, text: m.content }))); },
+        () => setError("Could not open that chat."),
+      );
+    };
+    const onOpen = (e: Event) => { takePendingChat(); open((e as CustomEvent<string | null>).detail ?? null); };
+    window.addEventListener(OPEN_CHAT_EVENT, onOpen);
+    const pending = takePendingChat();
+    if (pending !== undefined) queueMicrotask(() => open(pending));
+    return () => window.removeEventListener(OPEN_CHAT_EVENT, onOpen);
+  }, []);
   // The box grows with what is typed (up to a few lines), like a chat app's.
   useEffect(() => {
     const el = box.current;
@@ -62,6 +80,7 @@ export function AssistantChat({ tall = false }: { tall?: boolean }) {
     setText("");
     try {
       const r = await api.sendMessage(message, conversationId);
+      if (r.conversationId !== conversationId) announceChatsChanged(); // a new chat: it joins the sidebar's history
       setConversationId(r.conversationId);
       const motionOk = typeof window.matchMedia === "function" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       setLines((l) => [...l, { role: "assistant", text: r.reply, simulated: r.isSimulated, typed: motionOk, sources: r.sources }]);
@@ -93,10 +112,10 @@ export function AssistantChat({ tall = false }: { tall?: boolean }) {
   }
 
   return (
-    <section aria-label="Conversation" className={`flex flex-col gap-4 p-4 ${tall ? "min-h-[calc(100dvh-15rem)] md:min-h-[calc(100dvh-12rem)]" : ""} ${tileClass}`}>
+    <section aria-label="Conversation" className={`flex flex-col gap-4 p-4 ${tall ? "min-h-[calc(100dvh-11rem)] md:min-h-[calc(100dvh-9.5rem)]" : ""} ${tileClass}`}>
       <ol aria-live="polite" className={`flex flex-1 flex-col gap-3 ${tall ? "min-h-[16rem]" : "min-h-64"}`}>
         {lines.length === 0 && !busy && (
-          <li className={`flex flex-1 flex-col items-center justify-center gap-4 text-center ${tall ? "py-16" : "py-6"}`}>
+          <li className={`flex flex-1 flex-col items-center justify-center gap-4 text-center ${tall ? "py-6" : "py-6"}`}>
             <Orb size={tall ? 88 : 64} />
             <p className={`font-bold ${tall ? "text-3xl" : "text-lg"}`}>What can I do for you?</p>
             <ul className={`flex flex-wrap justify-center gap-2 ${tall ? "max-w-3xl" : "max-w-lg"}`}>

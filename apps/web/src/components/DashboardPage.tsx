@@ -4,15 +4,100 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { DashboardAppCard } from "@/components/integrations";
 import { buttonClass, EmptyState, ErrorState, Loading } from "@/components/ui";
 import { GMAIL_CARD_HINT_KEY, GmailCardPlaceholder, GmailDashboardCard } from "@/components/GmailDashboardCard";
-import { DashboardHero } from "@/components/DashboardWidgets";
 import { CommandCentre } from "@/components/CommandCentre";
-import { api, type DashboardApp, type DashboardLayoutItem, type DashboardWidget } from "@/lib/api";
+import { api, type AvailableDashboardApp, type DashboardApp, type DashboardLayoutItem, type DashboardWidget } from "@/lib/api";
 import { DashboardTile, getActiveTileDrag, getGrabOffsetX, type TileDrag } from "@/components/DashboardTile";
-import { GRID_COLUMNS, applySize, colOf, effectiveStart, heightOf, isCustomized, moveTile, placeTile, setTileCol, sortTiles, spanOf, startFromPointer, toLayoutPayload } from "@/lib/dashboardLayout";
+import { GRID_COLUMNS, applySize, colOf, effectiveStart, heightOf, moveTile, placeTile, sortTiles, spanOf, startFromPointer, toLayoutPayload } from "@/lib/dashboardLayout";
 import { useApi } from "@/lib/useApi";
 
 /** Messaging apps (WhatsApp, Telegram) live in the Chats sidebar on every page, so they are not tiles here. */
 const MESSAGING = new Set(["whatsapp", "telegram"]);
+
+/** A pop-up listing every connected app and account, ticked when it is already on the dashboard. Save adds the newly ticked and removes the unticked. */
+function ChooseApps({ onChanged }: { onChanged: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<AvailableDashboardApp[] | null>(null);
+  const [ticked, setTicked] = useState<Set<string>>(new Set());
+  const [failed, setFailed] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function show() {
+    setOpen(true); setItems(null); setFailed(false); setError(null);
+    api.availableDashboardApps().then(
+      (a) => { setItems(a); setTicked(new Set(a.filter((x) => x.dashboardId).map((x) => x.connectionId))); },
+      () => setFailed(true),
+    );
+  }
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  const toggle = (id: string) => setTicked((t) => { const n = new Set(t); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+
+  async function save() {
+    if (!items) return;
+    setSaving(true); setError(null);
+    try {
+      for (const a of items) {
+        const on = ticked.has(a.connectionId);
+        if (on && !a.dashboardId) await api.addToDashboard(a.connectionId);
+        if (!on && a.dashboardId) await api.removeFromDashboard(a.dashboardId);
+      }
+      setOpen(false); onChanged();
+    } catch { setError("Could not save your choices. Try again."); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <>
+      <div className="mb-3 flex justify-end">
+        <button type="button" onClick={show} className="rounded-full border border-line bg-surface px-4 py-2 text-sm font-semibold hover:border-accent">Choose apps</button>
+      </div>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="absolute inset-0 cursor-default bg-black/50" />
+          <div role="dialog" aria-modal="true" aria-labelledby="choose-apps-title" className="relative flex max-h-[85vh] w-full max-w-md flex-col rounded-2xl border border-line bg-surface p-5 text-text shadow-[var(--shadow)]">
+            <h2 id="choose-apps-title" className="text-lg font-bold">Apps on your dashboard</h2>
+            <p className="mt-1 text-sm text-muted">Tick the connected apps and accounts you want as tiles.</p>
+            <div className="mt-3 min-h-0 flex-1 overflow-y-auto">
+              {failed && <p role="alert" className="text-sm text-danger">Could not load your connected apps. Try again.</p>}
+              {!failed && !items && <p role="status" className="text-sm text-muted">Loading…</p>}
+              {items && items.length === 0 && (
+                <p className="text-sm text-muted">No connected apps yet. <Link href="/apps" className="font-semibold text-accent hover:underline">Connect an app</Link></p>
+              )}
+              {items && items.length > 0 && (
+                <ul className="divide-y divide-line">
+                  {items.map((a) => (
+                    <li key={a.connectionId}>
+                      <label className="flex cursor-pointer items-center gap-3 py-3">
+                        <input type="checkbox" checked={ticked.has(a.connectionId)} onChange={() => toggle(a.connectionId)} className="h-4 w-4" />
+                        <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: a.color }} />
+                        <span className="min-w-0 flex-1"><span className="font-semibold">{a.name}</span>{a.accountIdentifier && <span className="block truncate text-sm text-muted">{a.accountIdentifier}</span>}</span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            {error && <p role="alert" className="mt-2 text-sm text-danger">{error}</p>}
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={() => setOpen(false)} className="rounded-full border border-line px-4 py-2 text-sm font-semibold hover:bg-surface-2">Cancel</button>
+              <button type="button" onClick={() => void save()} disabled={saving || !items} className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-accent-contrast hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** The layout save that is on its way to the server. Loading the tiles waits for it, so a reload (or another tab) can never read the old layout and show the resize as forgotten. */
+let savingLayout: Promise<unknown> = Promise.resolve();
+const saveLayout = (payload: DashboardLayoutItem[]) => { const p = api.saveDashboardLayout(payload); savingLayout = p.catch(() => undefined); return p; };
 
 function DashboardBody({ apps, onRemove, onReload }: { apps: DashboardApp[]; onRemove: (id: string) => void; onReload: () => void }) {
   // The arrangement is local state seeded from the saved layout; every change is saved to the user's account after a short pause.
@@ -87,7 +172,7 @@ function DashboardBody({ apps, onRemove, onReload }: { apps: DashboardApp[]; onR
     const p = pending.current;
     if (!p) return;
     window.clearTimeout(p.timer); pending.current = null;
-    try { await api.saveDashboardLayout(p.payload); setSaveState("saved"); } catch { setSaveState("error"); }
+    try { await saveLayout(p.payload); setSaveState("saved"); } catch { setSaveState("error"); }
   }, []);
   const schedule = useCallback((next: DashboardApp[]) => {
     if (pending.current) window.clearTimeout(pending.current.timer);
@@ -99,7 +184,7 @@ function DashboardBody({ apps, onRemove, onReload }: { apps: DashboardApp[]; onR
     const p = pending.current;
     if (!p) return;
     window.clearTimeout(p.timer); pending.current = null; // save once, now — not again when the timer would have fired
-    void api.saveDashboardLayout(p.payload).catch(() => undefined);
+    void saveLayout(p.payload).catch(() => undefined);
   }, []);
 
   const commit = (next: DashboardApp[], message?: string) => { setTiles(next); schedule(next); if (message) setAnnounce(message); };
@@ -108,16 +193,13 @@ function DashboardBody({ apps, onRemove, onReload }: { apps: DashboardApp[]; onR
     if (next !== tilesRef.current) commit(next, `${name} moved to position ${to + 1} of ${next.length}.`);
   };
 
-  async function reset() {
-    if (pending.current) window.clearTimeout(pending.current.timer);
-    pending.current = null;
-    setSaveState("saving");
-    try { await api.resetDashboardLayout(); setSaveState("saved"); onReload(); } catch { setSaveState("error"); }
-  }
+  const reloadAfterSave = () => { void flush().then(() => savingLayout).then(onReload); };
 
   return (
     <>
-      <DashboardHero apps={tiles} canResetLayout={isCustomized(tiles)} onResetLayout={() => void reset()} layoutSaveFailed={saveState === "error"} onRetryLayoutSave={() => schedule(tilesRef.current)} />
+      {saveState === "error" && (
+        <button type="button" onClick={() => schedule(tilesRef.current)} className="mb-3 rounded-full border border-danger px-4 py-2 text-sm font-semibold text-danger hover:bg-danger-bg">Couldn&apos;t save layout — retry</button>
+      )}
       <p className="sr-only" role="status" aria-live="polite">{announce}{saveState === "saved" ? " Layout saved." : ""}</p>
       <div className="relative" onDragOver={onGridDragOver} onDrop={onGridDrop}>
         {/* While a tile is being dragged or resized, the grid's columns show as dashed shadows so the empty places and snap points are visible. */}
@@ -131,15 +213,13 @@ function DashboardBody({ apps, onRemove, onReload }: { apps: DashboardApp[]; onR
         <ul ref={gridRef} className="relative grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
           {tiles.map((app, index) => (
             <DashboardTile
-              key={app.id} id={app.id} name={app.name} span={spanOf(app)} height={heightOf(app)} colStart={effectiveStart(spanOf(app), colOf(app))} index={index} count={tiles.length}
+              key={app.id} id={app.id} name={app.name} span={spanOf(app)} height={heightOf(app)} colStart={effectiveStart(spanOf(app), colOf(app))}
               drag={drag} onDragChange={onDragChange} onActiveChange={setResizingNow}
-              onMove={(delta) => move(app.id, index + delta, app.name)}
-              onPlace={(col) => commit(setTileCol(tilesRef.current, app.id, col), `${app.name} moved to column ${col}.`)}
               onResizeCommit={(change) => commit(applySize(tilesRef.current, app.id, change), `${app.name} resized.`)}
               onDropOn={(fromId) => move(fromId, index, tilesRef.current.find((t) => t.id === fromId)?.name ?? "Tile")}
             >
               {app.integrationKey === "gmail"
-                ? <GmailDashboardCard app={app} onChanged={onReload} />
+                ? <GmailDashboardCard app={app} onChanged={reloadAfterSave} />
                 : <DashboardAppCard app={app} onRemove={onRemove} />}
             </DashboardTile>
           ))}
@@ -156,26 +236,35 @@ function DashboardBody({ apps, onRemove, onReload }: { apps: DashboardApp[]; onR
   );
 }
 
+const SECTIONS: { id: DashboardWidget; label: string }[] = [{ id: "command", label: "Command Centre" }, { id: "apps", label: "App tiles" }];
+
 /** The blocks of one dashboard. Which blocks show is the dashboard's own choice (see DashboardTabs). */
 export function DashboardContent({ widgets = ["command", "apps"] }: { widgets?: DashboardWidget[] }) {
-  const { state, reload } = useApi(() => api.dashboardApps());
+  const { state: fresh, reload } = useApi(() => savingLayout.then(() => api.dashboardApps()));
+  // A reload keeps showing the tiles as they were instead of blanking and rebuilding them.
+  const [kept, setKept] = useState<DashboardApp[] | null>(null);
+  if (fresh.status === "ready" && fresh.data !== kept) setKept(fresh.data);
+  const state = fresh.status === "loading" && kept ? ({ status: "ready", data: kept } as const) : fresh;
   // Did this browser last see a Gmail card? If so, hold its space while loading instead of flashing a small spinner.
   const expectGmail = useSyncExternalStore(() => () => {}, () => { try { return localStorage.getItem(GMAIL_CARD_HINT_KEY) === "1"; } catch { return false; } }, () => false);
   useEffect(() => {
-    if (state.status !== "ready") return;
-    try { localStorage.setItem(GMAIL_CARD_HINT_KEY, state.data.some((a) => a.integrationKey === "gmail") ? "1" : "0"); } catch { /* storage unavailable */ }
-  }, [state]);
+    if (fresh.status !== "ready") return;
+    try { localStorage.setItem(GMAIL_CARD_HINT_KEY, fresh.data.some((a) => a.integrationKey === "gmail") ? "1" : "0"); } catch { /* storage unavailable */ }
+  }, [fresh]);
 
   async function remove(id: string) {
     await api.removeFromDashboard(id);
     reload();
   }
 
-  const showCommand = widgets.includes("command");
-  const showApps = widgets.includes("apps");
-  if (!showCommand && !showApps) return <EmptyState>Nothing on this dashboard yet. Use the ⋯ next to its name to choose what it shows.</EmptyState>;
+  const [inner, setInner] = useState<DashboardWidget>("command");
+  const available = SECTIONS.filter((x) => widgets.includes(x.id));
+  const shown = available.some((x) => x.id === inner) ? inner : available[0]?.id;
+  const showCommand = shown === "command";
+  const showApps = shown === "apps";
+  if (available.length === 0) return <EmptyState>Nothing on this dashboard yet. Use the ⋯ next to its name to choose what it shows.</EmptyState>;
 
-  return (
+  const content = (
     <>
       {state.status === "loading" && (showApps && expectGmail ? <GmailCardPlaceholder /> : <Loading />)}
       {state.status === "error" && <ErrorState error={state.error} onRetry={reload} />}
@@ -183,18 +272,38 @@ export function DashboardContent({ widgets = ["command", "apps"] }: { widgets?: 
         const tiles = state.data.filter((a) => !MESSAGING.has(a.integrationKey));
         return (
           <>
-            {showCommand && <CommandCentre apps={state.data} />}
-            {showApps && (tiles.length === 0 ? (
+            {/* Both stay mounted and the other is only hidden, so switching tabs never reloads the tiles from stale data (which looked like the resize was forgotten). */}
+            {widgets.includes("command") && <div hidden={!showCommand}><CommandCentre apps={state.data} /></div>}
+            {widgets.includes("apps") && <div hidden={!showApps}><ChooseApps onChanged={reload} />{(tiles.length === 0 ? (
               <EmptyState>
-                Nothing here yet. Your WhatsApp and Telegram chats are always in the Chats sidebar on the right. Connect more apps to see them here.{" "}
+                Nothing here yet. Your WhatsApp and Telegram chats are always in the Chats sidebar on the right. Use Choose apps above to add a connected app, or connect more apps.{" "}
                 <Link href="/apps" className={`${buttonClass} mt-3 inline-flex`}>Browse apps</Link>
               </EmptyState>
             ) : (
               <DashboardBody apps={tiles} onRemove={remove} onReload={reload} />
-            ))}
+            ))}</div>}
           </>
         );
       })()}
     </>
+  );
+
+  // One block: just show it. Both: connected folder tabs, the active tab merging into the content box.
+  if (available.length < 2) return content;
+  return (
+    <div>
+      <div role="tablist" aria-label="Dashboard sections" className="grid grid-cols-2">
+        {available.map((x, i) => {
+          const active = shown === x.id;
+          return (
+            <button key={x.id} type="button" role="tab" id={`section-${x.id}`} aria-selected={active} aria-controls="section-panel" onClick={() => setInner(x.id)}
+              className={`border border-line px-3 py-3.5 text-sm transition-colors ${i === 0 ? "rounded-tl-2xl" : "border-l-0 rounded-tr-2xl"} ${active ? "border-b-surface bg-surface font-bold text-text shadow-[inset_0_3px_0_var(--accent)]" : "bg-surface-2 font-medium text-muted hover:text-text"}`}>
+              {x.label}
+            </button>
+          );
+        })}
+      </div>
+      <div role="tabpanel" id="section-panel" aria-labelledby={`section-${shown}`} className="-mt-px flex flex-col gap-4 rounded-b-2xl border border-t-0 border-line bg-surface p-4 md:p-6">{content}</div>
+    </div>
   );
 }

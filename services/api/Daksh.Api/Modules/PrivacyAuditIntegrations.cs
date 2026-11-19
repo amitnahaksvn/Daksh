@@ -62,7 +62,7 @@ public static class PlatformModules
 {
     public static void MapPlatform(this IEndpointRouteBuilder app)
     {
-        var p = app.MapGroup("/api/v1/privacy").RequireAuthorization().WithTags("Privacy");
+        var p = app.MapGroup("/api/v1/privacy").RequireAuthorization(AuthSetup.UserScheme).WithTags("Privacy");
 
         // Everything is off until the owner turns it on: sharing data with an AI provider is always an explicit choice.
         p.MapGet("/", async (IMongoDatabase db, ClaimsPrincipalAccessor who, CancellationToken ct) => Results.Ok(await PrivacyStore.GetAsync(db, who.UserId, ct)));
@@ -80,7 +80,7 @@ public static class PlatformModules
                 var rows = await db.GetCollection<AuditEventDoc>("auditEvents").Find(e => e.UserId == who.UserId).SortByDescending(e => e.OccurredAt).Limit(Math.Clamp(take ?? 50, 1, 200)).ToListAsync(ct);
                 return Results.Ok(rows.Select(e => new AuditEventDto(Guid.Parse(e.Id), e.Action, e.EntityType, e.EntityId, e.Detail, new DateTimeOffset(DateTime.SpecifyKind(e.OccurredAt, DateTimeKind.Utc)))));
             })
-            .RequireAuthorization().WithTags("Audit");
+            .RequireAuthorization(AuthSetup.UserScheme).WithTags("Audit");
 
         app.MapGet("/api/v1/integrations", (IServiceProvider sp) =>
                 Results.Ok(sp.DescribeIntegrations()

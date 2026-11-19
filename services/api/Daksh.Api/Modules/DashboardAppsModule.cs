@@ -6,6 +6,7 @@ using MongoDB.Driver;
 namespace Daksh.Api.Modules;
 
 public sealed record DashboardAppDto(string Id, string ConnectionId, string IntegrationKey, string Name, string Icon, string Color, string Status, string? AccountIdentifier, DateTime? LastActiveAt, int DisplayOrder, int UnreadCount, string? LastMessagePreview, DateTime? LastMessageAt, bool LastMessageIsGroup, int Cols = 0, int Height = 0, int Col = 0);
+public sealed record AvailableAppDto(string ConnectionId, string IntegrationKey, string Name, string Icon, string Color, string? AccountIdentifier, string? DashboardId);
 public sealed record ActivityItemDto(string IntegrationKey, string ConnectionId, string Icon, string Color, string ChatId, string? ChatName, bool IsGroup, bool FromMe, string Text, DateTime Timestamp);
 public sealed record AddDashboardAppRequest(string? ConnectionId);
 public sealed record PatchDashboardAppRequest(bool? IsVisible, int? DisplayOrder, int? Cols = null, int? Height = null, int? Col = null);
@@ -27,6 +28,7 @@ public static class DashboardAppsModule
         var g = app.MapGroup("/api/dashboard/apps").WithTags("Dashboard").RequireAuthorization(AuthSetup.UserScheme);
 
         g.MapGet("/", ListAsync);
+        g.MapGet("/available", AvailableAsync);
         g.MapPost("/", AddAsync).Validate<AddDashboardAppRequest>();
         g.MapDelete("/{id}", RemoveAsync);
         g.MapPatch("/{id}", PatchAsync);
@@ -55,6 +57,22 @@ public static class DashboardAppsModule
             "whatsapp", m.ConnectionId, catalog?.Icon ?? "SiWhatsapp", catalog?.Color ?? "#25D366",
             m.ChatId, m.ChatName, WhatsAppChat.IsGroup(m.ChatId), m.FromMe, m.Text, m.Timestamp));
         return Results.Ok(items);
+    }
+
+    /// <summary>Every connected app and account the user could show as a tile. DashboardId is set when it is already on the dashboard (WhatsApp and Telegram live in the Chats sidebar, so they are not offered).</summary>
+    private static async Task<IResult> AvailableAsync(IMongoDatabase db, ClaimsPrincipalAccessor who, CancellationToken ct)
+    {
+        var onDashboard = (await db.GetCollection<UserDashboardApp>("userDashboardApps")
+            .Find(a => a.UserId == who.UserId && a.IsVisible).ToListAsync(ct)).GroupBy(a => a.ConnectionId).ToDictionary(g => g.Key, g => g.First().Id);
+        var connections = await db.GetCollection<IntegrationConnection>("integrationConnections")
+            .Find(c => c.UserId == who.UserId && c.Status == ConnectionStatus.Connected && c.IntegrationKey != "whatsapp" && c.IntegrationKey != "telegram").ToListAsync(ct);
+        var keys = connections.Select(c => c.IntegrationKey).Distinct().ToList();
+        var catalog = (await db.GetCollection<IntegrationCatalogEntry>("integrations").Find(c => keys.Contains(c.IntegrationKey)).ToListAsync(ct)).ToDictionary(c => c.IntegrationKey);
+        return Results.Ok(connections.Select(c =>
+        {
+            var entry = catalog.GetValueOrDefault(c.IntegrationKey);
+            return new AvailableAppDto(c.Id, c.IntegrationKey, entry?.Name ?? c.IntegrationKey, entry?.Icon ?? "", entry?.Color ?? "#888888", c.AccountIdentifier, onDashboard.GetValueOrDefault(c.Id));
+        }));
     }
 
     private static async Task<IResult> ListAsync(IMongoDatabase db, ClaimsPrincipalAccessor who, CancellationToken ct)

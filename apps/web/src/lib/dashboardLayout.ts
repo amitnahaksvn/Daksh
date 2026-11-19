@@ -89,9 +89,10 @@ export function spanFromPointer(pointerX: number, tileLeft: number, gridWidth: n
 }
 
 /** Applies a width and/or height change to one tile. */
-export function applySize(tiles: DashboardApp[], id: string, change: { span?: number; height?: number }): DashboardApp[] {
+export function applySize(tiles: DashboardApp[], id: string, change: { span?: number; height?: number; col?: number }): DashboardApp[] {
   let next = tiles;
   if (change.span !== undefined) next = resizeTile(next, id, change.span);
+  if (change.col !== undefined) next = setTileCol(next, id, change.col);
   if (change.height !== undefined) next = setTileHeight(next, id, change.height);
   return next;
 }

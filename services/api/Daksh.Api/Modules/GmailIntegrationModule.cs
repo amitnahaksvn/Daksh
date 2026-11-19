@@ -617,23 +617,27 @@ public static partial class GmailIntegrationModule
                 context = context with { Tokens = await RefreshTokensAsync(context.Connection, context.Tokens, db, protector, config, clients, ct) };
                 continue;
             }
-            if (response.StatusCode is HttpStatusCode.TooManyRequests or HttpStatusCode.BadGateway or HttpStatusCode.ServiceUnavailable or HttpStatusCode.GatewayTimeout or HttpStatusCode.InternalServerError
+            // Google reports its per-minute quota as 403 "rateLimitExceeded", which is a wait-and-retry condition, not a permission problem.
+            var errorBody = response.IsSuccessStatusCode ? "" : await response.Content.ReadAsStringAsync(ct);
+            var rateLimited = response.StatusCode == HttpStatusCode.TooManyRequests
+                || (response.StatusCode == HttpStatusCode.Forbidden && (errorBody.Contains("rateLimitExceeded", StringComparison.OrdinalIgnoreCase) || errorBody.Contains("userRateLimitExceeded", StringComparison.OrdinalIgnoreCase)));
+            if ((rateLimited || response.StatusCode is HttpStatusCode.BadGateway or HttpStatusCode.ServiceUnavailable or HttpStatusCode.GatewayTimeout or HttpStatusCode.InternalServerError)
                 && transientRetries < 3)
             {
                 transientRetries++;
                 attempt--; // transient retries do not consume the single token-refresh retry
-                await Task.Delay(GmailBackoff.Delay(transientRetries), ct);
+                await Task.Delay(rateLimited ? TimeSpan.FromSeconds(8 * transientRetries) : GmailBackoff.Delay(transientRetries), ct); // the quota is per minute, so wait longer than for a blip
                 continue;
             }
             if (!response.IsSuccessStatusCode)
-                throw new GmailIntegrationException((int)response.StatusCode, response.StatusCode switch
+                throw new GmailIntegrationException(rateLimited ? 429 : (int)response.StatusCode, response.StatusCode switch
                 {
+                    _ when rateLimited => "Gmail is rate limiting requests. It will retry shortly.",
                     HttpStatusCode.Unauthorized => "Gmail authorization expired. Reconnect your Gmail account.",
                     HttpStatusCode.Forbidden => "Google denied this request. The account may need additional permission — reconnect Gmail and approve it.",
                     HttpStatusCode.NotFound => "Gmail could not find that item.",
-                    HttpStatusCode.TooManyRequests => "Gmail is rate limiting requests. Try again shortly.",
                     _ => "Gmail could not complete the request. Check the connection and permissions.",
-                }, response.StatusCode == HttpStatusCode.Forbidden ? "google_forbidden" : null);
+                }, rateLimited ? "rate_limited" : response.StatusCode == HttpStatusCode.Forbidden ? "google_forbidden" : null);
 
             var bytes = await response.Content.ReadAsByteArrayAsync(ct);
             return bytes.Length == 0 ? JsonDocument.Parse("{}") : JsonDocument.Parse(bytes);

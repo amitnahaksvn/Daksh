@@ -5,7 +5,6 @@ import { api, type AuditEvent, type DashboardApp, type ReminderDto, type TaskDto
 import { useApi } from "@/lib/useApi";
 import { buildNeedsYou, buildPulse, buildToday, isView, nextUp, relativeTime, VIEW_KEY, type DashboardView, type NeedsItem, type PendingWithConnection } from "@/lib/commandCentre";
 import { Chip, tileClass } from "@/components/ui";
-import { ThemeHero } from "@/components/ThemeHero";
 
 type Data = { tasks: TaskDto[]; reminders: ReminderDto[]; audit: AuditEvent[]; pending: PendingWithConnection[] };
 
@@ -216,7 +215,6 @@ export function CommandCentre({ apps }: { apps: DashboardApp[] }) {
 
   return (
     <section aria-label="Command Centre" className="mb-4 space-y-4">
-      <ThemeHero apps={apps} stats={data ? { needs: needs.length, handled: buildPulse({ audit: data.audit, tasks: data.tasks, apps }).handledToday, next: next?.label ?? null, first: needs[0]?.title ?? null } : null} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-extrabold">Command Centre</h2>
         <div role="radiogroup" aria-label="Dashboard view" className="inline-flex rounded-full border border-line bg-surface p-1">

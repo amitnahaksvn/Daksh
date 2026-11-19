@@ -587,6 +587,7 @@ public static class TelegramAutoReply
                 var gate = await ReplyGateFlow.ResolveAsync(db, settings, connection.Id, chatId, trigger.ChatName, text, trigger.IsGroup,
                     since => messages.Find(m => m.ConnectionId == connection.Id && m.ChatId == chatId && m.FromMe && !m.IsAiGenerated && m.Timestamp > since).AnyAsync(),
                     DateTime.UtcNow, forced: null);
+                logger.LogInformation("Telegram auto-reply for {ChatId}: gate says {Action} ({Reason})", chatId, gate.Action, gate.Reason);
                 if (gate.Action == GateAction.Silent) { logger.LogInformation("Reply gate: no Telegram reply for {ChatId} ({Reason})", chatId, gate.Reason); return; }
                 if (gate.Action == GateAction.SendHolding) { replyText = gate.Text!; isAi = true; goto Deliver; }
 
@@ -600,7 +601,7 @@ public static class TelegramAutoReply
                 var userContext = new UserAiContext(connection.UserId, MemoryEnabled: false, AllowProviderDataSharing: true);
                 var prompt = IntegrationsModule.BuildAutoReplyPrompt(settings, chatId, trigger.ChatName, text, trigger.IsGroup, null, "Telegram");
                 var result = await sp.GetRequiredService<IAssistantOrchestrator>().RespondAsync(new AssistantRequest(userContext, prompt, history));
-                if (result.IsSimulated || string.IsNullOrWhiteSpace(result.Text)) return;
+                if (result.IsSimulated || string.IsNullOrWhiteSpace(result.Text)) { logger.LogWarning("Telegram auto-reply for {ChatId}: the AI gave no usable answer", chatId); return; }
                 if (result.Text.Trim().Equals("NO_REPLY", StringComparison.OrdinalIgnoreCase)) return;
                 if (ReplyGate.ModelSaidNeedBoss(result.Text))
                 {
@@ -618,7 +619,11 @@ public static class TelegramAutoReply
             if (settings.ResponseDelaySeconds > 0) await Task.Delay(TimeSpan.FromSeconds(settings.ResponseDelaySeconds));
 
             // If you answered yourself while this was being prepared or delayed, don't talk over you.
-            if (await messages.Find(m => m.ConnectionId == connection.Id && m.ChatId == chatId && m.FromMe && !m.IsAiGenerated && m.Timestamp >= receivedAt).AnyAsync()) return;
+            if (await messages.Find(m => m.ConnectionId == connection.Id && m.ChatId == chatId && m.FromMe && !m.IsAiGenerated && m.Timestamp >= receivedAt).AnyAsync())
+            {
+                logger.LogInformation("Telegram auto-reply for {ChatId} skipped: the owner answered in the meantime", chatId);
+                return;
+            }
 
             if (settings.RequireApproval)
             {
@@ -630,6 +635,7 @@ public static class TelegramAutoReply
             }
 
             var wire = isAi ? await WithSignatureAsync(db, connection.Id, replyText, CancellationToken.None) : replyText;
+            logger.LogInformation("Telegram auto-reply for {ChatId}: sending", chatId);
             await TelegramIntegrationModule.SendAndStoreAsync(db, sp.GetRequiredService<TelegramIntegrationProvider>(), connection.Id, chatId, wire, isAiGenerated: true, CancellationToken.None);
             await stateCollection.UpdateOneAsync(s => s.ConnectionId == connection.Id && s.ChatId == chatId,
                 Builders<WhatsAppAutoReplyState>.Update.Set(s => s.LastRepliedAt, DateTime.UtcNow).SetOnInsert(s => s.ConnectionId, connection.Id).SetOnInsert(s => s.ChatId, chatId),

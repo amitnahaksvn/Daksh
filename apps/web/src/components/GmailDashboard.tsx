@@ -64,8 +64,8 @@ function Stat({ icon, tone, value, label, sub, hint }: { icon: string; tone: str
  * The Gmail landing view: a compact, data-driven summary. Every number comes from the connected account (Gmail counts) or from what Daksha
  * has synced and analysed (importance, responses needed, deadlines). Nothing here is sample data.
  */
-export function GmailDashboard({ icon, color, onOpenMailbox, onOpenManage }: {
-  icon: string; color: string; onOpenMailbox: (t?: MailboxTarget) => void; onOpenManage: (tab?: ManageTab) => void;
+export function GmailDashboard({ icon, color, accountId, accountEmail, onOpenMailbox, onOpenManage }: {
+  icon: string; color: string; /** Which Gmail account this card shows; without it, the default account. */ accountId?: string; accountEmail?: string | null; onOpenMailbox: (t?: MailboxTarget) => void; onOpenManage: (tab?: ManageTab) => void;
 }) {
   const [data, setData] = useState<GmailDashboardData | null>(null);
   const [error, setError] = useState<ApiError | Error | null>(null);
@@ -74,13 +74,13 @@ export function GmailDashboard({ icon, color, onOpenMailbox, onOpenManage }: {
   const [notice, setNotice] = useState<string | null>(null);
   const alive = useRef(true);
 
-  const fetchNow = useCallback(() =>
-    gmailControl.dashboard().then(
+  const fetchNow = useCallback((fresh = false) =>
+    gmailControl.dashboard(accountId, fresh).then(
       (next) => { if (alive.current) { setData(next); setError(null); } },
       (e) => { if (alive.current) setError(e instanceof Error ? e : new Error("Could not load the dashboard.")); },
-    ), []);
+    ), [accountId]);
 
-  const refresh = useCallback(() => { setRefreshing(true); void fetchNow().finally(() => { if (alive.current) setRefreshing(false); }); }, [fetchNow]);
+  const refresh = useCallback(() => { setRefreshing(true); void fetchNow(true).finally(() => { if (alive.current) setRefreshing(false); }); }, [fetchNow]);
 
   useEffect(() => {
     alive.current = true;
@@ -93,7 +93,7 @@ export function GmailDashboard({ icon, color, onOpenMailbox, onOpenManage }: {
     setNotice(null);
     const next = !row.starred;
     setData((d) => d && { ...d, priority: d.priority.map((p) => (p.id === row.id ? { ...p, starred: next } : p)) });
-    try { await gmailControl.messageAction(row.id, next ? "star" : "unstar"); }
+    try { await gmailControl.messageAction(row.id, next ? "star" : "unstar", accountId); }
     catch (e) {
       setData((d) => d && { ...d, priority: d.priority.map((p) => (p.id === row.id ? { ...p, starred: row.starred } : p)) });
       setNotice(e instanceof ApiError && (e.code === "scope_upgrade_required" || e.code === "permission_denied")
@@ -115,6 +115,7 @@ export function GmailDashboard({ icon, color, onOpenMailbox, onOpenManage }: {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-xl font-bold leading-tight">Gmail Dashboard</h2>
+            {accountEmail && <span className="truncate text-sm font-semibold text-muted">{accountEmail}</span>}
             <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${status.cls}`}><span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />{status.text}</span>
           </div>
           <p className="mt-0.5 text-xs text-muted sm:text-sm">Manage, summarize and take action on your Gmail with Daksha.</p>

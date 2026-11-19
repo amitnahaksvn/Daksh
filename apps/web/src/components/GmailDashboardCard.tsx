@@ -35,6 +35,8 @@ export function GmailDashboardCard({ app, onChanged }: { app: DashboardApp; onCh
         key={version}
         icon={app.icon}
         color={app.color}
+        accountId={app.connectionId}
+        accountEmail={app.accountIdentifier}
         onOpenMailbox={(target) => router.push(mailboxUrl(target))}
         onOpenManage={openManage}
       />

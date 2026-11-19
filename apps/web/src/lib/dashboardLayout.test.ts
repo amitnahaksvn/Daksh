@@ -83,6 +83,7 @@ describe("dashboard layout (12-column grid)", () => {
     expect(setTileHeight(t, "a", 450)[0].height).toBe(450);
     expect(setTileHeight(t, "a", 0)).toEqual(t);
     expect(applySize(t, "a", { span: 9, height: 300 })[0]).toMatchObject({ cols: 9, height: 300 });
+    expect(applySize(t, "a", { span: 5, col: 4 })[0]).toMatchObject({ cols: 5, col: 4 }); // resizing from the left edge also moves the start column
     expect(toLayoutPayload(setTileHeight(t, "b", 333))[1]).toEqual({ id: "b", displayOrder: 1, cols: 0, height: 330, col: 0 });
     expect(isCustomized(setTileHeight(t, "a", 300))).toBe(true);
   });

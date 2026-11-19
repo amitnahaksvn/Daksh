@@ -12,7 +12,7 @@ namespace Daksh.Api.Modules;
 public sealed class GmailSyncEngine(GmailServices svc, GmailPipeline pipeline)
 {
     private const int MaxMessagesPerRun = 150;
-    private const int Concurrency = 4;
+    private const int Concurrency = 2; // gentle on the per-minute Gmail quota
 
     /// <summary>Runs one sync pass. Returns the run record. Never throws for per-message failures.</summary>
     public async Task<GmailSyncRun> SyncAsync(string userId, string accountId, string trigger, CancellationToken ct)

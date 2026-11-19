@@ -84,17 +84,32 @@ describe("every theme has the same sidebar", () => {
     expect(container.querySelector('[data-sidebar="collapsed"]')).not.toBeNull();
   });
 
-  it("has a top search box that is labelled as a placeholder", () => {
+  it("hides the search box for now and leaves a slot in the top bar for the dashboard tabs", () => {
     window.localStorage.setItem(STYLE_KEY, "hybrid");
-    render(<AppShell><p>x</p></AppShell>);
-    const box = screen.getByLabelText("Search everything (placeholder)");
-    expect(box).toBeTruthy();
-    expect(screen.getAllByText("Fake").length).toBeGreaterThan(0);
+    const { container } = render(<AppShell><p>x</p></AppShell>);
+    expect(screen.queryByLabelText("Search everything (placeholder)")).toBeNull();
+    expect(container.querySelector("#topbar-slot")).not.toBeNull();
   });
 
-  it("is laid out like a chat app's: logo with a collapse icon, icon rows, and a list of your dashboards", async () => {
+  it("lists past Ask chats by title, opens one, and can delete one", async () => {
     window.localStorage.setItem(STYLE_KEY, "hybrid");
-    vi.spyOn(api, "dashboards").mockResolvedValue([{ id: "d1", name: "Dashboard", order: 0, widgets: ["command", "apps"] }, { id: "d2", name: "Sales", order: 1, widgets: ["apps"] }]);
+    vi.spyOn(api, "dashboards").mockResolvedValue([]);
+    vi.spyOn(api, "conversations").mockResolvedValue([{ id: "c1", createdAt: "2026-11-19T10:00:00Z", messageCount: 2, title: "Catch me up on today" }]);
+    const del = vi.spyOn(api, "deleteConversation").mockResolvedValue(undefined);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const heard: unknown[] = [];
+    window.addEventListener("daksh:open-chat", (e) => heard.push((e as CustomEvent).detail));
+    render(<AppShell><p>x</p></AppShell>);
+    await userEvent.click(await screen.findByRole("button", { name: "Catch me up on today" }));
+    expect(heard).toContain("c1");
+    await userEvent.click(screen.getByRole("button", { name: /Delete chat: Catch me up on today/ }));
+    expect(del).toHaveBeenCalledWith("c1");
+    expect(screen.queryByRole("button", { name: "Catch me up on today" })).toBeNull();
+  });
+
+  it("is laid out like a chat app's: logo with a collapse icon, icon rows, and no list of dashboards (those are tabs in the top bar)", async () => {
+    window.localStorage.setItem(STYLE_KEY, "hybrid");
+    vi.spyOn(api, "conversations").mockResolvedValue([]);
     const seen: string[] = [];
     const onOpen = (e: Event) => seen.push((e as CustomEvent<string>).detail);
     window.addEventListener("daksh:open-tab", onOpen);
@@ -103,11 +118,9 @@ describe("every theme has the same sidebar", () => {
     expect(screen.getByRole("button", { name: "Minimize sidebar" })).toBeTruthy();
     const nav = screen.getAllByRole("navigation", { name: "Main" })[0];
     for (const label of ["New chat", "Dashboard", "Apps", "Chats"]) expect(nav.textContent).toContain(label);
-    await userEvent.click(await screen.findByRole("button", { name: "Sales" })); // the dashboards list
-    expect(seen).toEqual(["d2"]);
-    expect(window.localStorage.getItem("daksh.dashboard.tab")).toBe("d2");
+    expect(nav.textContent).not.toContain("Sales");
     await userEvent.click(screen.getByRole("button", { name: "New chat" }));
-    expect(seen).toEqual(["d2", "ask"]);
+    expect(seen).toEqual(["ask"]);
     window.removeEventListener("daksh:open-tab", onOpen);
   });
 

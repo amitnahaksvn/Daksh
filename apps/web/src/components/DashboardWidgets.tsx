@@ -66,13 +66,8 @@ export function DashboardHero({ apps, canResetLayout = false, onResetLayout, lay
   layoutSaveFailed?: boolean;
   onRetryLayoutSave?: () => void;
 }) {
-  const connected = apps.filter((a) => a.status === "Connected").length;
-  const unread = apps.reduce((n, a) => n + a.unreadCount, 0);
   return (
-    <section className={`mb-4 flex flex-wrap items-center justify-between gap-3 p-4 ${tileClass}`}>
-      <p className="text-sm text-muted">
-        <span className="font-semibold text-text">Your apps</span> · {connected} connected · {unread > 0 ? `${unread} unread message${unread === 1 ? "" : "s"}` : "inbox is clear"}
-      </p>
+    <section className={`mb-4 flex flex-wrap items-center justify-end gap-3 p-4 ${tileClass}`}>
       <div className="flex flex-wrap items-center gap-2">
         {layoutSaveFailed && (
           <button type="button" onClick={onRetryLayoutSave} className="rounded-full border border-danger px-4 py-2 text-sm font-semibold text-danger hover:bg-danger-bg">

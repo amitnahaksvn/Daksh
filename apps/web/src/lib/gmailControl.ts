@@ -103,9 +103,9 @@ export type GmailDashboardData = {
 
 export const gmailControl = {
   /** `since` is the start of the user's local day so "today" means today where they are. */
-  dashboard: (accountId?: string) => {
+  dashboard: (accountId?: string, fresh = false) => {
     const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
-    return apiFetch<GmailDashboardData>(`${BASE}/dashboard${q({ accountId, since: Math.floor(midnight.getTime() / 1000) })}`);
+    return apiFetch<GmailDashboardData>(`${BASE}/dashboard${q({ accountId, since: Math.floor(midnight.getTime() / 1000), fresh: fresh ? "true" : undefined })}`);
   },
   accounts: () => apiFetch<GmailAccount[]>(`${BASE}/accounts`),
   updateAccount: (id: string, change: { nickname?: string; enabled?: boolean; isDefault?: boolean }) => apiFetch<GmailAccount>(`${BASE}/accounts/${id}`, body("PATCH", change)),

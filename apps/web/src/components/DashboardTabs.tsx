@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { AssistantChat } from "@/components/AssistantChat";
 import { DashboardContent } from "@/components/DashboardPage";
 import { ErrorState } from "@/components/ui";
@@ -12,6 +13,10 @@ const MAX_TABS = 12;
 const WIDGET_LABELS: Record<DashboardWidget, string> = { command: "Command Centre", apps: "App tiles" };
 
 const subscribeNone = () => () => {};
+const WIDE = "(min-width: 768px)";
+const subscribeWide = (cb: () => void) => { const m = window.matchMedia?.(WIDE); m?.addEventListener("change", cb); return () => m?.removeEventListener("change", cb); };
+const readWide = () => window.matchMedia?.(WIDE).matches ?? false;
+const readSlot = () => document.getElementById("topbar-slot");
 function readTab(): string | null { try { return localStorage.getItem(TAB_KEY); } catch { return null; } }
 
 /** The dashboard page: an Ask tab (a chat box, first and always there), then the person's own named dashboards, and a + to add more. */
@@ -92,9 +97,13 @@ export function DashboardTabs() {
 
   const tabClass = (active: boolean) => `flex items-center gap-1 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${active ? "bg-accent text-accent-contrast" : "text-muted hover:bg-surface-2 hover:text-text"}`;
 
-  return (
-    <div className="flex flex-col gap-4">
-      <div role="tablist" aria-label="Dashboards" className="flex flex-wrap items-center gap-1.5 rounded-[1.25rem] border border-line bg-surface p-1.5 shadow-[var(--shadow)]">
+  // On wide screens the tabs live in the top bar; on phones (no top bar) they stay above the content.
+  const slot = useSyncExternalStore(subscribeNone, readSlot, () => null);
+  const wide = useSyncExternalStore(subscribeWide, readWide, () => false);
+  const inBar = !!slot && wide;
+
+  const strip = (
+      <div role="tablist" aria-label="Dashboards" className={`flex flex-wrap items-center gap-1.5 ${inBar ? "" : "rounded-[1.25rem] border border-line bg-surface p-1.5 shadow-[var(--shadow)]"}`}>
         <button type="button" role="tab" aria-selected={current === ASK_TAB} id="tab-ask" aria-controls="panel-ask" onClick={() => select(ASK_TAB)} className={tabClass(current === ASK_TAB)}>
           <span aria-hidden>✨</span> Ask
         </button>
@@ -134,12 +143,17 @@ export function DashboardTabs() {
           <span aria-hidden>＋</span><span className="hidden sm:inline">New dashboard</span>
         </button>
       </div>
+  );
+
+  return (
+    <div className="flex flex-1 flex-col gap-4">
+      {inBar ? createPortal(strip, slot) : strip}
 
       {error && <p role="alert" className="rounded-2xl bg-danger-bg px-4 py-2 text-sm text-danger">{error}</p>}
       {state.status === "error" && !tabs && <ErrorState error={state.error} onRetry={reload} />}
 
       {current === ASK_TAB ? (
-        <div role="tabpanel" id="panel-ask" aria-labelledby="tab-ask" className="w-full"><AssistantChat tall /></div>
+        <div role="tabpanel" id="panel-ask" aria-labelledby="tab-ask" className="flex w-full flex-1 flex-col [&>section]:flex-1"><AssistantChat tall /></div>
       ) : tab ? (
         <div role="tabpanel" id={`panel-${tab.id}`} aria-labelledby={`tab-${tab.id}`}><DashboardContent key={tab.id} widgets={tab.widgets} /></div>
       ) : null}

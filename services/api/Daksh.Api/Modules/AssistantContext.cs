@@ -34,6 +34,20 @@ public static class AssistantIntent
         return new Intent(MessagesRx.IsMatch(q), MailRx.IsMatch(q), TasksRx.IsMatch(q), OverviewRx.IsMatch(q), matched);
     }
 
+    private static readonly HashSet<string> Filler = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "what", "when", "where", "which", "who", "whom", "whose", "why", "how", "does", "did", "have", "has", "had", "with", "from", "that", "this", "there", "their", "about",
+        "tell", "show", "give", "please", "can", "could", "would", "should", "will", "any", "some", "into", "over", "just", "like", "need", "want", "know", "check", "find", "look",
+        "been", "were", "was", "are", "you", "your", "mine", "them", "they", "then", "than", "also", "again", "much", "many", "more", "most", "last", "latest", "recent", "daksha",
+    };
+
+    /// <summary>The meaningful words of a question (4+ letters, no filler), used to search the apps' text for what was asked about.</summary>
+    public static IReadOnlyList<string> Keywords(string question) =>
+        Regex.Matches(question ?? "", @"[\p{L}\p{N}]{4,}").Select(m => m.Value).Where(w => !Filler.Contains(w) && !Stop.Contains(w)).Distinct(StringComparer.OrdinalIgnoreCase).Take(6).ToList();
+
+    /// <summary>A real question (not "hi" or "thanks"): worth a look at the connected apps even when no app is named.</summary>
+    public static bool IsSubstantive(string question) => Regex.Matches(question ?? "", @"[\p{L}\p{N}]+").Count >= 3;
+
     private static bool ContainsWord(string text, string word) =>
         Regex.IsMatch(text, $@"(?<![\p{{L}}\p{{N}}]){Regex.Escape(word)}(?![\p{{L}}\p{{N}}])", RegexOptions.IgnoreCase);
 }
@@ -74,6 +88,9 @@ public static class AssistantContextBuilder
         chats = chats.OrderByDescending(c => c.LastAt).ToList();
 
         var intent = AssistantIntent.Detect(question, chats.Select(c => c.Name));
+        // Anything that could be about the owner's life gets a look at their apps, whether or not an app was named:
+        // a real question with no app words falls back to the overview, and the question's own words are searched for below.
+        var overview = intent.Overview || (!intent.AnyApp && AssistantIntent.IsSubstantive(question));
 
         if (intent.Names.Count > 0)
         {
@@ -85,7 +102,7 @@ public static class AssistantContextBuilder
                 }
         }
 
-        if ((intent.Messages || intent.Overview) && chats.Count > 0)
+        if ((intent.Messages || overview) && chats.Count > 0)
         {
             sb.AppendLine().AppendLine("Recent chats (newest first):");
             foreach (var chat in chats.Take(12))
@@ -93,7 +110,23 @@ public static class AssistantContextBuilder
             foreach (var s in chats.Take(12).Select(c => c.Source).Distinct()) if (!sources.Contains(s)) sources.Add(s);
         }
 
-        if (intent.Mail || intent.Overview)
+        // Search the chats for the question's own words, so "who's coming to the party?" finds the party messages.
+        var words = AssistantIntent.Keywords(question);
+        if (words.Count > 0)
+        {
+            var found = chats.SelectMany(c => c.Recent.Where(m => words.Any(w => m.Text.Contains(w, StringComparison.OrdinalIgnoreCase)))
+                    .Select(m => (Chat: c, Msg: m)))
+                .OrderByDescending(x => x.Msg.At).Take(12).ToList();
+            if (found.Count > 0)
+            {
+                sb.AppendLine().AppendLine($"Messages that mention {string.Join(", ", words.Select(w => $"\"{w}\""))}:");
+                foreach (var (chat, m) in found)
+                    sb.AppendLine($"- [{m.At.ToLocalTime():d MMM HH:mm}] {chat.Name} ({chat.Source}) {(m.FromMe ? "Me" : m.Who)}: {Clip(m.Text, 200)}");
+                foreach (var src in found.Select(f => f.Chat.Source).Distinct()) if (!sources.Contains(src)) sources.Add(src);
+            }
+        }
+
+        if (intent.Mail || overview)
         {
             var mail = connections.Any(c => c.IntegrationKey == "gmail") ? await recentMail() : null;
             if (mail is { Count: > 0 })
@@ -106,7 +139,7 @@ public static class AssistantContextBuilder
             else if (intent.Mail) sb.AppendLine().AppendLine("Gmail: not connected or could not be read right now.");
         }
 
-        if (intent.Tasks || intent.Overview)
+        if (intent.Tasks || overview)
         {
             var connectionIds = connections.Select(c => c.Id).ToList();
             var open = await db.GetCollection<WhatsAppInsight>("whatsappInsights")
