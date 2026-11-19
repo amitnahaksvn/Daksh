@@ -373,3 +373,19 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 @media (prefers-reduced-motion: reduce) {
   .sidebar-fade { animation: none; }
 }
+
+
+/* The WhatsApp chat window: WhatsApp's own colours, wallpaper and bubbles, in day and night, whatever theme the app is in. */
+.wa-chat {
+  --wa-bg: #efeae2; --wa-in: #ffffff; --wa-out: #d9fdd3; --wa-text: #111b21; --wa-meta: #667781; --wa-header: #f0f2f5;
+  --wa-input: #ffffff; --wa-accent: #00a884; --wa-pill: rgb(255 255 255 / 0.92); --wa-quote-in: #f5f6f6; --wa-quote-out: #c5ecb9; --wa-tick: #53bdeb;
+}
+.dark .wa-chat {
+  --wa-bg: #0b141a; --wa-in: #202c33; --wa-out: #005c4b; --wa-text: #e9edef; --wa-meta: #8696a0; --wa-header: #202c33;
+  --wa-input: #2a3942; --wa-accent: #00a884; --wa-pill: #182229; --wa-quote-in: #1d282f; --wa-quote-out: #025144; --wa-tick: #53bdeb;
+}
+.wa-wall {
+  background-color: var(--wa-bg);
+  background-image: radial-gradient(circle at 14px 14px, rgb(128 128 128 / 0.09) 1.6px, transparent 2px), radial-gradient(circle at 34px 34px, rgb(128 128 128 / 0.06) 1.2px, transparent 1.6px);
+  background-size: 44px 44px;
+}

@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { ChatAvatar } from "@/components/ChatAvatar";
 import { Linkified } from "@/components/Linkified";
 import { AssistBar, DayDivider, EmojiButton, exportChat, sameDay } from "@/components/ChatExtras";
-import { buttonClass, inputClass, secondaryButtonClass } from "@/components/ui";
+import { buttonClass, inputClass } from "@/components/ui";
 import { api, ApiError, type WhatsAppChat, type WhatsAppGroupInfo, type WhatsAppMessage, type WhatsAppPresence, type WhatsAppReaction } from "@/lib/api";
 import { getIntegrationsHub } from "@/lib/signalr";
 
@@ -38,7 +38,7 @@ const fileSize = (bytes: number) => (bytes > 1048576 ? `${(bytes / 1048576).toFi
 export function MessageTicks({ status }: { status: number | null }) {
   if (status === null || status === undefined) return null;
   const label = status >= 4 ? "Read" : status === 3 ? "Delivered" : status === 2 ? "Sent" : status === 1 ? "Sending" : "Failed";
-  const colour = status >= 4 ? "#38bdf8" : "currentColor";
+  const colour = status >= 4 ? "var(--wa-tick, #38bdf8)" : "currentColor";
   return (
     <span role="img" aria-label={label} title={label} className={status >= 4 ? "" : "opacity-70"} style={{ color: colour }}>
       <svg viewBox="0 0 20 12" width="16" height="10" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -97,17 +97,17 @@ function MessageBubble({ m, chat, connectionId, onMediaLoaded, onReply, onReact,
 
   if (m.deleted) {
     return (
-      <div className={`max-w-[85%] rounded-xl border border-dashed border-line px-3 py-2 text-sm italic text-muted ${m.fromMe ? "ml-auto" : ""}`}>
+      <div className={`max-w-[85%] rounded-lg px-3 py-1.5 text-[13px] italic text-[var(--wa-meta)] shadow-sm ${m.fromMe ? "ml-auto rounded-tr-none bg-[var(--wa-out)]" : "rounded-tl-none bg-[var(--wa-in)]"}`}>
         🚫 {m.fromMe ? "You deleted this message" : "This message was deleted"}
       </div>
     );
   }
   const showText = !(m.hasMedia && LABELS.has(m.text));
   return (
-    <div className={`group relative max-w-[85%] rounded-xl p-2.5 text-sm ${m.fromMe ? "ml-auto bg-accent text-accent-contrast" : "bg-surface-2"}`}>
-      {!m.fromMe && chat.isGroup && <p className="text-xs font-semibold opacity-70">{m.chatName ?? "Unknown"}</p>}
+    <div className={`group relative max-w-[85%] rounded-lg px-2.5 py-1.5 text-[14px] leading-snug text-[var(--wa-text)] shadow-sm ${m.fromMe ? "ml-auto rounded-tr-none bg-[var(--wa-out)]" : "rounded-tl-none bg-[var(--wa-in)]"}`}>
+      {!m.fromMe && chat.isGroup && <p className="text-xs font-medium text-[var(--wa-accent)]">{m.chatName ?? "Unknown"}</p>}
       {m.quotedText && (
-        <div className={`mb-1 truncate rounded-lg border-l-2 px-2 py-1 text-xs opacity-80 ${m.fromMe ? "border-accent-contrast/50 bg-black/10" : "border-line bg-surface"}`}>{m.quotedText}</div>
+        <div className={`mb-1 truncate rounded-md border-l-4 border-[var(--wa-accent)] px-2 py-1 text-xs text-[var(--wa-meta)] ${m.fromMe ? "bg-[var(--wa-quote-out)]" : "bg-[var(--wa-quote-in)]"}`}>{m.quotedText}</div>
       )}
       {m.hasMedia && m.mediaKind && <MessageMedia connectionId={connectionId} m={m} onLoaded={onMediaLoaded} />}
       {!m.hasMedia && m.mediaKind === "video" && <p className="opacity-80">🎥 Video</p>}
@@ -118,12 +118,12 @@ function MessageBubble({ m, chat, connectionId, onMediaLoaded, onReply, onReact,
           {groupReactions(m.reactions).map(([emoji, count]) => <span key={emoji} className="rounded-full bg-black/10 px-1.5 py-0.5 text-xs">{emoji}{count > 1 ? ` ${count}` : ""}</span>)}
         </div>
       )}
-      <div className="mt-0.5 flex items-center justify-end gap-2">
+      <div className="-mb-0.5 mt-0.5 flex items-center justify-end gap-1.5 text-[var(--wa-meta)]">
         {m.starred && <span aria-label="Starred" title="Starred" className="text-xs">★</span>}
         {m.edited && <span className="text-[10px] italic opacity-70">edited</span>}
         <span className="text-[10px] opacity-70">{new Date(m.timestamp).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
         {m.fromMe && <MessageTicks status={m.status} />}
-        <button type="button" onClick={() => { setOpenedAt(Date.now()); setMenu(menu === "closed" ? "actions" : "closed"); }} aria-label="Message options" aria-expanded={menu !== "closed"} className="rounded px-1 text-xs opacity-60 hover:opacity-100">⋯</button>
+        <button type="button" onClick={() => { setOpenedAt(Date.now()); setMenu(menu === "closed" ? "actions" : "closed"); }} aria-label="Message options" aria-expanded={menu !== "closed"} className="rounded px-1 text-xs opacity-0 transition-opacity focus:opacity-100 group-hover:opacity-80">⋯</button>
       </div>
       {m.fromMe && m.isAiGenerated && <p className="mt-0.5 text-right text-[9px] italic opacity-60">🤖 Reply by AI Assistant</p>}
 
@@ -261,8 +261,8 @@ function presenceText(p: WhatsAppPresence | null): string | null {
   return null;
 }
 
-export function ChatThread({ connectionId, chat, onClose, onSent, bodyHeightClass = "max-h-80", embedded = false }: {
-  connectionId: string; chat: WhatsAppChat; onClose: () => void; onSent: () => void; bodyHeightClass?: string;
+export function ChatThread({ connectionId, chat, onClose, onMinimize, onSent, bodyHeightClass = "max-h-80", embedded = false }: {
+  connectionId: string; chat: WhatsAppChat; onClose: () => void; onMinimize?: () => void; onSent: () => void; bodyHeightClass?: string;
   /** Inside a floating chat window: no outer border and no header of its own. */
   embedded?: boolean;
 }) {
@@ -387,48 +387,49 @@ export function ChatThread({ connectionId, chat, onClose, onSent, bodyHeightClas
   const visible = messages && query ? messages.filter((m) => m.text.toLowerCase().includes(query)) : messages;
   const status = presenceText(presence);
   const name = chatDisplayName(chat);
+  const hdrBtn = "flex h-9 w-9 items-center justify-center rounded-full text-[var(--wa-meta)] transition-colors hover:bg-black/10 hover:text-[var(--wa-text)]";
+  const menuItem = "block w-full rounded-lg px-3 py-1.5 text-left text-xs hover:bg-surface-2";
 
   return (
-    <div className={embedded ? "flex h-full min-h-0 flex-col" : "rounded-[1.25rem] border border-line"} onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }} onDrop={(e) => { const f = e.dataTransfer.files?.[0]; if (f) { e.preventDefault(); pickFile(f); } }}>
-      {!embedded && (
-        <div className="flex items-center justify-between gap-2 border-b border-line p-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <ChatAvatar connectionId={connectionId} chatId={chat.chatId} name={name} isGroup={chat.isGroup} size={40} />
-            <div className="min-w-0"><div className="flex items-center gap-2"><span className="truncate font-semibold">{name}</span>{chat.isGroup && <GroupBadge />}</div>{status && <p className="text-xs text-accent">{status}</p>}</div>
-          </div>
-          <button onClick={onClose} className="text-sm text-muted hover:text-text">Close</button>
+    <div className={`wa-chat flex min-h-0 flex-col overflow-hidden text-[var(--wa-text)] ${embedded ? "h-full" : "rounded-[1.25rem] border border-line"}`} onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }} onDrop={(e) => { const f = e.dataTransfer.files?.[0]; if (f) { e.preventDefault(); pickFile(f); } }}>
+      <div className="flex shrink-0 items-center gap-2 bg-[var(--wa-header)] px-3 py-2">
+        <ChatAvatar connectionId={connectionId} chatId={chat.chatId} name={name} isGroup={chat.isGroup} size={36} />
+        <div className="min-w-0 flex-1 leading-tight">
+          <p className="truncate text-[15px] font-medium">{name}</p>
+          <p className="truncate text-xs text-[var(--wa-meta)]">{status ?? (chat.isGroup ? "group chat" : "")}</p>
         </div>
-      )}
-      <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-1.5 text-xs text-muted">
-        <span className="min-w-0 truncate">{embedded ? (status ?? "") : ""}</span>
-        <span className="flex shrink-0 items-center gap-1">
-          {chat.isGroup && <button type="button" onClick={() => setShowGroup((v) => !v)} aria-pressed={showGroup} className="rounded-full px-2 py-1 hover:bg-surface-2 hover:text-text">Group info</button>}
-          <button type="button" onClick={() => setSearch(search === null ? "" : null)} aria-pressed={search !== null} className="rounded-full px-2 py-1 hover:bg-surface-2 hover:text-text">Search</button>
-          <span className="relative">
-            <button type="button" onClick={() => setMore((v) => !v)} aria-expanded={more} aria-label="More chat options" className="rounded-full px-2 py-1 hover:bg-surface-2 hover:text-text">More ▾</button>
-            {more && (<>
-              <button type="button" aria-label="Close menu" onClick={() => setMore(false)} className="fixed inset-0 z-10 cursor-default" />
-              <div role="menu" className="absolute right-0 top-full z-20 mt-1 w-56 rounded-xl border border-line bg-surface p-1 text-text shadow-[var(--shadow)]">
-                <p className="px-3 pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted">Disappearing messages</p>
-                {([["Off", 0], ["24 hours", 86400], ["7 days", 604800], ["90 days", 7776000]] as const).map(([label, secs]) => (
-                  <button key={label} role="menuitem" className="block w-full rounded-lg px-3 py-1.5 text-left text-xs hover:bg-surface-2" onClick={() => chatAction(() => api.setWhatsAppDisappearing(connectionId, chat.chatId, secs), "Could not change disappearing messages.", `Disappearing messages: ${label}`)}>{label}</button>
-                ))}
-                <hr className="my-1 border-line" />
-                <button role="menuitem" className="block w-full rounded-lg px-3 py-1.5 text-left text-xs hover:bg-surface-2" onClick={() => { setMore(false); exportChat(chatDisplayName(chat), messages ?? []); }}>Export chat</button>
-                <button role="menuitem" className="block w-full rounded-lg px-3 py-1.5 text-left text-xs text-danger hover:bg-surface-2" onClick={() => chatAction(() => api.clearWhatsAppChat(connectionId, chat.chatId), "Could not clear the chat.", "Chat cleared in Daksha")}>Clear chat (Daksha only)</button>
-                {!chat.isGroup && <>
-                  <button role="menuitem" className="block w-full rounded-lg px-3 py-1.5 text-left text-xs text-danger hover:bg-surface-2" onClick={() => chatAction(() => api.blockWhatsAppChat(connectionId, chat.chatId, true), "Could not block this contact.", "Contact blocked")}>Block contact</button>
-                  <button role="menuitem" className="block w-full rounded-lg px-3 py-1.5 text-left text-xs hover:bg-surface-2" onClick={() => chatAction(() => api.blockWhatsAppChat(connectionId, chat.chatId, false), "Could not unblock this contact.", "Contact unblocked")}>Unblock contact</button></>}
-              </div>
-            </>)}
-          </span>
+        <button type="button" onClick={() => setSearch(search === null ? "" : null)} aria-pressed={search !== null} aria-label="Search" title="Search" className={hdrBtn}>
+          <svg aria-hidden viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+        </button>
+        <span className="relative">
+          <button type="button" onClick={() => setMore((v) => !v)} aria-expanded={more} aria-label="More chat options" title="More" className={hdrBtn}>
+            <svg aria-hidden viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><circle cx="12" cy="5" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="12" cy="19" r="1.8" /></svg>
+          </button>
+          {more && (<>
+            <button type="button" aria-label="Close menu" onClick={() => setMore(false)} className="fixed inset-0 z-10 cursor-default" />
+            <div role="menu" className="absolute right-0 top-full z-20 mt-1 w-56 rounded-xl border border-line bg-surface p-1 text-text shadow-[var(--shadow)]">
+              {chat.isGroup && <button role="menuitem" className={menuItem} onClick={() => { setMore(false); setShowGroup((v) => !v); }}>Group info</button>}
+              <p className="px-3 pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted">Disappearing messages</p>
+              {([["Off", 0], ["24 hours", 86400], ["7 days", 604800], ["90 days", 7776000]] as const).map(([label, secs]) => (
+                <button key={label} role="menuitem" className={menuItem} onClick={() => chatAction(() => api.setWhatsAppDisappearing(connectionId, chat.chatId, secs), "Could not change disappearing messages.", `Disappearing messages: ${label}`)}>{label}</button>
+              ))}
+              <hr className="my-1 border-line" />
+              <button role="menuitem" className={menuItem} onClick={() => { setMore(false); exportChat(chatDisplayName(chat), messages ?? []); }}>Export chat</button>
+              <button role="menuitem" className={`${menuItem} text-danger`} onClick={() => chatAction(() => api.clearWhatsAppChat(connectionId, chat.chatId), "Could not clear the chat.", "Chat cleared in Daksha")}>Clear chat (Daksha only)</button>
+              {!chat.isGroup && <>
+                <button role="menuitem" className={`${menuItem} text-danger`} onClick={() => chatAction(() => api.blockWhatsAppChat(connectionId, chat.chatId, true), "Could not block this contact.", "Contact blocked")}>Block contact</button>
+                <button role="menuitem" className={menuItem} onClick={() => chatAction(() => api.blockWhatsAppChat(connectionId, chat.chatId, false), "Could not unblock this contact.", "Contact unblocked")}>Unblock contact</button></>}
+            </div>
+          </>)}
         </span>
+        {onMinimize && <button type="button" onClick={onMinimize} aria-label="Minimise" title="Minimise" className={hdrBtn}>–</button>}
+        <button type="button" onClick={onClose} aria-label="Close chat" title="Close" className={hdrBtn}>✕</button>
       </div>
       {showGroup && chat.isGroup && <GroupInfoPanel connectionId={connectionId} chat={chat} onClose={() => setShowGroup(false)} />}
-      {search !== null && <div className="border-b border-line p-2"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search in this chat…" aria-label="Search in this chat" className={inputClass} autoFocus /></div>}
-      <div ref={scrollRef} className={`${embedded ? "min-h-0 flex-1" : bodyHeightClass} space-y-2 overflow-y-auto p-3`}>
-        {!visible ? <p className="text-sm text-muted">Loading…</p>
-          : visible.length === 0 ? <p className="text-sm text-muted">{query ? "No messages match." : "No messages yet."}</p>
+      {search !== null && <div className="shrink-0 bg-[var(--wa-header)] px-3 pb-2"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search in this chat…" aria-label="Search in this chat" className="field-in-pill w-full rounded-full bg-[var(--wa-input)] px-4 py-2 text-sm text-[var(--wa-text)] placeholder:text-[var(--wa-meta)]" autoFocus /></div>}
+      <div ref={scrollRef} className={`wa-wall ${embedded ? "min-h-0 flex-1" : bodyHeightClass} space-y-1 overflow-y-auto px-3 py-2`}>
+        {!visible ? <p className="text-sm text-[var(--wa-meta)]">Loading…</p>
+          : visible.length === 0 ? <p className="text-sm text-[var(--wa-meta)]">{query ? "No messages match." : "No messages yet."}</p>
           : visible.map((m, i) => (
             <div key={m.messageId} className="contents">
               {(i === 0 || !sameDay(visible[i - 1].timestamp, m.timestamp)) && <DayDivider iso={m.timestamp} />}
@@ -444,26 +445,30 @@ export function ChatThread({ connectionId, chat, onClose, onSent, bodyHeightClas
           ))}
       </div>
       {(replyingTo || editing || file) && (
-        <div className="flex items-center justify-between gap-2 border-t border-line bg-surface-2 px-3 py-2 text-xs">
-          <span className="truncate">
-            {editing ? <>Editing: <span className="opacity-70">{editing.text}</span></>
-              : file ? <>📎 {file.name} <span className="opacity-70">({fileSize(file.size)})</span></>
-              : <>Replying to: <span className="opacity-70">{replyingTo?.text}</span></>}
+        <div className="flex shrink-0 items-center justify-between gap-2 bg-[var(--wa-header)] px-3 py-2 text-xs">
+          <span className="truncate rounded-md border-l-4 border-[var(--wa-accent)] bg-[var(--wa-quote-in)] px-2 py-1 text-[var(--wa-meta)]">
+            {editing ? <>Editing: {editing.text}</> : file ? <>📎 {file.name} ({fileSize(file.size)})</> : <>Replying to: {replyingTo?.text}</>}
           </span>
-          <button onClick={() => { setReplyingTo(null); setEditing(null); setFile(null); if (editing) setText(""); }} aria-label="Cancel" className="shrink-0 text-muted hover:text-text">✕</button>
+          <button onClick={() => { setReplyingTo(null); setEditing(null); setFile(null); if (editing) setText(""); }} aria-label="Cancel" className="shrink-0 text-[var(--wa-meta)] hover:text-[var(--wa-text)]">✕</button>
         </div>
       )}
-      <AssistBar compact={embedded} channel="whatsapp" connectionId={connectionId} chatId={chat.chatId} onUse={(t) => { setText(t); setEditing(null); }} />
-      <div className="flex items-center gap-2 border-t border-line p-3">
+      <div className="bg-[var(--wa-header)]"><AssistBar compact={embedded} channel="whatsapp" connectionId={connectionId} chatId={chat.chatId} onUse={(t) => { setText(t); setEditing(null); }} /></div>
+      <div className="flex shrink-0 items-end gap-2 bg-[var(--wa-header)] px-2 py-2">
         <input ref={fileInput} type="file" className="sr-only" aria-label="Attach a file" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setFile(f); setEditing(null); } e.target.value = ""; }} />
-        <button type="button" onClick={() => fileInput.current?.click()} disabled={busy || editing !== null} aria-label="Attach a photo, video, voice note or file" title="Attach" className={`${secondaryButtonClass} !px-3 !py-2`}>📎</button>
-        <EmojiButton disabled={busy} onPick={(e) => onType(text + e)} />
-        <input value={text} onChange={(e) => onType(e.target.value)} onBlur={stopTyping} onPaste={(e) => { const f = e.clipboardData.files?.[0]; if (f) { e.preventDefault(); pickFile(f); } }} onKeyDown={(e) => { if (e.key === "Enter") void send(); }}
-          placeholder={file ? "Add a caption…" : editing ? "Edit your message…" : "Reply…"} className={inputClass} />
-        <button onClick={send} disabled={busy || (!file && !text.trim())} className={`${buttonClass} px-4`}>{busy ? "…" : editing ? "Save" : "Send"}</button>
+        <div className="flex min-w-0 flex-1 items-center rounded-3xl bg-[var(--wa-input)] px-1.5">
+          <EmojiButton plain disabled={busy} onPick={(e) => onType(text + e)} />
+          <input value={text} onChange={(e) => onType(e.target.value)} onBlur={stopTyping} onPaste={(e) => { const f = e.clipboardData.files?.[0]; if (f) { e.preventDefault(); pickFile(f); } }} onKeyDown={(e) => { if (e.key === "Enter") void send(); }}
+            placeholder={file ? "Add a caption…" : editing ? "Edit your message…" : "Type a message"} className="field-in-pill min-w-0 flex-1 bg-transparent px-1 py-2.5 text-[14px] text-[var(--wa-text)] placeholder:text-[var(--wa-meta)]" />
+          <button type="button" onClick={() => fileInput.current?.click()} disabled={busy || editing !== null} aria-label="Attach a photo, video, voice note or file" title="Attach" className="rounded-full p-2 text-[var(--wa-meta)] hover:text-[var(--wa-text)] disabled:opacity-50">
+            <svg aria-hidden viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20.5 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8" /></svg>
+          </button>
+        </div>
+        <button onClick={send} disabled={busy || (!file && !text.trim())} aria-label={editing ? "Save" : "Send"} title={editing ? "Save" : "Send"} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--wa-accent)] text-white transition-opacity disabled:opacity-60">
+          {busy ? "…" : editing ? "✓" : <svg aria-hidden viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M3.4 20.4l17.4-7.5a1 1 0 0 0 0-1.8L3.4 3.6a.9.9 0 0 0-1.3 1l2 6.1 8.9 1.3-8.9 1.3-2 6.1a.9.9 0 0 0 1.3 1z" /></svg>}
+        </button>
       </div>
-      {notice && <p role="status" className="px-3 pb-2 text-xs text-accent">{notice}</p>}
-      {error && <p role="alert" className="px-3 pb-3 text-sm text-danger">{error}</p>}
+      {notice && <p role="status" className="bg-[var(--wa-header)] px-3 pb-2 text-xs text-[var(--wa-accent)]">{notice}</p>}
+      {error && <p role="alert" className="bg-[var(--wa-header)] px-3 pb-3 text-sm text-danger">{error}</p>}
       {forwarding && <ForwardDialog connectionId={connectionId} onClose={() => setForwarding(null)} onPick={(target) => { const m = forwarding; setForwarding(null); void run(() => api.forwardWhatsAppMessage(connectionId, m.messageId, target.chatId), "Could not forward the message.", `Forwarded to ${chatDisplayName(target)}`); }} />}
     </div>
   );

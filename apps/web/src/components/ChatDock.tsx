@@ -206,20 +206,20 @@ export function ChatDock() {
           <section
             key={`${w.channel}:${w.chatId}`}
             aria-label={`Chat with ${name}`}
-            className={`chat-window pointer-events-auto flex w-[min(16rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-t-2xl border border-b-0 border-line bg-surface shadow-[0_-6px_28px_rgb(0_0_0/0.22)] ${w.minimized ? "" : "h-[min(32rem,calc(100vh-3rem))]"}`}
+            className={`chat-window pointer-events-auto flex ${w.channel === "whatsapp" ? "w-[min(19rem,calc(100vw-1.5rem))]" : "w-[min(16rem,calc(100vw-1.5rem))]"} flex-col overflow-hidden rounded-t-2xl border border-b-0 border-line bg-surface shadow-[0_-6px_28px_rgb(0_0_0/0.22)] ${w.minimized ? "" : "h-[min(32rem,calc(100vh-3rem))]"}`}
           >
-            <header className="flex shrink-0 items-center gap-2 border-b border-line bg-surface-2 px-3 py-2">
+            {(w.minimized || w.channel !== "whatsapp") && <header className="flex shrink-0 items-center gap-2 border-b border-line bg-surface-2 px-3 py-2">
               <button type="button" onClick={() => toggleMinimize(w.channel, w.chatId)} className="flex min-w-0 flex-1 items-center gap-2 text-left" aria-label={w.minimized ? `Expand chat with ${name}` : `Minimise chat with ${name}`}>
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white"><BrandIcon icon={brand.icon} color={brand.color} size={14} /></span>
                 <span className="truncate text-sm font-bold">{name}</span>
               </button>
               <button type="button" onClick={() => toggleMinimize(w.channel, w.chatId)} aria-label={w.minimized ? "Expand" : "Minimise"} className="rounded-full px-2 text-muted hover:bg-line hover:text-text">{w.minimized ? "▢" : "–"}</button>
               <button type="button" onClick={() => closeWindow(w.channel, w.chatId)} aria-label="Close chat" className="rounded-full px-2 text-muted hover:bg-line hover:text-text">✕</button>
-            </header>
+            </header>}
             {!w.minimized && (
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 {w.channel === "whatsapp" && wa ? (
-                  <ChatThread connectionId={group.connectionId} chat={wa} onClose={() => closeWindow(w.channel, w.chatId)} onSent={() => void refresh()} embedded bodyHeightClass="h-[min(14rem,calc(100vh-17rem))]" />
+                  <ChatThread connectionId={group.connectionId} chat={wa} onClose={() => closeWindow(w.channel, w.chatId)} onMinimize={() => toggleMinimize(w.channel, w.chatId)} onSent={() => void refresh()} embedded bodyHeightClass="h-[min(14rem,calc(100vh-17rem))]" />
                 ) : tg ? (
                   <TelegramThread connectionId={group.connectionId} chat={tg} onBack={() => closeWindow(w.channel, w.chatId)} embedded heightClass="h-full" />
                 ) : (

@@ -5,11 +5,11 @@ import { api, ApiError, type ChatAssistResult } from "@/lib/api";
 const EMOJIS = ["😀","😂","🥹","😍","🥰","😘","😊","😉","😎","🤔","😅","😭","😢","😡","🙏","👍","👎","👏","🙌","💪","🔥","🎉","❤️","💔","✅","❌","👀","🤝","🙂","😴","🤗","😇","🥳","😬","🤷","💯","🌸","☕","🍕","🎂"];
 
 /** A small emoji palette that inserts into the message box. */
-export function EmojiButton({ onPick, disabled = false }: { onPick: (emoji: string) => void; disabled?: boolean }) {
+export function EmojiButton({ onPick, disabled = false, plain = false }: { onPick: (emoji: string) => void; disabled?: boolean; plain?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <span className="relative">
-      <button type="button" disabled={disabled} onClick={() => setOpen((v) => !v)} aria-label="Insert an emoji" aria-expanded={open} title="Emoji" className="rounded-full border border-line bg-surface px-3 py-2 text-sm hover:bg-surface-2 disabled:opacity-50">😊</button>
+      <button type="button" disabled={disabled} onClick={() => setOpen((v) => !v)} aria-label="Insert an emoji" aria-expanded={open} title="Emoji" className={plain ? "rounded-full p-2 text-lg leading-none opacity-70 hover:opacity-100 disabled:opacity-40" : "rounded-full border border-line bg-surface px-3 py-2 text-sm hover:bg-surface-2 disabled:opacity-50"}>😊</button>
       {open && (<>
         <button type="button" aria-label="Close emoji picker" onClick={() => setOpen(false)} className="fixed inset-0 z-10 cursor-default" />
         <div role="dialog" aria-label="Emoji" className="absolute bottom-full left-0 z-20 mb-2 grid w-64 grid-cols-8 gap-1 rounded-xl border border-line bg-surface p-2 shadow-[var(--shadow)]">
@@ -32,7 +32,7 @@ export function dayLabel(iso: string, now = new Date()): string {
 export const sameDay = (a: string, b: string) => new Date(a).toDateString() === new Date(b).toDateString();
 
 export function DayDivider({ iso }: { iso: string }) {
-  return <div role="separator" className="my-1 flex items-center gap-3 text-[11px] font-semibold text-muted"><span className="h-px flex-1 bg-line" /><span>{dayLabel(iso)}</span><span className="h-px flex-1 bg-line" /></div>;
+  return <div role="separator" className="my-2 flex justify-center"><span className="rounded-lg bg-[var(--wa-pill,var(--surface-2))] px-3 py-1 text-[11px] font-medium text-[var(--wa-meta,var(--muted))] shadow-sm">{dayLabel(iso)}</span></div>;
 }
 
 /** Saves the visible messages as a plain text file. */
