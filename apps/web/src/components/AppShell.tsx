@@ -8,6 +8,7 @@ import { AppearanceControls, StyleToggle, useStyle } from "@/components/ThemeTog
 import { NotificationBell } from "@/components/NotificationBell";
 import { UserBadge } from "@/components/UserBadge";
 import { tileClass } from "@/components/ui";
+import { FakeBadge } from "@/components/CommandCentre";
 import type { StyleId } from "@/lib/theme";
 
 /** Phones get the same bottom tab bar in every theme, so the thumb reaches everything. */
@@ -28,6 +29,18 @@ function MobileBar() {
       <DakshaBrand compact />
       <div className="flex items-center gap-2"><StyleToggle /><NotificationBell /><UserBadge /></div>
     </div>
+  );
+}
+
+/** A search box that is not wired up yet. It looks and types like a real one, does nothing, and says so. */
+function TopSearch() {
+  return (
+    <label className="flex min-w-0 max-w-md flex-1 items-center gap-2 rounded-full border border-dashed border-danger/60 bg-surface-2 px-4 py-2 text-sm text-muted focus-within:border-solid focus-within:border-accent">
+      <svg aria-hidden viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+      <input type="search" aria-label="Search everything (placeholder)" placeholder="Search messages, mail, tasks, people…" className="min-w-0 flex-1 bg-transparent text-text placeholder:text-muted focus:outline-none" onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }} />
+      <span className="ai-mono hidden rounded-md border border-line px-1.5 py-0.5 text-xs lg:inline">⌘K</span>
+      <FakeBadge />
+    </label>
   );
 }
 
@@ -105,7 +118,10 @@ export function AppShell({ children }: { children: ReactNode }) {
         </aside>
         <main id="main" className="flex min-w-0 flex-col gap-3 md:gap-4">
           <MobileBar />
-          <header className={`hidden items-center justify-end gap-3 p-3 md:flex ${tileClass}`}><NotificationBell /><UserBadge /></header>
+          <header className={`hidden items-center justify-between gap-3 p-3 md:flex ${tileClass}`}>
+            <TopSearch />
+            <div className="flex items-center gap-3"><NotificationBell /><UserBadge /></div>
+          </header>
           {children}
         </main>
       </div>

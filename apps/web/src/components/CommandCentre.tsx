@@ -67,17 +67,6 @@ function AskBar() {
   );
 }
 
-/** A search-everything box that is not wired up yet. It looks real but does nothing, and says so. */
-function FakeSearch() {
-  return (
-    <div className="flex items-center gap-2 rounded-2xl border border-dashed border-danger/60 bg-surface-2 px-4 py-2.5 text-sm text-muted" aria-label="Search everything (placeholder)">
-      <span className="min-w-0 flex-1 truncate">Search every app — messages, mail, tasks, people…</span>
-      <span className="ai-mono rounded-md border border-line px-1.5 py-0.5 text-xs">⌘K</span>
-      <FakeBadge />
-    </div>
-  );
-}
-
 function NeedsRow({ item, busy, onAct }: { item: NeedsItem; busy: boolean; onAct: (a: NonNullable<NeedsItem["action"] | NeedsItem["secondary"]>) => void }) {
   const style = SOURCE_STYLE[item.source];
   return (
@@ -236,7 +225,6 @@ export function CommandCentre({ apps }: { apps: DashboardApp[] }) {
       </div>
 
       <AskBar />
-      <FakeSearch />
 
       {state.status === "error" && !data && <p role="alert" className="rounded-2xl bg-danger-bg p-4 text-sm text-danger">Could not load the Command Centre. <button type="button" onClick={reload} className="font-semibold underline">Try again</button></p>}
       {!data && state.status === "loading" && <p role="status" className="text-sm text-muted">Loading your day…</p>}

@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CommandCentre } from "./CommandCentre";
@@ -46,9 +46,8 @@ describe("Command Centre", () => {
     mockApi();
     render(<CommandCentre apps={[wa]} />);
     await screen.findByText("Reply to Rohan is ready");
-    expect(screen.getAllByText("Fake").length).toBeGreaterThanOrEqual(8); // search box, 2 stats, 3 tiles + heading, automations
-    const search = screen.getByLabelText("Search everything (placeholder)");
-    expect(within(search).getByText("Fake")).toBeTruthy();
+    expect(screen.getAllByText("Fake").length).toBeGreaterThanOrEqual(7); // 2 stats, 3 tiles + heading, automations
+    expect(screen.getByLabelText("Automations (placeholder)")).toBeTruthy();
   });
 
   it("remembers the chosen view", async () => {

@@ -59,6 +59,14 @@ describe("every theme has a sidebar menu of its own", () => {
     expect(screen.getByLabelText("Main (mobile)")).toBeTruthy();
   });
 
+  it("has a top search box that is labelled as a placeholder", () => {
+    window.localStorage.setItem(STYLE_KEY, "hybrid");
+    render(<AppShell><p>x</p></AppShell>);
+    const box = screen.getByLabelText("Search everything (placeholder)");
+    expect(box).toBeTruthy();
+    expect(screen.getAllByText("Fake").length).toBeGreaterThan(0);
+  });
+
   it("draws the menu differently in each theme", () => {
     const seen = new Set<string>();
     for (const t of THEMES) {
