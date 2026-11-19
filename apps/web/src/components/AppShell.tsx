@@ -58,10 +58,13 @@ function CompactMenu() {
   );
 }
 
+/** The minimize / expand tab: sits on the sidebar's right edge, halfway down, so it is always in the same easy-to-find place. */
 function CollapseButton({ collapsed }: { collapsed: boolean }) {
   return (
     <button type="button" onClick={() => setSidebarCollapsed(!collapsed)} aria-label={collapsed ? "Expand sidebar" : "Minimize sidebar"} aria-expanded={!collapsed} title={collapsed ? "Expand sidebar" : "Minimize sidebar"}
-      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line bg-surface-2 text-sm text-muted hover:text-text">{collapsed ? "»" : "«"}</button>
+      className="absolute right-0 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full border border-line bg-surface text-sm text-muted shadow-[var(--shadow)] transition-colors hover:text-text">
+      <span aria-hidden className={`inline-block transition-transform duration-300 ${collapsed ? "rotate-180" : ""}`}>«</span>
+    </button>
   );
 }
 
@@ -129,26 +132,30 @@ export function AppShell({ children }: { children: ReactNode }) {
   const collapsed = useSyncExternalStore(subscribeSidebar, sidebarSnapshot, () => false);
   return (
     <>
-      <div data-nav={style} data-sidebar={collapsed ? "collapsed" : "open"} className={`grid w-full flex-1 grid-cols-[minmax(0,1fr)] content-start gap-3 p-3 pb-24 transition-[padding] duration-300 md:gap-4 md:p-4 md:pb-4 lg:pr-[calc(var(--chat-rail-w,0rem)+1rem)] ${collapsed ? "md:grid-cols-[3.75rem_minmax(0,1fr)]" : "md:grid-cols-[12rem_minmax(0,1fr)]"}`}>
-        <aside className={`hidden min-w-0 flex-col md:sticky md:top-4 md:flex md:h-[calc(100vh-2rem)] md:self-start md:overflow-y-auto ${tileClass} ${collapsed ? "items-center gap-4 px-2 py-3" : "gap-4 p-3"}`}>
-          {collapsed ? (
-            <>
-              <DakshaBrand compact />
-              <CollapseButton collapsed />
-              <CompactMenu />
-              <div className="mt-auto"><StyleToggle compact /></div>
-            </>
-          ) : (
-            <>
-              <div className="flex items-center justify-between gap-2"><DakshaBrand /><CollapseButton collapsed={false} /></div>
-              <SideMenu style={style} />
-              <div className="mt-auto flex flex-col gap-3">
-                <SideFooter style={style} />
-                <div><p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted">Appearance</p><AppearanceControls /></div>
-              </div>
-            </>
-          )}
-        </aside>
+      <div data-nav={style} data-sidebar={collapsed ? "collapsed" : "open"} className={`grid w-full flex-1 grid-cols-[minmax(0,1fr)] content-start gap-3 p-3 pb-24 transition-[padding,grid-template-columns] duration-300 ease-out md:gap-4 md:p-4 md:pb-4 lg:pr-[calc(var(--chat-rail-w,0rem)+1rem)] ${collapsed ? "md:grid-cols-[3.75rem_minmax(0,1fr)]" : "md:grid-cols-[12rem_minmax(0,1fr)]"}`}>
+        <div className="relative hidden min-w-0 md:sticky md:top-4 md:block md:h-[calc(100vh-2rem)] md:self-start">
+          <aside className={`flex h-full min-w-0 flex-col overflow-y-auto overflow-x-hidden ${tileClass} ${collapsed ? "items-center gap-4 px-2 py-3" : "gap-4 p-3"}`}>
+            <div key={collapsed ? "collapsed" : "open"} className={`sidebar-fade flex min-h-full w-full flex-col ${collapsed ? "items-center gap-4" : "gap-4"}`}>
+              {collapsed ? (
+                <>
+                  <DakshaBrand compact />
+                  <CompactMenu />
+                  <div className="mt-auto"><StyleToggle compact /></div>
+                </>
+              ) : (
+                <>
+                  <DakshaBrand />
+                  <SideMenu style={style} />
+                  <div className="mt-auto flex flex-col gap-3">
+                    <SideFooter style={style} />
+                    <div><p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted">Appearance</p><AppearanceControls /></div>
+                  </div>
+                </>
+              )}
+            </div>
+          </aside>
+          <CollapseButton collapsed={collapsed} />
+        </div>
         <main id="main" className="flex min-w-0 flex-col gap-3 md:gap-4">
           <MobileBar />
           <header className={`hidden items-center justify-between gap-3 p-3 md:flex ${tileClass}`}>

@@ -362,3 +362,14 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 @media (prefers-reduced-motion: reduce) {
   [data-style="galaxy"] .tile { backdrop-filter:none; -webkit-backdrop-filter:none; }
 }
+
+
+/* The sidebar's contents fade in when it is minimized or expanded; its width eases via the page grid. */
+@keyframes sidebar-fade {
+  from { opacity: 0; transform: translateX(-6px); }
+  to { opacity: 1; transform: none; }
+}
+.sidebar-fade { animation: sidebar-fade 0.28s ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-fade { animation: none; }
+}
