@@ -1,3 +1,4 @@
+using Daksh.Platform.Security;
 using System.Collections.Concurrent;
 using System.Net.Http.Json;
 using Daksh.Ai;
@@ -409,9 +410,18 @@ public static class TelegramIntegrationModule
 
         // A message the owner types in their own "Saved Messages" may be a command ("busy for 2 hours", "buy milk"): do it and confirm there.
         if (!stored.IsGroup && !string.IsNullOrEmpty(connection.SelfChatId) && stored.ChatId == connection.SelfChatId
-            && SelfCommands.Parse(stored.Text).Kind != SelfCommandKind.None && SelfCommandSeen.First(connection.Id, stored.MessageId))
+            && !stored.Text.StartsWith(SelfCommands.ReplyMarker, StringComparison.Ordinal)
+            && (SelfCommands.Parse(stored.Text).Kind != SelfCommandKind.None || SelfAssistant.LooksLikeQuestion(stored.Text)) && SelfCommandSeen.First(connection.Id, stored.MessageId))
         {
+            // A command is done and confirmed; anything else that reads like a question is answered by the assistant, in this same chat.
             var confirmation = await SelfCommands.RunAsync(db, connection.UserId, stored.Text, DateTime.UtcNow, ct);
+            if (confirmation is null)
+            {
+                using var askScope = scopes.CreateScope();
+                var asp = askScope.ServiceProvider;
+                confirmation = await SelfAssistant.AnswerAsync(db, asp.GetRequiredService<IAssistantOrchestrator>(), asp.GetRequiredService<ISecretProtector>(), config,
+                    asp.GetRequiredService<IHttpClientFactory>(), connection.UserId, stored.Text, loggers.CreateLogger("SelfAssistant"), CancellationToken.None);
+            }
             if (confirmation is not null)
                 try
                 {

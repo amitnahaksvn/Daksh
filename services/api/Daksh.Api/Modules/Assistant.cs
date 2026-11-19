@@ -81,7 +81,9 @@ public static class AssistantModule
             .OrderBy(m => m.CreatedAt).Select(m => (m.Role, m.Content)).ToList();
 
         AssistantContextResult context;
-        try { context = await AssistantContextBuilder.BuildAsync(db, who.UserId, question, () => GmailIntegrationModule.RecentForAssistantAsync(who.UserId, "in:inbox newer_than:7d", 10, db, protector, config, clients, ct), ct); }
+        try { context = await AssistantContextBuilder.BuildAsync(db, who.UserId, question,
+            accountId => GmailIntegrationModule.RecentForAssistantAsync(who.UserId, accountId, "in:inbox newer_than:7d", 10, db, protector, config, clients, ct), ct,
+            (accountId, messageId) => GmailIntegrationModule.ReadBodyForAssistantAsync(who.UserId, accountId, messageId, db, protector, config, clients, ct)); }
         catch (Exception ex) { logger.LogWarning(ex, "Could not gather app data for the assistant; answering without it"); context = new AssistantContextResult("", []); }
 
         AssistantResult result;

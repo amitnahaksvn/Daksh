@@ -306,18 +306,18 @@ public static partial class GmailIntegrationModule
     }
 
     /// <summary>A short list of recent mail (sender, subject, a snippet) for the assistant. Returns null when Gmail is not connected or cannot be read.</summary>
-    internal static async Task<IReadOnlyList<GmailMessageSummary>?> RecentForAssistantAsync(string userId, string query, int max, IMongoDatabase db, ISecretProtector protector, IConfiguration config, IHttpClientFactory clients, CancellationToken ct)
+    internal static async Task<IReadOnlyList<GmailMessageSummary>?> RecentForAssistantAsync(string userId, string? accountId, string query, int max, IMongoDatabase db, ISecretProtector protector, IConfiguration config, IHttpClientFactory clients, CancellationToken ct)
     {
         try
         {
             var path = QueryHelpers.AddQueryString("users/me/messages", new Dictionary<string, string?> { ["maxResults"] = Math.Clamp(max, 1, 15).ToString(), ["q"] = query });
-            using var list = await GmailApiAsync(userId, path, HttpMethod.Get, null, db, protector, config, clients, ct);
+            using var list = await GmailApiForAsync(userId, accountId, path, HttpMethod.Get, null, db, protector, config, clients, ct);
             var ids = list.RootElement.TryGetProperty("messages", out var items) ? items.EnumerateArray().Select(m => m.GetProperty("id").GetString() ?? "").Where(i => i.Length > 0).ToArray() : [];
             var rows = await Task.WhenAll(ids.Select(async id =>
             {
                 try
                 {
-                    using var detail = await GmailApiAsync(userId, $"users/me/messages/{Uri.EscapeDataString(id)}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date", HttpMethod.Get, null, db, protector, config, clients, ct);
+                    using var detail = await GmailApiForAsync(userId, accountId, $"users/me/messages/{Uri.EscapeDataString(id)}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date", HttpMethod.Get, null, db, protector, config, clients, ct);
                     var root = detail.RootElement;
                     var headers = root.TryGetProperty("payload", out var payload) && payload.TryGetProperty("headers", out var values) ? values.EnumerateArray().ToArray() : [];
                     var date = root.TryGetProperty("internalDate", out var d) && long.TryParse(d.GetString(), out var ms) ? DateTimeOffset.FromUnixTimeMilliseconds(ms) : (DateTimeOffset?)null;
@@ -329,6 +329,17 @@ public static partial class GmailIntegrationModule
             return rows.OfType<GmailMessageSummary>().ToArray();
         }
         catch (Exception) { return null; } // not connected, token problem, offline: the assistant simply has no mail to look at
+    }
+
+    /// <summary>The full plain text of one email in one of the owner's accounts, for the assistant to read. Null when it can't be read.</summary>
+    internal static async Task<string?> ReadBodyForAssistantAsync(string userId, string accountId, string messageId, IMongoDatabase db, ISecretProtector protector, IConfiguration config, IHttpClientFactory clients, CancellationToken ct)
+    {
+        try
+        {
+            using var doc = await GmailApiForAsync(userId, accountId, $"users/me/messages/{Uri.EscapeDataString(messageId)}?format=full", HttpMethod.Get, null, db, protector, config, clients, ct);
+            return GmailMessageParser.Parse(doc.RootElement).Text;
+        }
+        catch (Exception) { return null; }
     }
 
     private static async Task<IResult> ListMessagesAsync(

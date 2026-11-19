@@ -20,6 +20,8 @@ public static class AssistantIntent
     private static readonly Regex ListsRx = new(@"\b(lists?|shopping|buy|buying|groceries|grocery|amazon|wishlist|wish list|to buy|purchase)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex CodesRx = new(@"\b(otps?|codes?|verification|passcodes?|2fa|one[- ]time)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex OverviewRx = new(@"\b(today|tonight|summary|summari[sz]e|catch me up|catch up|brief(ing)?|what.?s new|anything|everything|miss(ed)?|overview|status|what did i|what do i)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    /// <summary>Words that only say "look at my mail", not what to look for.</summary>
+    public static readonly HashSet<string> MailWords = new(StringComparer.OrdinalIgnoreCase) { "mail", "mails", "email", "emails", "gmail", "inbox", "important", "urgent", "unread", "latest", "recent", "received", "today", "yesterday", "anything", "messages", "codes", "code", "otps", "verification" };
     private static readonly HashSet<string> Stop = new(StringComparer.OrdinalIgnoreCase) { "the", "and", "for", "mr", "mrs", "dr", "my", "our", "group", "team", "family", "office", "work", "new", "mom", "dad" };
 
     public static Intent Detect(string question, IEnumerable<string> chatNames)
@@ -57,7 +59,7 @@ public static class AssistantIntent
 /// <summary>Gathers, read-only, what the assistant needs from the owner's connected apps to answer one question.</summary>
 public static class AssistantContextBuilder
 {
-    private const int MaxChars = 7000;
+    private const int MaxChars = 14000;
     private sealed record ChatInfo(string Source, string Name, int Unread, DateTime LastAt, bool LastFromMe, string LastText, IReadOnlyList<(DateTime At, bool FromMe, string Who, string Text)> Recent);
 
     public static string Clip(string? text, int max)
@@ -71,7 +73,7 @@ public static class AssistantContextBuilder
         $"Chat with {name}:\n" + string.Join("\n", messages.OrderBy(m => m.At).Select(m => $"[{m.At.ToLocalTime():d MMM HH:mm}] {(m.FromMe ? "Me" : m.Who)}: {Clip(m.Text, 300)}"));
 
     public static async Task<AssistantContextResult> BuildAsync(IMongoDatabase db, string userId, string question,
-        Func<Task<IReadOnlyList<GmailMessageSummary>?>> recentMail, CancellationToken ct)
+        Func<string?, Task<IReadOnlyList<GmailMessageSummary>?>> recentMail, CancellationToken ct, Func<string, string, Task<string?>>? readMail = null)
     {
         var sources = new List<string>();
         var sb = new StringBuilder();
@@ -128,23 +130,108 @@ public static class AssistantContextBuilder
             }
         }
 
+        // Search EVERY stored WhatsApp and Telegram message of every connected account (not just the recent ones) for what was asked about.
+        var chatSearch = words.Where(w => !AssistantIntent.MailWords.Contains(w)).ToList();
+        if (chatSearch.Count > 0 && (intent.Messages || overview || !intent.AnyApp || intent.Names.Count > 0 || AssistantIntent.IsSubstantive(question)))
+        {
+            var waIds = connections.Where(c => c.IntegrationKey == "whatsapp").Select(c => c.Id).ToList();
+            var tgIds = connections.Where(c => c.IntegrationKey == "telegram").Select(c => c.Id).ToList();
+            var older = new List<(DateTime At, string Source, string Chat, string Who, string Text)>();
+            if (waIds.Count > 0)
+            {
+                var f = Builders<WhatsAppMessage>.Filter;
+                var rows = await db.GetCollection<WhatsAppMessage>("whatsappMessages")
+                    .Find(f.In(m => m.ConnectionId, waIds) & f.Eq(m => m.Hidden, false) & f.Eq(m => m.Deleted, false) & f.Or(chatSearch.Select(w => f.Regex(m => m.Text, new MongoDB.Bson.BsonRegularExpression(Regex.Escape(w), "i")))))
+                    .SortByDescending(m => m.Timestamp).Limit(12).ToListAsync(ct);
+                older.AddRange(rows.Select(m => (m.Timestamp, "WhatsApp", m.ChatName ?? m.ChatId.Split('@')[0], m.FromMe ? "Me" : (m.ChatName ?? "Them"), m.Text)));
+            }
+            if (tgIds.Count > 0)
+            {
+                var f = Builders<TelegramMessage>.Filter;
+                var rows = await db.GetCollection<TelegramMessage>("telegramMessages")
+                    .Find(f.In(m => m.ConnectionId, tgIds) & f.Eq(m => m.Hidden, false) & f.Eq(m => m.Deleted, false) & f.Or(chatSearch.Select(w => f.Regex(m => m.Text, new MongoDB.Bson.BsonRegularExpression(Regex.Escape(w), "i")))))
+                    .SortByDescending(m => m.Timestamp).Limit(12).ToListAsync(ct);
+                older.AddRange(rows.Select(m => (m.Timestamp, "Telegram", m.ChatName ?? m.ChatId, m.FromMe ? "Me" : (m.SenderName ?? m.ChatName ?? "Them"), m.Text)));
+            }
+            if (older.Count > 0)
+            {
+                sb.AppendLine().AppendLine($"Across ALL stored chats, messages that mention {string.Join(", ", chatSearch.Select(w => $"\"{w}\""))} (newest first):");
+                foreach (var m in older.OrderByDescending(x => x.At).Take(14))
+                    sb.AppendLine($"- [{m.At.ToLocalTime():d MMM yyyy HH:mm}] {m.Chat} ({m.Source}) {m.Who}: {Clip(m.Text, 220)}");
+                foreach (var src in older.Select(o => o.Source).Distinct()) if (!sources.Contains(src)) sources.Add(src);
+            }
+        }
+
         if (intent.Mail || overview)
         {
-            var mail = connections.Any(c => c.IntegrationKey == "gmail") ? await recentMail() : null;
-            if (mail is { Count: > 0 })
+            var hasGmail = connections.Any(c => c.IntegrationKey == "gmail");
+            // The mail Daksha has already synced covers EVERY connected Gmail account, can be searched for what was asked about, reaches back
+            // past a week, and needs no live Gmail calls (which are rate limited). The live inbox is only the fallback when nothing is synced yet.
+            var local = hasGmail
+                ? await db.GetCollection<GmailMessageDoc>("gmailMessages").Find(d => d.UserId == userId && !d.Labels.Contains("SENT")).SortByDescending(d => d.DateUtc).Limit(300).ToListAsync(ct)
+                : [];
+            string When(DateTime? at) => at is { } t ? t.ToLocalTime().ToString("d MMM HH:mm") : "";
+            string Body(GmailMessageDoc d) => Clip(string.IsNullOrWhiteSpace(d.Summary) ? d.Snippet : d.Summary, 140);
+
+            if (local.Count > 0)
             {
-                sb.AppendLine().AppendLine("Recent Gmail inbox (newest first):");
-                foreach (var m in mail.Take(10))
-                    sb.AppendLine($"- {(m.IsUnread ? "[unread] " : "")}From {Clip(m.From, 60)} — {Clip(m.Subject, 90)}: {Clip(m.Snippet, 100)}");
+                sb.AppendLine().AppendLine("Recent emails across the owner's connected Gmail accounts (newest first):");
+                foreach (var d in local.Take(10))
+                    sb.AppendLine($"- {(d.Labels.Contains("UNREAD") ? "[unread] " : "")}{(d.Urgent ? "[urgent] " : d.Important ? "[important] " : "")}{When(d.DateUtc)} From {Clip(d.From, 60)} — {Clip(d.Subject, 90)}: {Body(d)}");
+                var search = AssistantIntent.Keywords(question).Where(w => !AssistantIntent.MailWords.Contains(w)).ToList();
+                if (search.Count > 0)
+                {
+                    bool Has(string? text, string w) => text?.Contains(w, StringComparison.OrdinalIgnoreCase) == true;
+                    var hits = local.Where(d => search.Any(w => Has(d.From, w) || Has(d.Subject, w) || Has(d.Snippet, w) || Has(d.Summary, w))).Take(8).ToList();
+                    if (hits.Count > 0)
+                    {
+                        sb.AppendLine().AppendLine($"Emails that mention {string.Join(", ", search.Select(w => $"\"{w}\""))}:");
+                        foreach (var d in hits) sb.AppendLine($"- {When(d.DateUtc)} From {Clip(d.From, 60)} — {Clip(d.Subject, 90)}: {Body(d)}");
+                    }
+                }
                 sources.Add("Gmail");
+                // Read the actual emails, not just their previews: the ones that match the question, else the unread / important / newest.
+                if (readMail is not null && !intent.Codes)
+                {
+                    var hitDocs = search.Count == 0 ? [] : local.Where(d => search.Any(w => (d.From + " " + d.Subject + " " + d.Snippet + " " + d.Summary).Contains(w, StringComparison.OrdinalIgnoreCase))).Take(3).ToList();
+                    var toRead = hitDocs.Count > 0 ? hitDocs
+                        : local.Where(d => d.Important || d.Urgent || d.Labels.Contains("UNREAD")).Take(3).DefaultIfEmpty().Where(d => d is not null).Cast<GmailMessageDoc>().ToList();
+                    if (toRead.Count == 0) toRead = local.Take(2).ToList();
+                    var bodies = await Task.WhenAll(toRead.Select(async d => (Doc: d, Body: await readMail(d.AccountId, d.MessageId))));
+                    foreach (var (d, body) in bodies.Where(b => !string.IsNullOrWhiteSpace(b.Body)))
+                        sb.AppendLine().AppendLine($"Full text of the email \"{Clip(d.Subject, 80)}\" from {Clip(d.From, 50)} ({When(d.DateUtc)}):").AppendLine(Clip(body, 1500));
+                }
+                if (intent.Codes)
+                {
+                    var codes = local.Where(d => d.DateUtc >= DateTime.UtcNow.AddDays(-3)).Take(80)
+                        .Where(d => OtpExtractor.LooksLikeOtp(d.Subject, d.Snippet + " " + d.Summary))
+                        .Select(d => (Doc: d, Code: OtpExtractor.Extract(d.Subject, d.Snippet + " " + d.Summary))).Where(x => x.Code is not null).Take(5).ToList();
+                    sb.AppendLine().AppendLine(codes.Count == 0 ? "No one-time codes were found in emails from the last 3 days." : "One-time codes in recent emails (newest first):");
+                    foreach (var (d, code) in codes) sb.AppendLine($"- {code} from {Clip(d.From, 50)} — {Clip(d.Subject, 70)} ({When(d.DateUtc)})");
+                }
             }
-            else if (intent.Mail) sb.AppendLine().AppendLine("Gmail: not connected or could not be read right now.");
-            if (intent.Codes && mail is { Count: > 0 })
+            else
             {
-                var codes = mail.Where(m => OtpExtractor.LooksLikeOtp(m.Subject, m.Snippet))
-                    .Select(m => (Mail: m, Code: OtpExtractor.Extract(m.Subject, m.Snippet))).Where(x => x.Code is not null).Take(5).ToList();
-                sb.AppendLine().AppendLine(codes.Count == 0 ? "No one-time codes were found in the recent emails." : "One-time codes in recent emails (newest first):");
-                foreach (var (m, code) in codes) sb.AppendLine($"- {code} from {Clip(m.From, 50)} — {Clip(m.Subject, 70)}");
+                var gmailAccounts = connections.Where(c => c.IntegrationKey == "gmail").Select(c => c.Id).ToList();
+                var liveLists = hasGmail ? await Task.WhenAll(gmailAccounts.Select(recentMail)) : [];
+                var mail = liveLists.Where(l => l is not null).SelectMany(l => l!).OrderByDescending(m => m.Date).Take(15).ToList();
+                if (mail is { Count: > 0 })
+                {
+                    sb.AppendLine().AppendLine("Recent Gmail inbox (newest first):");
+                    foreach (var m in mail.Take(10))
+                        sb.AppendLine($"- {(m.IsUnread ? "[unread] " : "")}From {Clip(m.From, 60)} — {Clip(m.Subject, 90)}: {Clip(m.Snippet, 100)}");
+                    sources.Add("Gmail");
+                    if (intent.Codes)
+                    {
+                        var codes = mail.Where(m => OtpExtractor.LooksLikeOtp(m.Subject, m.Snippet))
+                            .Select(m => (Mail: m, Code: OtpExtractor.Extract(m.Subject, m.Snippet))).Where(x => x.Code is not null).Take(5).ToList();
+                        sb.AppendLine().AppendLine(codes.Count == 0 ? "No one-time codes were found in the recent emails." : "One-time codes in recent emails (newest first):");
+                        foreach (var (m, code) in codes) sb.AppendLine($"- {code} from {Clip(m.From, 50)} — {Clip(m.Subject, 70)}");
+                    }
+                }
+                else if (intent.Mail) sb.AppendLine().AppendLine(hasGmail
+                    ? "Gmail is connected but no emails have been synced yet and the live inbox could not be read right now (it may be rate limited or need to be reconnected)."
+                    : "Gmail is not connected.");
             }
         }
 

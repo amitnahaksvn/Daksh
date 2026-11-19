@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using Daksh.Ai;
 using Daksh.Api.Auth;
 using Daksh.Api.Hubs;
+using Daksh.Platform.Security;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using MongoDB.Bson;
@@ -585,7 +586,8 @@ public static class IntegrationsModule
 
     private static async Task<IResult> ReceiveWhatsAppEventAsync(
         WhatsAppInternalEvent evt, IMongoDatabase db, IConfiguration config, IHubContext<IntegrationsHub> hub, HttpContext http,
-        IAssistantOrchestrator orchestrator, WhatsAppIntegrationProvider whatsApp, IEmailSender emailSender, ILoggerFactory loggerFactory, CancellationToken ct)
+        IAssistantOrchestrator orchestrator, WhatsAppIntegrationProvider whatsApp, IEmailSender emailSender, ILoggerFactory loggerFactory,
+        ISecretProtector protector, IHttpClientFactory httpClients, CancellationToken ct)
     {
         var expected = config["Integrations:Whatsapp:InternalServiceKey"];
         if (string.IsNullOrEmpty(expected) || http.Request.Headers["X-Internal-Key"] != expected)
@@ -615,10 +617,13 @@ public static class IntegrationsModule
         // A message the owner types in their OWN chat ("Message yourself") may be a command: "busy for 2 hours", "buy milk", "free now"…
         // Daksha does it and confirms in the same chat. Only the owner's own chat is ever read this way, never anyone else's.
         if (evt.EventType is IntegrationEvents.MessageReceived or IntegrationEvents.MessageSent && !isGroup && evt.ChatId is not null && evt.Preview is not null
-            && IsOwnChat(connection.AccountIdentifier, evt.ChatId) && SelfCommands.Parse(evt.Preview).Kind != SelfCommandKind.None
+            && IsOwnChat(connection.AccountIdentifier, evt.ChatId) && !evt.Preview.StartsWith(SelfCommands.ReplyMarker, StringComparison.Ordinal)
+            && (SelfCommands.Parse(evt.Preview).Kind != SelfCommandKind.None || SelfAssistant.LooksLikeQuestion(evt.Preview))
             && SelfCommandSeen.First(evt.ConnectionId, evt.MessageId ?? $"{evt.ChatId}:{evt.Preview}"))
         {
-            var confirmation = await SelfCommands.RunAsync(db, connection.UserId, evt.Preview, DateTime.UtcNow, ct);
+            // A command is done and confirmed; anything else that reads like a question is answered by the assistant, in this same chat.
+            var confirmation = await SelfCommands.RunAsync(db, connection.UserId, evt.Preview, DateTime.UtcNow, ct)
+                ?? await SelfAssistant.AnswerAsync(db, orchestrator, protector, config, httpClients, connection.UserId, evt.Preview, loggerFactory.CreateLogger("SelfAssistant"), CancellationToken.None);
             if (confirmation is not null)
                 try { await whatsApp.SendMessageAsync(connection.Id, evt.ChatId, confirmation, quotedMessageId: null, ct, isAiGenerated: true); }
                 catch (Exception ex) { loggerFactory.CreateLogger("SelfCommands").LogWarning(ex, "Could not confirm a self-command on WhatsApp for connection {ConnectionId}", connection.Id); }

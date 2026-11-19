@@ -142,3 +142,38 @@ public class HumanReplyTests
     [Fact] public void Detects_that_it_already_introduced_itself() =>
         Assert.True(HumanReply.AlreadyIntroduced([("user", "hi"), ("assistant", "Hi, I'm Amit's AI assistant.")]));
 }
+
+public class AssistantMailContextTests
+{
+    [Fact]
+    public void Asking_about_mail_codes_or_importance_looks_at_mail()
+    {
+        Assert.True(AssistantIntent.Detect("any important email?", []).Mail);
+        Assert.True(AssistantIntent.Detect("did I get an OTP?", []).Codes);
+        Assert.True(AssistantIntent.Detect("did I get an OTP?", []).Mail);
+    }
+
+    [Fact]
+    public void Words_that_only_mean_look_at_my_mail_are_not_used_as_search_terms()
+    {
+        var words = AssistantIntent.Keywords("any important email from Flipkart about my invoice").Where(w => !AssistantIntent.MailWords.Contains(w)).ToList();
+        Assert.Contains("Flipkart", words);
+        Assert.Contains("invoice", words);
+        Assert.DoesNotContain("email", words, StringComparer.OrdinalIgnoreCase);
+    }
+}
+
+public class SelfAssistantTests
+{
+    [Theory]
+    [InlineData("what's pending?")] [InlineData("any important email?")] [InlineData("Any OTP in my mail")] [InlineData("daksha what is on my amazon list")]
+    [InlineData("Hey Daksha, summarize my day")] [InlineData("did Ravi reply about the party?")] [InlineData("show my pending tasks")] [InlineData("who messaged me today")]
+    public void Questions_for_Daksha(string text) => Assert.True(SelfAssistant.LooksLikeQuestion(text));
+
+    [Theory]
+    [InlineData("buy milk")] [InlineData("busy for 2 hours")] [InlineData("free")] [InlineData("remember to call mom tomorrow")] [InlineData("https://example.com/page")] [InlineData("ok")] [InlineData("")]
+    public void Notes_and_commands_are_not_questions(string text) => Assert.False(SelfAssistant.LooksLikeQuestion(text));
+
+    [Fact] public void Our_own_replies_are_never_questions() => Assert.False(SelfAssistant.LooksLikeQuestion(SelfCommands.ReplyMarker + "what's pending?"));
+    [Fact] public void The_address_is_stripped() => Assert.Equal("what's pending?", SelfAssistant.StripAddress("Hey Daksha, what's pending?"));
+}
