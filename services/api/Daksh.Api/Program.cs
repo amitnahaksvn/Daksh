@@ -67,6 +67,7 @@ app.MapGmailIntegration();
 app.MapTelegramIntegration();
 app.MapChatAssist();
 app.MapDashboardApps();
+app.MapDashboardTabs();
 app.MapWhatsAppSettings();
 app.MapWhatsAppAutomation();
 app.MapHub<IntegrationsHub>("/hubs/integrations").RequireAuthorization(Daksh.Api.Auth.AuthSetup.UserScheme);

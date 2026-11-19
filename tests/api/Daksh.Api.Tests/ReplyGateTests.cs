@@ -230,4 +230,18 @@ public class ReplyGateTests
         Assert.True(message.ReadSent);
         Assert.Equal("hi", message.Text);
     }
+
+    [Fact]
+    public void Dashboard_tab_names_blocks_and_default_names_follow_the_rules()
+    {
+        Assert.Equal("My board", DashboardTabs.CleanName("  My    board \n"));
+        Assert.Null(DashboardTabs.CleanName("   "));
+        Assert.Null(DashboardTabs.CleanName(null));
+        Assert.Equal(40, DashboardTabs.CleanName(new string('a', 100))!.Length);
+        Assert.Equal(["command", "apps"], DashboardTabs.CleanWidgets(["apps", "bogus", "command", "apps"])); // known blocks only, once each, in catalog order
+        Assert.Empty(DashboardTabs.CleanWidgets(null));
+        Assert.Equal("Dashboard", DashboardTabs.NextDefaultName([]));
+        Assert.Equal("Dashboard 2", DashboardTabs.NextDefaultName(["Dashboard"]));
+        Assert.Equal("Dashboard 3", DashboardTabs.NextDefaultName(["dashboard", "Dashboard 2"]));
+    }
 }

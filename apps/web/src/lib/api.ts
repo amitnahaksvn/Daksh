@@ -239,6 +239,8 @@ export type DashboardApp = {
   /** The column (1–10) the tile starts in. 0 = flow after the previous tile. */
   col: number;
 };
+export type DashboardWidget = "command" | "apps";
+export type DashboardTab = { id: string; name: string; order: number; widgets: DashboardWidget[] };
 export type DashboardLayoutItem = { id: string; displayOrder: number; cols: number; height: number; col: number };
 
 export type WhatsAppGeneralSettings = {
@@ -571,5 +573,10 @@ export const api = {
   removeFromDashboard: (id: string) => apiFetch<void>(`/api/dashboard/apps/${id}`, { method: "DELETE" }),
   saveDashboardLayout: (items: DashboardLayoutItem[]) => apiFetch<{ updated: number }>("/api/dashboard/apps/layout", { method: "PUT", body: JSON.stringify(items) }),
   resetDashboardLayout: () => apiFetch<void>("/api/dashboard/apps/layout", { method: "DELETE" }),
+  dashboards: () => apiFetch<DashboardTab[]>("/api/dashboards"),
+  createDashboard: (name?: string) => apiFetch<DashboardTab>("/api/dashboards", json({ name })),
+  updateDashboard: (id: string, change: { name?: string; widgets?: DashboardWidget[] }) =>
+    apiFetch<DashboardTab>(`/api/dashboards/${id}`, { method: "PATCH", body: JSON.stringify(change) }),
+  deleteDashboard: (id: string) => apiFetch<void>(`/api/dashboards/${id}`, { method: "DELETE" }),
   dashboardActivity: () => apiFetch<ActivityItem[]>("/api/dashboard/activity"),
 };

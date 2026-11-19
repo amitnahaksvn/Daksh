@@ -1,8 +1,8 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { Orb } from "./Orb";
-import { buttonClass, inputClass, tileClass } from "./ui";
+import { buttonClass, tileClass } from "./ui";
 
 type Line = { role: "user" | "assistant"; text: string; simulated?: boolean; typed?: boolean };
 
@@ -31,15 +31,27 @@ function Reply({ text, animate }: { text: string; animate: boolean }) {
   );
 }
 
-export function AssistantChat() {
+/** `tall` gives the conversation room to breathe (the dashboard's Ask tab); the default is the compact version. */
+export function AssistantChat({ tall = false }: { tall?: boolean }) {
   const [lines, setLines] = useState<Line[]>([]);
   const [text, setText] = useState("");
   const [conversationId, setConversationId] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const box = useRef<HTMLTextAreaElement>(null);
+  const endRef = useRef<HTMLLIElement>(null);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  // The box grows with what is typed (up to a few lines), like a chat app's.
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+  }, [text]);
+  // Keep the newest message in view.
+  useEffect(() => { endRef.current?.scrollIntoView?.({ block: "end" }); }, [lines, busy]);
+
+  async function send() {
     const message = text.trim();
     if (!message || busy) return;
     setBusy(true);
@@ -59,10 +71,11 @@ export function AssistantChat() {
       setBusy(false);
     }
   }
+  const submit = (e: React.FormEvent) => { e.preventDefault(); void send(); };
 
   return (
-    <section aria-label="Conversation" className={`flex flex-col gap-4 p-4 ${tileClass}`}>
-      <ol aria-live="polite" className="flex min-h-64 flex-col gap-3">
+    <section aria-label="Conversation" className={`flex flex-col gap-4 p-4 ${tall ? "min-h-[calc(100vh-17rem)]" : ""} ${tileClass}`}>
+      <ol aria-live="polite" className={`flex flex-1 flex-col gap-3 ${tall ? "min-h-[16rem]" : "min-h-64"}`}>
         {lines.length === 0 && !busy && (
           <li className="flex flex-1 flex-col items-center justify-center gap-4 py-6 text-center">
             <Orb size={64} />
@@ -102,14 +115,18 @@ export function AssistantChat() {
             <span className="sr-only">Daksh is thinking</span>
           </li>
         )}
+        <li ref={endRef} aria-hidden className="h-0" />
       </ol>
       {error && <p role="alert" className="text-sm font-medium text-danger">{error}</p>}
-      <form onSubmit={submit} className="flex gap-2">
+      <form onSubmit={submit} className="flex items-end gap-2 rounded-2xl border border-line bg-surface-2 p-2">
         <label htmlFor="message" className="sr-only">Message</label>
-        <div className="ai-input-ring min-w-0 flex-1">
-          <input id="message" className={inputClass} value={text} onChange={(e) => setText(e.target.value)} placeholder="Ask Daksh…" maxLength={4000} />
-        </div>
-        <button className={buttonClass} disabled={busy}>{busy ? "Sending" : "Send"}</button>
+        <textarea
+          id="message" ref={box} rows={1} value={text} onChange={(e) => setText(e.target.value)} maxLength={4000}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); } }}
+          placeholder="Ask Daksha anything…  (Shift+Enter for a new line)"
+          className="field-in-pill max-h-[200px] min-w-0 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-text placeholder:text-muted"
+        />
+        <button className={`${buttonClass} shrink-0`} disabled={busy}>{busy ? "Sending" : "Send"}</button>
       </form>
     </section>
   );

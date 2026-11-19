@@ -1,7 +1,7 @@
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DashboardPage } from "./DashboardPage";
+import { DashboardContent as DashboardPage } from "./DashboardPage";
 import { api, type DashboardApp } from "@/lib/api";
 
 vi.mock("./DashboardWidgets", () => ({

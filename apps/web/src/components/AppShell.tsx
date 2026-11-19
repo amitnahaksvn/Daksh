@@ -26,7 +26,7 @@ function BottomTabs() {
 
 function MobileBar() {
   return (
-    <div className="flex items-center justify-between gap-2 md:hidden">
+    <div className="sticky top-0 z-30 -mx-3 -mt-3 flex items-center justify-between gap-2 bg-canvas/95 px-3 py-2 backdrop-blur md:hidden">
       <DakshaBrand compact />
       <div className="flex items-center gap-2"><StyleToggle /><NotificationBell /><UserBadge /></div>
     </div>
@@ -58,11 +58,11 @@ function CompactMenu() {
   );
 }
 
-/** The minimize / expand tab: sits on the sidebar's right edge, halfway down, so it is always in the same easy-to-find place. */
+/** The minimize / expand tab: sits on the sidebar's right edge, level with the logo at the top, so it is always in the same easy-to-find place. */
 function CollapseButton({ collapsed }: { collapsed: boolean }) {
   return (
     <button type="button" onClick={() => setSidebarCollapsed(!collapsed)} aria-label={collapsed ? "Expand sidebar" : "Minimize sidebar"} aria-expanded={!collapsed} title={collapsed ? "Expand sidebar" : "Minimize sidebar"}
-      className="absolute right-0 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full border border-line bg-surface text-sm text-muted shadow-[var(--shadow)] transition-colors hover:text-text">
+      className="absolute right-0 top-5 z-10 flex h-8 w-8 translate-x-1/2 items-center justify-center rounded-full border border-line bg-surface text-sm text-muted shadow-[var(--shadow)] transition-colors hover:text-text">
       <span aria-hidden className={`inline-block transition-transform duration-300 ${collapsed ? "rotate-180" : ""}`}>«</span>
     </button>
   );
@@ -158,7 +158,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
         <main id="main" className="flex min-w-0 flex-col gap-3 md:gap-4">
           <MobileBar />
-          <header className={`hidden items-center justify-between gap-3 p-3 md:flex ${tileClass}`}>
+          <header className={`z-30 hidden items-center justify-between gap-3 p-3 md:sticky md:top-4 md:flex ${tileClass}`}>
             <TopSearch />
             <div className="flex items-center gap-3"><NotificationBell /><UserBadge /></div>
           </header>
