@@ -37,3 +37,18 @@ Principles: **provider-agnostic**, **privacy-by-policy**, **honest about simulat
 
 Golden-set regression for prompts and routing, retrieval quality (recall@k), guardrail precision/recall, and ML model
 metrics gated in CI before a prompt or model version is promoted.
+
+
+## The AI key: one place
+
+Every AI feature in Daksha uses one model, created once at startup from one setting, **`Ai:Gemini:ApiKey`** (model name in `Ai:Gemini:Model`):
+the Ask box on the dashboard, WhatsApp and Telegram auto-replies, summaries, suggested replies, translation, and automation rules.
+The WhatsApp and Telegram services themselves never call an AI provider; they hand messages to the API.
+
+Set it in one place per environment, then restart the API (the key is read at startup):
+
+- **Local:** `cd services/api/Daksh.Api && dotnet user-secrets set "Ai:Gemini:ApiKey" "<key>"`
+- **Azure:** `az containerapp secret set -n daksh-api -g rg-daksh --secrets geminikey=<key>` (the app reads it as `Ai__Gemini__ApiKey`)
+
+The API logs which model is in use when it starts. Without a key it runs on a simulated model and says so.
+(The separate Gateway service has its own per-agent provider settings and is not used by these features.)

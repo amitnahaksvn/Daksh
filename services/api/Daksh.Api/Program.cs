@@ -40,6 +40,15 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p => p
 
 var app = builder.Build();
 
+// One AI key for the whole app. Every AI feature (the Ask box, WhatsApp and Telegram auto-replies, summaries, suggested replies,
+// translation, automation rules) goes through one model registered from the single setting Ai:Gemini:ApiKey. Say which one is in use.
+{
+    var models = app.Services.GetServices<Daksh.Ai.ChatModelRegistration>().ToList();
+    var real = models.FirstOrDefault(m => !m.IsSimulated);
+    if (real is not null) app.Logger.LogInformation("AI: using the {Model} model (key from Ai:Gemini:ApiKey). Every AI feature shares it.", real.Name);
+    else app.Logger.LogWarning("AI: no API key is set (Ai:Gemini:ApiKey), so every AI feature runs on the simulated model.");
+}
+
 await AccountModule.EnsureAccountIndexesAsync(app.Services.GetRequiredService<MongoDB.Driver.IMongoDatabase>());
 await IntegrationsModule.EnsureIntegrationIndexesAndCatalogAsync(app.Services.GetRequiredService<MongoDB.Driver.IMongoDatabase>());
 await GmailIntegrationModule.EnsureGmailIndexesAsync(app.Services.GetRequiredService<MongoDB.Driver.IMongoDatabase>());
