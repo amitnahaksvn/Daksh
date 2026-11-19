@@ -60,7 +60,7 @@ public sealed record TelegramState(string Status, string? Qr, DateTime? ExpiresA
 public sealed record TelegramInternalEvent(
     string ConnectionId, string EventType, string? Status, string? AccountIdentifier, string? Error,
     string? MessageId, string? ChatId, string? ChatName, bool IsGroup, bool FromMe, string? SenderName,
-    string? Text, DateTime? Timestamp, bool History, bool HasMedia = false, string? MediaKind = null, string? MimeType = null, string? FileName = null, string? ReplyToId = null);
+    string? Text, DateTime? Timestamp, bool History, bool HasMedia = false, string? MediaKind = null, string? MimeType = null, string? FileName = null, string? ReplyToId = null, string? SelfChatId = null);
 
 /// <summary>Talks to the Telegram Node service (GramJS / MTProto), which holds each user's signed-in session.</summary>
 public sealed class TelegramIntegrationProvider(HttpClient http) : IIntegrationProvider
@@ -368,6 +368,7 @@ public static class TelegramIntegrationModule
                 if (status == ConnectionStatus.Disconnected) update = update.Set(c => c.DisconnectedAt, DateTime.UtcNow);
             }
             if (evt.AccountIdentifier is not null) update = update.Set(c => c.AccountIdentifier, evt.AccountIdentifier);
+            if (!string.IsNullOrEmpty(evt.SelfChatId)) update = update.Set(c => c.SelfChatId, evt.SelfChatId);
             if (evt.Error is not null) update = update.Set(c => c.LastError, evt.Error);
             await connections.UpdateOneAsync(c => c.Id == connection.Id, update, cancellationToken: ct);
             return Results.Ok();
@@ -405,6 +406,21 @@ public static class TelegramIntegrationModule
         if (evt.History) return Results.Ok();
 
         await connections.UpdateOneAsync(c => c.Id == connection.Id, Builders<IntegrationConnection>.Update.Set(c => c.LastActiveAt, DateTime.UtcNow), cancellationToken: ct);
+
+        // A message the owner types in their own "Saved Messages" may be a command ("busy for 2 hours", "buy milk"): do it and confirm there.
+        if (!stored.IsGroup && !string.IsNullOrEmpty(connection.SelfChatId) && stored.ChatId == connection.SelfChatId
+            && SelfCommands.Parse(stored.Text).Kind != SelfCommandKind.None && SelfCommandSeen.First(connection.Id, stored.MessageId))
+        {
+            var confirmation = await SelfCommands.RunAsync(db, connection.UserId, stored.Text, DateTime.UtcNow, ct);
+            if (confirmation is not null)
+                try
+                {
+                    using var scope = scopes.CreateScope();
+                    await SendAndStoreAsync(db, scope.ServiceProvider.GetRequiredService<TelegramIntegrationProvider>(), connection.Id, stored.ChatId, confirmation, isAiGenerated: true, ct);
+                }
+                catch (Exception ex) { loggers.CreateLogger("SelfCommands").LogWarning(ex, "Could not confirm a self-command on Telegram for connection {ConnectionId}", connection.Id); }
+            return Results.Ok();
+        }
 
         // From here on Telegram runs through the same settings, rules and intelligence as WhatsApp — the
         // settings documents, chat rules, automation rules and insights are all keyed by connection id.
@@ -521,6 +537,27 @@ public static class TelegramAutoReply
         return $"{text}\n\n{signature}";
     }
 
+    /// <summary>The "my boss will get back to you" reply, written by the AI like a person. Telegram contacts aren't known as saved, so the AI introduces itself once.</summary>
+    private static async Task<string> ComposeHumanHoldingAsync(IServiceProvider sp, WhatsAppSettings settings, IntegrationConnection connection, string chatId, string? chatName, string text, GateOutcome gate,
+        string? busyNote, IMongoCollection<TelegramMessage> messages, ILogger logger)
+    {
+        var fallback = gate.Text!;
+        try
+        {
+            List<(string, string)>? history = null;
+            if (settings.AllowMessageContentAsAiContext && settings.UseConversationContext && settings.ContextRetentionMessages > 0)
+            {
+                var recent = await messages.Find(m => m.ConnectionId == connection.Id && m.ChatId == chatId).SortByDescending(m => m.Timestamp).Limit(settings.ContextRetentionMessages).ToListAsync();
+                recent.Reverse();
+                history = recent.Select(m => (m.FromMe ? "assistant" : "user", m.Text)).ToList();
+            }
+            var prompt = HumanReply.BuildPrompt(settings, gate.Verdict, savedContact: false, HumanReply.AlreadyIntroduced(history), chatName ?? "", text, busyNote);
+            var result = await sp.GetRequiredService<IAssistantOrchestrator>().RespondAsync(new AssistantRequest(new UserAiContext(connection.UserId, MemoryEnabled: false, AllowProviderDataSharing: true), prompt, history));
+            return result.IsSimulated ? fallback : HumanReply.Clean(result.Text) ?? fallback;
+        }
+        catch (Exception ex) { logger.LogInformation(ex, "Human-style holding reply failed; using the template for {ChatId}", chatId); return fallback; }
+    }
+
     private static async Task RunAsync(IServiceScopeFactory scopes, IntegrationConnection connection, TelegramMessage trigger, WhatsAppChatRule? chatRule, bool force, ILogger logger)
     {
         try
@@ -592,7 +629,11 @@ public static class TelegramAutoReply
                     DateTime.UtcNow, forced: null);
                 logger.LogInformation("Telegram auto-reply for {ChatId}: gate says {Action} ({Reason})", chatId, gate.Action, gate.Reason);
                 if (gate.Action == GateAction.Silent) { logger.LogInformation("Reply gate: no Telegram reply for {ChatId} ({Reason})", chatId, gate.Reason); return; }
-                if (gate.Action == GateAction.SendHolding) { replyText = gate.Text!; isAi = true; goto Deliver; }
+                if (gate.Action == GateAction.SendHolding)
+                {
+                    replyText = await ComposeHumanHoldingAsync(sp, settings, connection, chatId, trigger.ChatName, text, gate, BusyMode.ActiveNote(busyProfile, DateTime.UtcNow), messages, logger);
+                    isAi = true; goto Deliver;
+                }
 
                 List<(string, string)>? history = null;
                 if (settings.AllowMessageContentAsAiContext && settings.UseConversationContext && settings.ContextRetentionMessages > 0)
@@ -602,7 +643,7 @@ public static class TelegramAutoReply
                     history = recent.Select(m => (m.FromMe ? "assistant" : "user", m.Text)).ToList();
                 }
                 var userContext = new UserAiContext(connection.UserId, MemoryEnabled: false, AllowProviderDataSharing: true);
-                var prompt = IntegrationsModule.BuildAutoReplyPrompt(settings, chatId, trigger.ChatName, text, trigger.IsGroup, null, "Telegram");
+                var prompt = IntegrationsModule.BuildAutoReplyPrompt(settings, chatId, trigger.ChatName, text, trigger.IsGroup, null, "Telegram", BusyMode.ActiveNote(busyProfile, DateTime.UtcNow));
                 var result = await sp.GetRequiredService<IAssistantOrchestrator>().RespondAsync(new AssistantRequest(userContext, prompt, history));
                 if (result.IsSimulated || string.IsNullOrWhiteSpace(result.Text)) { logger.LogWarning("Telegram auto-reply for {ChatId}: the AI gave no usable answer", chatId); return; }
                 if (result.Text.Trim().Equals("NO_REPLY", StringComparison.OrdinalIgnoreCase)) return;
@@ -612,7 +653,7 @@ public static class TelegramAutoReply
                         since => messages.Find(m => m.ConnectionId == connection.Id && m.ChatId == chatId && m.FromMe && !m.IsAiGenerated && m.Timestamp > since).AnyAsync(),
                         DateTime.UtcNow, GateVerdict.Boss);
                     if (hold.Action != GateAction.SendHolding) return;
-                    replyText = hold.Text!;
+                    replyText = await ComposeHumanHoldingAsync(sp, settings, connection, chatId, trigger.ChatName, text, hold, BusyMode.ActiveNote(busyProfile, DateTime.UtcNow), messages, logger);
                 }
                 else replyText = result.Text.Trim();
                 isAi = true;

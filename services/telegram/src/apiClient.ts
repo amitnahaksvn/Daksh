@@ -5,6 +5,8 @@ export type TelegramEvent = {
   eventType: "Status" | "Message" | "MessageUpdated";
   status?: string;
   accountIdentifier?: string;
+  /** The signed-in user's own id: the id of their "Saved Messages" chat. */
+  selfChatId?: string;
   error?: string;
   // Message fields
   messageId?: string;

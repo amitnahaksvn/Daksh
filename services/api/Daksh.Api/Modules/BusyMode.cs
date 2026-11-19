@@ -19,6 +19,8 @@ public sealed class BusyProfile
     public DateTime? Until { get; set; }
     public string ReplyMode { get; set; } = "Ai"; // "Ai" | "Fixed"
     public string? FixedMessage { get; set; }
+    /// <summary>Optional: why/what, e.g. "in a meeting" or "driving". The owner chose to share it, so replies may mention it.</summary>
+    public string? Note { get; set; }
 }
 
 /// <summary>Decides whether the owner is busy. Pure, so it can be tested.</summary>
@@ -58,6 +60,9 @@ public static class BusyMode
     public static string? FixedReply(BusyProfile? p) =>
         p is { ReplyMode: "Fixed" } && !string.IsNullOrWhiteSpace(p.FixedMessage) ? p.FixedMessage.Trim() : null;
 
+    /// <summary>The optional note to share while busy, only when the owner is actually busy.</summary>
+    public static string? ActiveNote(BusyProfile? p, DateTime utcNow) => IsBusy(p, utcNow) && !string.IsNullOrWhiteSpace(p!.Note) ? p.Note!.Trim() : null;
+
     /// <summary>The busy profile of the account that owns a connection. Never throws: no profile means "not busy".</summary>
     public static async Task<BusyProfile?> LoadAsync(IMongoDatabase db, string userId, CancellationToken ct = default)
     {
@@ -66,5 +71,5 @@ public static class BusyMode
     }
 }
 
-public sealed record BusyProfileDto(bool Enabled, string Timezone, string Start, string End, IReadOnlyList<int> Days, DateTime? Until, string ReplyMode, string? FixedMessage, bool IsBusyNow);
-public sealed record UpdateBusyProfileRequest(bool? Enabled, string? Timezone, string? Start, string? End, List<int>? Days, DateTime? Until, bool? ClearUntil, string? ReplyMode, string? FixedMessage);
+public sealed record BusyProfileDto(bool Enabled, string Timezone, string Start, string End, IReadOnlyList<int> Days, DateTime? Until, string ReplyMode, string? FixedMessage, bool IsBusyNow, string? Note = null);
+public sealed record UpdateBusyProfileRequest(bool? Enabled, string? Timezone, string? Start, string? End, List<int>? Days, DateTime? Until, bool? ClearUntil, string? ReplyMode, string? FixedMessage, string? Note = null);

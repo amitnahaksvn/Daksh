@@ -187,10 +187,24 @@ public static class ReplyGate
 
     /// <summary>What the sender is told when the message needs the boss. Always says openly that this is an AI assistant (so nobody
     /// mistakes it for the owner), asks who is writing, and never answers the question itself or shares anything.</summary>
-    public static string HoldingReply(GateVerdict verdict, string? boss, string seed)
+    public static string HoldingReply(GateVerdict verdict, string? boss, string seed, bool savedContact = false)
     {
         var b = NormaliseBoss(boss);
         if (verdict == GateVerdict.Closing) return ClosingReply(seed);
+        // Someone the owner knows (a saved contact) isn't told who is replying: just that the question is being passed on.
+        if (savedContact)
+            return verdict == GateVerdict.BossAskMore
+                ? Pick(seed,
+                [
+                    $"Could you share a few more details (what it's about and when you need it)? I'll let {b} know, and {b} will get back to you.",
+                    $"Sure, tell me a bit more about what you need and I'll pass it on to {b}. {b} will get back to you.",
+                ])
+                : Pick(seed,
+                [
+                    $"I don't have that information right now. I'll let {b} know, and {b} will get back to you.",
+                    $"I'll tell {b} about this, and {b} will let you know.",
+                    $"Let me check with {b}. {b} will get back to you as soon as they see this.",
+                ]);
         return verdict == GateVerdict.BossAskMore
             ? Pick(seed,
             [
@@ -219,14 +233,14 @@ public static class ReplyGate
 }
 
 public enum GateAction { Silent, SendHolding, UseAi }
-public sealed record GateOutcome(GateAction Action, string? Text, string Reason);
+public sealed record GateOutcome(GateAction Action, string? Text, string Reason, GateVerdict Verdict = GateVerdict.Boss);
 
 /// <summary>Applies the gate for one incoming message: decides the outcome, creates the boss's to-do, and rate-limits holding replies.</summary>
 public static class ReplyGateFlow
 {
     public static async Task<GateOutcome> ResolveAsync(
         IMongoDatabase db, WhatsAppSettings settings, string connectionId, string chatId, string? chatName, string text, bool isGroup,
-        Func<DateTime, Task<bool>> ownerRepliedSince, DateTime nowUtc, GateVerdict? forced = null, CancellationToken ct = default, bool inConversation = false)
+        Func<DateTime, Task<bool>> ownerRepliedSince, DateTime nowUtc, GateVerdict? forced = null, CancellationToken ct = default, bool inConversation = false, bool savedContact = false)
     {
         if (!settings.ReplyGateEnabled && forced is null) return new(GateAction.UseAi, null, "The reply gate is turned off.");
 
@@ -235,7 +249,7 @@ public static class ReplyGateFlow
         {
             case GateVerdict.Silent: return new(GateAction.Silent, null, decision.Reason);
             case GateVerdict.AiOk: return new(GateAction.UseAi, null, decision.Reason);
-            case GateVerdict.Closing: return new(GateAction.SendHolding, ReplyGate.ClosingReply(chatId + text), decision.Reason);
+            case GateVerdict.Closing: return new(GateAction.SendHolding, ReplyGate.ClosingReply(chatId + text), decision.Reason, GateVerdict.Closing);
         }
 
         // The boss gets a to-do either way, so nothing that needs a decision is lost even when we stay quiet.
@@ -248,7 +262,7 @@ public static class ReplyGateFlow
         await state.UpdateOneAsync(s => s.ConnectionId == connectionId && s.ChatId == chatId,
             Builders<WhatsAppAutoReplyState>.Update.Set(s => s.LastHoldingAt, nowUtc).SetOnInsert(s => s.ConnectionId, connectionId).SetOnInsert(s => s.ChatId, chatId).SetOnInsert(s => s.LastRepliedAt, DateTime.MinValue),
             new UpdateOptions { IsUpsert = true }, ct);
-        return new(GateAction.SendHolding, ReplyGate.HoldingReply(decision.Verdict, boss, chatId + text), decision.Reason);
+        return new(GateAction.SendHolding, ReplyGate.HoldingReply(decision.Verdict, boss, chatId + text, savedContact), decision.Reason, decision.Verdict);
     }
 
     private static async Task AddBossTaskAsync(IMongoDatabase db, string connectionId, string chatId, string? chatName, string text, CancellationToken ct)

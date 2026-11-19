@@ -9,14 +9,16 @@ public sealed record AssistantContextResult(string Text, IReadOnlyList<string> S
 /// <summary>Works out, from the words of a question, which connected apps are worth looking at. Pure, so it is tested directly.</summary>
 public static class AssistantIntent
 {
-    public sealed record Intent(bool Messages, bool Mail, bool Tasks, bool Overview, IReadOnlyList<string> Names)
+    public sealed record Intent(bool Messages, bool Mail, bool Tasks, bool Overview, IReadOnlyList<string> Names, bool Lists = false, bool Codes = false)
     {
-        public bool AnyApp => Messages || Mail || Tasks || Overview || Names.Count > 0;
+        public bool AnyApp => Messages || Mail || Tasks || Overview || Names.Count > 0 || Lists || Codes;
     }
 
     private static readonly Regex MessagesRx = new(@"\b(whats?app|telegram|messages?|msgs?|chats?|dms?|texts?|texted|replied|reply|said|say|told|unread|missed|groups?|conversation)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex MailRx = new(@"\b(mails?|e-?mails?|gmail|inbox|subject|invoices?|newsletters?)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex TasksRx = new(@"\b(tasks?|to-?dos?|reminders?|remind|due|deadlines?|overdue|pending|follow-?ups?)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex ListsRx = new(@"\b(lists?|shopping|buy|buying|groceries|grocery|amazon|wishlist|wish list|to buy|purchase)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex CodesRx = new(@"\b(otps?|codes?|verification|passcodes?|2fa|one[- ]time)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex OverviewRx = new(@"\b(today|tonight|summary|summari[sz]e|catch me up|catch up|brief(ing)?|what.?s new|anything|everything|miss(ed)?|overview|status|what did i|what do i)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly HashSet<string> Stop = new(StringComparer.OrdinalIgnoreCase) { "the", "and", "for", "mr", "mrs", "dr", "my", "our", "group", "team", "family", "office", "work", "new", "mom", "dad" };
 
@@ -31,7 +33,7 @@ public static class AssistantIntent
             if (hit) matched.Add(name);
             if (matched.Count == 3) break;
         }
-        return new Intent(MessagesRx.IsMatch(q), MailRx.IsMatch(q), TasksRx.IsMatch(q), OverviewRx.IsMatch(q), matched);
+        return new Intent(MessagesRx.IsMatch(q), MailRx.IsMatch(q) || CodesRx.IsMatch(q) || Regex.IsMatch(q, @"\b(important|urgent)\b", RegexOptions.IgnoreCase), TasksRx.IsMatch(q), OverviewRx.IsMatch(q), matched, ListsRx.IsMatch(q), CodesRx.IsMatch(q));
     }
 
     private static readonly HashSet<string> Filler = new(StringComparer.OrdinalIgnoreCase)
@@ -137,6 +139,36 @@ public static class AssistantContextBuilder
                 sources.Add("Gmail");
             }
             else if (intent.Mail) sb.AppendLine().AppendLine("Gmail: not connected or could not be read right now.");
+            if (intent.Codes && mail is { Count: > 0 })
+            {
+                var codes = mail.Where(m => OtpExtractor.LooksLikeOtp(m.Subject, m.Snippet))
+                    .Select(m => (Mail: m, Code: OtpExtractor.Extract(m.Subject, m.Snippet))).Where(x => x.Code is not null).Take(5).ToList();
+                sb.AppendLine().AppendLine(codes.Count == 0 ? "No one-time codes were found in the recent emails." : "One-time codes in recent emails (newest first):");
+                foreach (var (m, code) in codes) sb.AppendLine($"- {code} from {Clip(m.From, 50)} — {Clip(m.Subject, 70)}");
+            }
+        }
+
+        if (intent.Lists || intent.Tasks || overview)
+        {
+            var open = await ListsModule.OpenAsync(db, userId, 60, ct);
+            if (open.Count > 0)
+            {
+                sb.AppendLine().AppendLine("The owner's lists (open items):").AppendLine(ListsModule.Summarise(open));
+                sources.Add("Lists");
+            }
+            else if (intent.Lists) sb.AppendLine().AppendLine("The owner's lists are empty.");
+        }
+
+        if (intent.Mail || intent.Codes)
+        {
+            var flagged = await db.GetCollection<GmailMessageDoc>("gmailMessages")
+                .Find(d => d.UserId == userId && (d.Important || d.Urgent) && d.DateUtc >= DateTime.UtcNow.AddDays(7 * -1))
+                .SortByDescending(d => d.DateUtc).Limit(8).ToListAsync(ct);
+            if (flagged.Count > 0)
+            {
+                sb.AppendLine().AppendLine("Important or urgent emails this week:");
+                foreach (var d in flagged) sb.AppendLine($"- {(d.Urgent ? "[urgent] " : "")}{(d.DateUtc is { } when ? when.ToLocalTime().ToString("d MMM HH:mm") : "")} From {Clip(d.From, 50)} — {Clip(d.Subject, 90)}");
+            }
         }
 
         if (intent.Tasks || overview)

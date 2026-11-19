@@ -36,6 +36,8 @@ public sealed class ApplicationUser
     public int AccessFailedCount { get; set; }
     /// <summary>"I'm busy" mode: auto-reply on every connected app while the owner is busy.</summary>
     public BusyProfile Busy { get; set; } = new();
+    /// <summary>Copy one-time codes from email to the owner's own WhatsApp / Telegram chat.</summary>
+    public OtpForwardProfile OtpForward { get; set; } = new();
 }
 
 public sealed class PendingRegistration
@@ -191,10 +193,31 @@ public static class AccountModule
         me.MapPost("/password", ChangePasswordAsync).Validate<ChangePasswordRequest>();
         me.MapGet("/busy", GetBusyAsync);
         me.MapPut("/busy", UpdateBusyAsync);
+        me.MapGet("/otp-forward", GetOtpForwardAsync);
+        me.MapPut("/otp-forward", UpdateOtpForwardAsync);
+    }
+
+    private static async Task<OtpForwardDto> ToOtpDtoAsync(OtpForwardProfile p, IMongoDatabase db, string userId, CancellationToken ct)
+    {
+        var live = await db.GetCollection<IntegrationConnection>("integrationConnections").Find(c => c.UserId == userId && c.Status == ConnectionStatus.Connected).ToListAsync(ct);
+        return new(p.Enabled, p.WhatsApp, p.Telegram, live.Any(c => c.IntegrationKey == "whatsapp"), live.Any(c => c.IntegrationKey == "telegram"));
+    }
+
+    private static async Task<IResult> GetOtpForwardAsync(IMongoDatabase db, ClaimsPrincipalAccessor who, CancellationToken ct) =>
+        Results.Ok(await ToOtpDtoAsync(await OtpForwarder.LoadAsync(db, who.UserId, ct), db, who.UserId, ct));
+
+    private static async Task<IResult> UpdateOtpForwardAsync(UpdateOtpForwardRequest req, IMongoDatabase db, ClaimsPrincipalAccessor who, CancellationToken ct)
+    {
+        var p = await OtpForwarder.LoadAsync(db, who.UserId, ct);
+        if (req.Enabled is { } e) p.Enabled = e;
+        if (req.WhatsApp is { } w) p.WhatsApp = w;
+        if (req.Telegram is { } t) p.Telegram = t;
+        await db.GetCollection<ApplicationUser>("users").UpdateOneAsync(u => u.Id == who.UserId, Builders<ApplicationUser>.Update.Set(u => u.OtpForward, p), cancellationToken: ct);
+        return Results.Ok(await ToOtpDtoAsync(p, db, who.UserId, ct));
     }
 
     private static BusyProfileDto ToBusyDto(BusyProfile b) =>
-        new(b.Enabled, b.Timezone, b.Start, b.End, b.Days, b.Until, b.ReplyMode, b.FixedMessage, BusyMode.IsBusy(b, DateTime.UtcNow));
+        new(b.Enabled, b.Timezone, b.Start, b.End, b.Days, b.Until, b.ReplyMode, b.FixedMessage, BusyMode.IsBusy(b, DateTime.UtcNow), b.Note);
 
     private static async Task<IResult> GetBusyAsync(IMongoDatabase db, ClaimsPrincipalAccessor who, CancellationToken ct) =>
         Results.Ok(ToBusyDto(await BusyMode.LoadAsync(db, who.UserId, ct) ?? new BusyProfile()));
@@ -218,6 +241,7 @@ public static class AccountModule
         if (req.ClearUntil == true) b.Until = null;
         if (req.ReplyMode is { } mode) b.ReplyMode = mode == "Fixed" ? "Fixed" : "Ai";
         if (req.FixedMessage is { } msg) b.FixedMessage = msg.Length > 1000 ? msg[..1000] : msg;
+        if (req.Note is { } note) b.Note = string.IsNullOrWhiteSpace(note) ? null : (note.Trim().Length > 120 ? note.Trim()[..120] : note.Trim());
         // Starting a busy period from the quick button also switches the mode on.
         if (req.Enabled is { } enabled) b.Enabled = enabled;
         else if (req.Until is not null) b.Enabled = true;

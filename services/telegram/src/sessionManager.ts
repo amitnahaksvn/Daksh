@@ -185,7 +185,7 @@ async function onConnected(db: Db, connectionId: string, entry: Entry, client: T
   client.addEventHandler((event: NewMessageEvent) => void reportMessage(db, connectionId, event.message, false), new NewMessage({}));
   client.addEventHandler((update: unknown) => void onUpdate(db, connectionId, update), new Raw({}));
   const account = me.username ? `@${me.username}` : [me.firstName, me.lastName].filter(Boolean).join(" ") || me.phone || "Telegram";
-  await reportEvent({ connectionId, eventType: "Status", status: "Connected", accountIdentifier: account });
+  await reportEvent({ connectionId, eventType: "Status", status: "Connected", accountIdentifier: account, selfChatId: String(me.id) });
   void backfill(db, connectionId, client);
 }
 

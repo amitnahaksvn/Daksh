@@ -44,11 +44,21 @@ function useBusy() {
 }
 
 function untilIn(hours: number) { return new Date(Date.now() + hours * 3_600_000).toISOString(); }
+/** The next time the clock reads "HH:mm" (today if still ahead, otherwise tomorrow), as an ISO string. */
+function nextClockTime(hhmm: string) {
+  const [h, m] = hhmm.split(":").map(Number);
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1);
+  return d.toISOString();
+}
 
 /** A small "I'm busy" button for the top bar: one click to say how long, one click to say you're free. */
 export function BusyChip() {
   const { busy, save } = useBusy();
   const [open, setOpen] = useState(false);
+  const [customTime, setCustomTime] = useState("");
+  const [note, setNote] = useState("");
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -74,14 +84,32 @@ export function BusyChip() {
           <p className="mb-2 text-xs text-muted">
             {busy.isBusyNow ? `Replying for you${busy.until && new Date(busy.until) > new Date() ? ` until ${untilText(busy.until)}` : ""}.` : "Auto-reply on all your apps while you\u2019re busy."}
           </p>
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            maxLength={120}
+            placeholder="Reason (optional), e.g. in a meeting"
+            aria-label="Busy reason (optional)"
+            className={`${inputClass} mb-2 w-full py-1 text-xs`}
+          />
           <div className="flex flex-wrap gap-1">
             {QUICK.map((q) => (
-              <button key={q.hours} type="button" role="menuitem" onClick={() => { void save({ until: untilIn(q.hours) }); setOpen(false); }} className="rounded-full bg-surface-2 px-3 py-1 text-xs font-semibold hover:text-text">{q.label}</button>
+              <button key={q.hours} type="button" role="menuitem" onClick={() => { void save({ until: untilIn(q.hours), note }); setOpen(false); }} className="rounded-full bg-surface-2 px-3 py-1 text-xs font-semibold hover:text-text">{q.label}</button>
             ))}
             {busy.isBusyNow && (
               <button type="button" role="menuitem" onClick={() => { void save({ enabled: false, clearUntil: true }); setOpen(false); }} className="rounded-full bg-accent px-3 py-1 text-xs font-semibold text-accent-contrast">I&apos;m free</button>
             )}
           </div>
+          <form
+            className="mt-2 flex items-center gap-2"
+            onSubmit={(e) => { e.preventDefault(); if (customTime) { void save({ until: nextClockTime(customTime), note }); setOpen(false); } }}
+          >
+            <label className="flex flex-1 items-center gap-2 text-xs text-muted">
+              Until
+              <input type="time" required value={customTime} onChange={(e) => setCustomTime(e.target.value)} className={`${inputClass} w-full py-1 text-xs`} aria-label="Busy until (time)" />
+            </label>
+            <button type="submit" className="rounded-full bg-accent px-3 py-1 text-xs font-semibold text-accent-contrast">Set</button>
+          </form>
           <a href="/profile" className="mt-2 block text-xs text-accent underline">Busy settings</a>
         </div>
       )}
@@ -94,8 +122,11 @@ export function BusyModeForm() {
   const { busy, error, save } = useBusy();
   const [message, setMessage] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [noteDraft, setNoteText] = useState<string | null>(null);
   if (!busy) return <div className={`p-6 ${tileClass}`}>Loading…</div>;
   const tz = busy.timezone || systemTimezone();
+  const note = noteDraft ?? busy.note ?? "";
+  const noteText = noteDraft;
   const text = message ?? busy.fixedMessage ?? ""; // what you've typed, else what is saved
 
   return (
@@ -158,6 +189,19 @@ export function BusyModeForm() {
               })}
             </div>
           </div>
+
+          <label className="block text-sm text-muted">
+            What to tell people (optional)
+            <input
+              className={`${inputClass} mt-1`}
+              maxLength={120}
+              placeholder="e.g. in a meeting, driving, at the gym"
+              value={note}
+              onChange={(e) => { setNoteText(e.target.value); setSaved(false); }}
+              onBlur={() => { if (noteText !== null) void save({ note: noteText }); }}
+            />
+            <span className="mt-1 block text-xs">Replies can say this, e.g. &ldquo;my boss is in a meeting&rdquo;. Leave empty to share nothing. Quick tip: in your own chat, &ldquo;busy for 2 hours - in a meeting&rdquo; sets it too.</span>
+          </label>
 
           <div className="text-sm text-muted">
             <span className="mb-1 block">Reply while busy</span>

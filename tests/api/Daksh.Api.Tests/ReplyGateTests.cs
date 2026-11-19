@@ -120,6 +120,20 @@ public class ReplyGateTests
         }
     }
 
+    [Theory]
+    [InlineData(GateVerdict.Boss)]
+    [InlineData(GateVerdict.BossAskMore)]
+    public void A_saved_contact_is_not_told_who_is_replying(GateVerdict verdict)
+    {
+        foreach (var seed in new[] { "a", "b", "c", "d", "e", "f", "g" })
+        {
+            var reply = ReplyGate.HoldingReply(verdict, null, seed, savedContact: true);
+            Assert.Contains("my boss", reply);
+            Assert.DoesNotContain("AI", reply);
+            Assert.DoesNotContain("assistant", reply, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
     [Fact]
     public void Asking_for_more_information_actually_asks_a_question()
     {

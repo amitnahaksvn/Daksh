@@ -3,7 +3,7 @@ import { useState, type FormEvent } from "react";
 import { BusyModeForm } from "@/components/BusyControls";
 import { DatePicker } from "@/components/DatePicker";
 import { buttonClass, Dropdown, ErrorState, inputClass, Loading, Notice, PageHeader, tileClass } from "@/components/ui";
-import { api, ApiError, type UserDetails } from "@/lib/api";
+import { api, ApiError, type OtpForward, type UserDetails } from "@/lib/api";
 import { getSession, setSession } from "@/lib/session";
 import { useApi } from "@/lib/useApi";
 
@@ -87,6 +87,52 @@ function DetailsForm({ user }: { user: UserDetails }) {
   );
 }
 
+function OtpForwardForm() {
+  const [cfg, setCfg] = useState<OtpForward | null>(null);
+  const [status, setStatus] = useState<Status>(null);
+  const [loaded, setLoaded] = useState(false);
+  if (!loaded) {
+    setLoaded(true);
+    api.otpForward().then(setCfg).catch((err) => setStatus({ kind: "error", text: errorText(err) }));
+  }
+  async function save(req: Parameters<typeof api.updateOtpForward>[0]) {
+    setStatus(null);
+    try { setCfg(await api.updateOtpForward(req)); } catch (err) { setStatus({ kind: "error", text: errorText(err) }); }
+  }
+  return (
+    <div className={`flex flex-col gap-4 p-6 ${tileClass}`}>
+      <div>
+        <h2 className="text-lg font-bold">OTP forwarding</h2>
+        <p className="mt-1 text-sm text-muted">
+          When a one-time code arrives in your Gmail, Daksha copies just the code, the sender and the time to <strong>your own</strong> chat on WhatsApp and/or Telegram. It never goes to anyone else. It is off until you turn it on.
+        </p>
+      </div>
+      <StatusNote status={status} />
+      {!cfg ? <p className="text-sm text-muted">Loading…</p> : (
+        <>
+          <label className="flex items-center justify-between gap-4 text-sm font-medium">
+            Forward OTPs from email
+            <input type="checkbox" className="h-5 w-5" checked={cfg.enabled} onChange={(e) => void save({ enabled: e.target.checked })} />
+          </label>
+          {cfg.enabled && (
+            <>
+              <label className="flex items-center justify-between gap-4 text-sm">
+                <span>Send to my WhatsApp {!cfg.whatsAppConnected && <span className="text-xs text-muted">(not connected)</span>}</span>
+                <input type="checkbox" className="h-5 w-5" checked={cfg.whatsApp} onChange={(e) => void save({ whatsApp: e.target.checked })} />
+              </label>
+              <label className="flex items-center justify-between gap-4 text-sm">
+                <span>Send to my Telegram {!cfg.telegramConnected && <span className="text-xs text-muted">(not connected)</span>}</span>
+                <input type="checkbox" className="h-5 w-5" checked={cfg.telegram} onChange={(e) => void save({ telegram: e.target.checked })} />
+              </label>
+              <p className="text-xs text-muted">The code then also sits in your chat history. Only codes from the last 20 minutes are forwarded, once each.</p>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function PasswordForm() {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
@@ -141,6 +187,7 @@ function PasswordForm() {
 const SECTIONS = [
   { id: "personal", label: "Personal details" },
   { id: "busy", label: "Busy mode" },
+  { id: "otp", label: "OTP forwarding" },
   { id: "password", label: "Change password" },
 ] as const;
 type SectionId = (typeof SECTIONS)[number]["id"];
@@ -172,6 +219,8 @@ export default function ProfilePage() {
             <PasswordForm />
           ) : section === "busy" ? (
             <BusyModeForm />
+          ) : section === "otp" ? (
+            <OtpForwardForm />
           ) : (
             <>
               {state.status === "loading" && <Loading />}

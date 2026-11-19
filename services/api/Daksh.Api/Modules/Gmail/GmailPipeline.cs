@@ -22,7 +22,7 @@ public sealed class GmailActionItem
 /// The processing pipeline for one message: exclusions → duplicate check → AI → persist → notifications → automation events →
 /// follow-up tracking → automatic rules. One failing step never aborts the others for the same message.
 /// </summary>
-public sealed class GmailPipeline(GmailServices svc)
+public sealed class GmailPipeline(GmailServices svc, IServiceProvider services)
 {
     public async Task<bool> ProcessAsync(GmailAccountDoc account, GmailAccountConfig cfg, GmailFetched m, string trigger, CancellationToken ct)
     {
@@ -67,6 +67,13 @@ public sealed class GmailPipeline(GmailServices svc)
             ReplyEvaluated = existing?.ReplyEvaluated ?? outgoing,
         }, new ReplaceOptions { IsUpsert = true }, ct);
 
+        if (!outgoing)
+            await Step("otp-forward", async () =>
+            {
+                if (!OtpExtractor.LooksLikeOtp(m.Header("Subject"), m.Text)) return;
+                if (OtpExtractor.Extract(m.Header("Subject"), m.Text) is { } code)
+                    await OtpForwarder.ForwardAsync(services, svc.Db, userId, $"{accountId}:{m.Id}", from, code, m.Date, svc.Log, ct);
+            });
         await Step("notifications", () => NotifyAsync(cfg, m, cls, categories, outgoing, ct));
         await Step("events", () => EmitAsync(cfg, m, cls, categories, outgoing, ct));
         await Step("follow-up", () => TrackFollowUpAsync(account, cfg, m, cls, outgoing, ct));

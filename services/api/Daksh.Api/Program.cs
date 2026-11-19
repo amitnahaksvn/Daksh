@@ -69,6 +69,7 @@ app.MapHealthChecks("/health/live", new() { Predicate = _ => false });
 app.MapHealthChecks("/health/ready", new() { Predicate = r => r.Tags.Contains("ready") });
 app.MapAssistant();
 app.MapTasksAndReminders();
+ListsModule.Map(app);
 app.MapPlatform();
 app.MapAccount();
 app.MapIntegrations();

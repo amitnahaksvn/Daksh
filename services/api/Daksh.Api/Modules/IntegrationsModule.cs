@@ -42,6 +42,8 @@ public sealed class IntegrationConnection
     public ConnectionStatus Status { get; set; } = ConnectionStatus.NotConnected;
     public string? AccountIdentifier { get; set; }
     public string? ProviderAccountId { get; set; }
+    /// <summary>Telegram only: the owner's own user id, which is the id of their "Saved Messages" chat (where self-commands and forwarded codes go).</summary>
+    public string? SelfChatId { get; set; }
     public DateTime? ConnectedAt { get; set; }
     public DateTime? DisconnectedAt { get; set; }
     public DateTime? LastActiveAt { get; set; }
@@ -609,6 +611,20 @@ public static class IntegrationsModule
         await connections.UpdateOneAsync(c => c.Id == evt.ConnectionId, update, cancellationToken: ct);
 
         var isGroup = evt.ChatId is not null && WhatsAppChat.IsGroup(evt.ChatId);
+
+        // A message the owner types in their OWN chat ("Message yourself") may be a command: "busy for 2 hours", "buy milk", "free now"…
+        // Daksha does it and confirms in the same chat. Only the owner's own chat is ever read this way, never anyone else's.
+        if (evt.EventType is IntegrationEvents.MessageReceived or IntegrationEvents.MessageSent && !isGroup && evt.ChatId is not null && evt.Preview is not null
+            && IsOwnChat(connection.AccountIdentifier, evt.ChatId) && SelfCommands.Parse(evt.Preview).Kind != SelfCommandKind.None
+            && SelfCommandSeen.First(evt.ConnectionId, evt.MessageId ?? $"{evt.ChatId}:{evt.Preview}"))
+        {
+            var confirmation = await SelfCommands.RunAsync(db, connection.UserId, evt.Preview, DateTime.UtcNow, ct);
+            if (confirmation is not null)
+                try { await whatsApp.SendMessageAsync(connection.Id, evt.ChatId, confirmation, quotedMessageId: null, ct, isAiGenerated: true); }
+                catch (Exception ex) { loggerFactory.CreateLogger("SelfCommands").LogWarning(ex, "Could not confirm a self-command on WhatsApp for connection {ConnectionId}", connection.Id); }
+            return Results.Ok();
+        }
+
         var settings = await WhatsAppSettingsModule.GetOrCreateAsync(db, evt.ConnectionId, ct);
         var logger = loggerFactory.CreateLogger("WhatsAppAutoReply");
         var isReceived = evt.EventType == IntegrationEvents.MessageReceived && evt.ChatId is not null && evt.Preview is not null;
@@ -815,21 +831,27 @@ public static class IntegrationsModule
 
                 // The rule gate: the AI only ever answers simple social messages. Media/reels/emoji get nothing; anything that needs a
                 // decision or information is held for the boss (a task is created) and the sender gets a holding reply instead.
+                // A saved contact isn't told who is replying; only people the owner hasn't saved get the "I'm the AI assistant" line.
+                var savedContact = !string.IsNullOrWhiteSpace((await LookupContactAsync(db, connection.Id, chatId, ct))?.Name);
                 var gate = await ReplyGateFlow.ResolveAsync(db, settings, connection.Id, chatId, chatName, messageText, isGroup,
                     since => messages.Find(m => m.ConnectionId == connection.Id && m.ChatId == chatId && m.FromMe && !m.IsAiGenerated && m.Timestamp > since).AnyAsync(ct),
-                    DateTime.UtcNow, forced: null, ct, inConversation: await IsConversationBusyAsync(messages, connection.Id, chatId, ct));
+                    DateTime.UtcNow, forced: null, ct, inConversation: await IsConversationBusyAsync(messages, connection.Id, chatId, ct), savedContact: savedContact);
                 if (gate.Action == GateAction.Silent)
                 {
                     logger.LogInformation("Reply gate: no reply for {ChatId} ({Reason})", chatId, gate.Reason);
                     return;
                 }
-                if (gate.Action == GateAction.SendHolding) { replyText = gate.Text!; goto Deliver; }
+                if (gate.Action == GateAction.SendHolding)
+                {
+                    replyText = await ComposeHumanHoldingAsync(settings, connection, chatId, chatName, messageText, gate, savedContact, BusyMode.ActiveNote(busyProfile, DateTime.UtcNow), messages, orchestrator, logger, ct);
+                    goto Deliver;
+                }
 
                 // Turning auto-reply on for this connection IS the user's explicit, per-channel opt-in to let
                 // AI see and answer these messages — that opt-in is the provider-data-sharing consent here.
                 var userContext = new UserAiContext(connection.UserId, MemoryEnabled: false, AllowProviderDataSharing: true);
                 var summary = await SummarizeOlderConversationAsync(settings, connection.Id, chatId, messages, orchestrator, userContext, logger, ct);
-                var prompt = BuildAutoReplyPrompt(settings, chatId, chatName, messageText, isGroup, summary);
+                var prompt = BuildAutoReplyPrompt(settings, chatId, chatName, messageText, isGroup, summary, busyNote: BusyMode.ActiveNote(busyProfile, DateTime.UtcNow));
                 var history = await BuildAutoReplyHistoryAsync(settings, connection.Id, chatId, messages, ct);
                 var result = await orchestrator.RespondAsync(new AssistantRequest(userContext, prompt, history));
 
@@ -844,9 +866,9 @@ public static class IntegrationsModule
                     // Second line of defence: the model itself judged this beyond small talk. Same as a gate hold.
                     var hold = await ReplyGateFlow.ResolveAsync(db, settings, connection.Id, chatId, chatName, messageText, isGroup,
                         since => messages.Find(m => m.ConnectionId == connection.Id && m.ChatId == chatId && m.FromMe && !m.IsAiGenerated && m.Timestamp > since).AnyAsync(ct),
-                        DateTime.UtcNow, GateVerdict.Boss, ct);
+                        DateTime.UtcNow, GateVerdict.Boss, ct, savedContact: savedContact);
                     if (hold.Action != GateAction.SendHolding) return;
-                    replyText = hold.Text!;
+                    replyText = await ComposeHumanHoldingAsync(settings, connection, chatId, chatName, messageText, hold, savedContact, BusyMode.ActiveNote(busyProfile, DateTime.UtcNow), messages, orchestrator, logger, ct);
                 }
                 else replyText = result.Text;
             }
@@ -891,6 +913,22 @@ public static class IntegrationsModule
         }
     }
 
+    /// <summary>The "my boss will get back to you" reply, written by the AI like a person (varied, in their language, aware of the chat). Falls back to the template.</summary>
+    private static async Task<string> ComposeHumanHoldingAsync(WhatsAppSettings settings, IntegrationConnection connection, string chatId, string? chatName, string messageText, GateOutcome gate,
+        bool savedContact, string? busyNote, IMongoCollection<WhatsAppMessage> messages, IAssistantOrchestrator orchestrator, ILogger logger, CancellationToken ct)
+    {
+        var fallback = gate.Text!;
+        try
+        {
+            var history = await BuildAutoReplyHistoryAsync(settings, connection.Id, chatId, messages, ct);
+            var prompt = HumanReply.BuildPrompt(settings, gate.Verdict, savedContact, HumanReply.AlreadyIntroduced(history), chatName ?? "", messageText, busyNote);
+            var result = await orchestrator.RespondAsync(new AssistantRequest(new UserAiContext(connection.UserId, MemoryEnabled: false, AllowProviderDataSharing: true), prompt, history));
+            if (result.IsSimulated) return fallback;
+            return HumanReply.Clean(result.Text) ?? fallback;
+        }
+        catch (Exception ex) { logger.LogInformation(ex, "Human-style holding reply failed; using the template for {ChatId}", chatId); return fallback; }
+    }
+
     /// <summary>Latest batch ticket per (connection, chat); in-memory, so it assumes a single API instance.</summary>
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, long> BatchTickets = new();
 
@@ -921,6 +959,14 @@ public static class IntegrationsModule
     /// <summary>True when the owner wrote in this chat themselves within <see cref="OwnerActiveQuiet"/> of now.</summary>
     public static bool IsOwnerActive(DateTime? lastOwnerMessageUtc, DateTime nowUtc) =>
         lastOwnerMessageUtc is { } last && nowUtc - last >= TimeSpan.Zero && nowUtc - last < OwnerActiveQuiet;
+
+    /// <summary>True when the chat is the owner's own number ("Message yourself").</summary>
+    public static bool IsOwnChat(string? accountIdentifier, string chatId)
+    {
+        if (string.IsNullOrEmpty(accountIdentifier)) return false;
+        var me = accountIdentifier.Split(':')[0].Split('@')[0];
+        return me.Length >= 5 && me == chatId.Split(':')[0].Split('@')[0];
+    }
 
     internal static bool IsWithinActiveHours(WhatsAppSettings settings) => IsWithinActiveHours(settings, DateTime.UtcNow);
 
@@ -1020,7 +1066,7 @@ public static class IntegrationsModule
         }
     }
 
-    public static string BuildAutoReplyPrompt(WhatsAppSettings settings, string chatId, string? chatName, string messageText, bool isGroup, string? summary = null, string channel = "WhatsApp")
+    public static string BuildAutoReplyPrompt(WhatsAppSettings settings, string chatId, string? chatName, string messageText, bool isGroup, string? summary = null, string channel = "WhatsApp", string? busyNote = null)
     {
         var who = chatName ?? chatId;
         // Explicit about point of view and output format: without this, a model asked to "reply on someone's
@@ -1071,6 +1117,8 @@ public static class IntegrationsModule
         if (!string.IsNullOrWhiteSpace(settings.NeverRespondTopics))
             instructions += $" Never respond about any of these topics — if the message is about one of them, output exactly NO_REPLY and nothing else: {settings.NeverRespondTopics}";
 
+        if (!string.IsNullOrWhiteSpace(busyNote))
+            instructions += $" The owner is busy right now and chose to let people know this: \"{busyNote}\". You may mention it naturally if it fits, but add nothing beyond it.";
         if (settings.ReplyInSenderLanguage)
             instructions += " Reply in the same language, and the same script (e.g. romanized vs native), that the message you're replying to is written in.";
         if (!string.IsNullOrWhiteSpace(summary))

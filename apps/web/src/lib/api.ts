@@ -122,9 +122,14 @@ export type BusyProfile = {
   until: string | null;
   replyMode: "Ai" | "Fixed";
   fixedMessage: string | null;
+  /** Optional note people may be told, e.g. "in a meeting". */
+  note: string | null;
   isBusyNow: boolean;
 };
 export type UpdateBusyRequest = Partial<Omit<BusyProfile, "isBusyNow" | "until">> & { until?: string; clearUntil?: boolean };
+export type ListItem = { id: string; list: string; text: string; done: boolean; createdAt: string };
+/** Copy one-time codes from email to your own WhatsApp / Telegram chat. */
+export type OtpForward = { enabled: boolean; whatsApp: boolean; telegram: boolean; whatsAppConnected: boolean; telegramConnected: boolean };
 export type UpdateProfileRequest = { firstName: string; lastName: string; gender: string; dateOfBirth: string };
 export type MessageResponse = { message: string };
 export type AccountProfile = { id: string; firstName: string; lastName: string; email: string; accessToken: string; expiresAt: string };
@@ -407,6 +412,12 @@ export const api = {
   register: (req: RegisterRequest) => apiFetch<MessageResponse>("/api/v1/account/register", json(req)),
   verifyOtp: (email: string, otp: string) => apiFetch<AccountProfile>("/api/v1/account/verify-otp", json({ email, otp })),
   me: () => apiFetch<UserDetails>("/api/v1/account/me"),
+  lists: () => apiFetch<ListItem[]>("/api/v1/lists"),
+  addListItem: (list: string, text: string) => apiFetch<ListItem>("/api/v1/lists", { method: "POST", body: JSON.stringify({ list, text }) }),
+  toggleListItem: (id: string) => apiFetch<void>(`/api/v1/lists/${id}/toggle`, { method: "POST" }),
+  deleteListItem: (id: string) => apiFetch<void>(`/api/v1/lists/${id}`, { method: "DELETE" }),
+  otpForward: () => apiFetch<OtpForward>("/api/v1/account/me/otp-forward"),
+  updateOtpForward: (req: Partial<Pick<OtpForward, "enabled" | "whatsApp" | "telegram">>) => apiFetch<OtpForward>("/api/v1/account/me/otp-forward", { method: "PUT", body: JSON.stringify(req) }),
   busy: () => apiFetch<BusyProfile>("/api/v1/account/me/busy"),
   updateBusy: (req: UpdateBusyRequest) => apiFetch<BusyProfile>("/api/v1/account/me/busy", { method: "PUT", body: JSON.stringify(req) }),
   updateMe: (req: UpdateProfileRequest) => apiFetch<UserDetails>("/api/v1/account/me", { method: "PUT", body: JSON.stringify(req) }),
