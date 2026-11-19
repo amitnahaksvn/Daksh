@@ -92,14 +92,14 @@ describe("every theme has the same sidebar", () => {
     expect(screen.getAllByText("Fake").length).toBeGreaterThan(0);
   });
 
-  it("is laid out like a chat app's: logo with search and collapse icons, icon rows, and a list of your dashboards", async () => {
+  it("is laid out like a chat app's: logo with a collapse icon, icon rows, and a list of your dashboards", async () => {
     window.localStorage.setItem(STYLE_KEY, "hybrid");
     vi.spyOn(api, "dashboards").mockResolvedValue([{ id: "d1", name: "Dashboard", order: 0, widgets: ["command", "apps"] }, { id: "d2", name: "Sales", order: 1, widgets: ["apps"] }]);
     const seen: string[] = [];
     const onOpen = (e: Event) => seen.push((e as CustomEvent<string>).detail);
     window.addEventListener("daksh:open-tab", onOpen);
     render(<AppShell><p>page</p></AppShell>);
-    expect(screen.getByRole("button", { name: "Search" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Search" })).toBeNull(); // the sidebar has no search icon; the top bar has the search box
     expect(screen.getByRole("button", { name: "Minimize sidebar" })).toBeTruthy();
     const nav = screen.getAllByRole("navigation", { name: "Main" })[0];
     for (const label of ["New chat", "Dashboard", "Apps", "Chats"]) expect(nav.textContent).toContain(label);

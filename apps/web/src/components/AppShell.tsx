@@ -56,7 +56,6 @@ const Icons = {
   home: icon(<><path d="M4 11l8-7 8 7" /><path d="M6 10v9a1 1 0 0 0 1 1h3v-5h4v5h3a1 1 0 0 0 1-1v-9" /></>),
   apps: icon(<><circle cx="8" cy="8" r="3" /><circle cx="16" cy="8" r="3" /><circle cx="8" cy="16" r="3" /><circle cx="16" cy="16" r="3" /></>),
   chats: icon(<path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 4v-4A2.5 2.5 0 0 1 4 14.5z" />),
-  search: icon(<><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></>),
   panel: icon(<><rect x="3.5" y="4.5" width="17" height="15" rx="3" /><path d="M9.5 4.5v15" /></>),
   board: icon(<><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="4" rx="1.5" /><rect x="13" y="10" width="7" height="10" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /></>),
 };
@@ -117,7 +116,7 @@ function SideMenu({ collapsed }: { collapsed: boolean }) {
   );
 }
 
-/** The sidebar's top: the logo, and two small icons (search, collapse). Collapsed, the logo sits above the collapse icon. */
+/** The sidebar's top: the logo and the collapse icon. Collapsed, the logo sits above the collapse icon. */
 function SideHeader({ collapsed }: { collapsed: boolean }) {
   const iconBtn = "flex h-9 w-9 items-center justify-center rounded-xl text-muted transition-colors hover:bg-surface-2 hover:text-text";
   const toggle = (
@@ -128,7 +127,6 @@ function SideHeader({ collapsed }: { collapsed: boolean }) {
     <div className="flex items-center justify-between gap-1">
       <DakshaBrand />
       <div className="flex items-center">
-        <button type="button" onClick={() => document.getElementById("top-search")?.focus()} aria-label="Search" title="Search" className={iconBtn}>{Icons.search}</button>
         {toggle}
       </div>
     </div>
