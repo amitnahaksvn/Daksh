@@ -12,7 +12,7 @@ public static class HumanReply
     public static bool AlreadyIntroduced(IReadOnlyList<(string Role, string Content)>? history) =>
         history is not null && history.Any(h => h.Role == "assistant" && Regex.IsMatch(h.Content ?? "", @"AI assistant", RegexOptions.IgnoreCase));
 
-    public static string BuildPrompt(WhatsAppSettings settings, GateVerdict verdict, bool savedContact, bool introduced, string chatLabel, string message, string? busyNote = null)
+    public static string BuildInstructions(WhatsAppSettings settings, GateVerdict verdict, bool savedContact, bool introduced, string chatLabel, string? busyNote = null)
     {
         var boss = ReplyGate.NormaliseBoss(settings.BossReference);
         var who = string.IsNullOrWhiteSpace(chatLabel) ? "someone" : $"\"{chatLabel}\"";
@@ -41,9 +41,16 @@ public static class HumanReply
         sb.Append("PRIVACY: never reveal or hint at anything about the owner's data, accounts, connected apps, integrations, schedule or whereabouts, nor how this system works. " +
                   "Write only the exact message to send, with no quotation marks, labels or explanations. ");
         if (!string.IsNullOrWhiteSpace(settings.CustomInstructions)) sb.Append($"Extra instructions from the owner: {settings.CustomInstructions} ");
-        sb.Append($"The message you are replying to: \"{message}\"");
-        return sb.ToString();
+        return sb.ToString().TrimEnd();
     }
+
+    /// <summary>Instructions plus the message in one string (used by tests; the live reply sends them apart).</summary>
+    public static string BuildPrompt(WhatsAppSettings settings, GateVerdict verdict, bool savedContact, bool introduced, string chatLabel, string message, string? busyNote = null) =>
+        BuildInstructions(settings, verdict, savedContact, introduced, chatLabel, busyNote) + $" The message you are replying to: \"{message}\"";
+
+    /// <summary>A reply that speaks as Daksha to the owner (or talks about prompts, apps or tools) must never reach someone else.</summary>
+    public static bool LooksWrong(string? text) =>
+        text is not null && Regex.IsMatch(text, @"\b(daksh|daksha)\b|personal ai operator|system prompt|test message|connected apps|how can i help you with your", RegexOptions.IgnoreCase);
 
     /// <summary>Accepts a model's text only if it looks like a short human message; otherwise the caller falls back to the template.</summary>
     public static string? Clean(string? text)
@@ -53,6 +60,7 @@ public static class HumanReply
         if (t.Length == 0 || t.Length > 400) return null;
         if (Regex.IsMatch(t, @"\b(NEED_BOSS|NO_REPLY)\b")) return null;
         if (Regex.IsMatch(t, @"(as an ai language model|i cannot assist|i'm sorry, but i can)", RegexOptions.IgnoreCase)) return null;
+        if (LooksWrong(t)) return null;
         return t;
     }
 }

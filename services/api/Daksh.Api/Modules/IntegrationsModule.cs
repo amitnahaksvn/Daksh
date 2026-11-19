@@ -738,6 +738,8 @@ public static class IntegrationsModule
             "Never" => false,
             _ => (connection.AutoReplyEnabled || BusyMode.IsBusy(await BusyMode.LoadAsync(db, connection.UserId, ct), DateTime.UtcNow, settings.Timezone)) && (!isGroup || connection.AutoReplyInGroups),
         };
+        if (isReceived && !repliedByRule && !(autoReplyAllowed && passesMonitoring && !IsCallNotice(evt.Preview)))
+            logger.LogInformation("WhatsApp auto-reply for {ChatId}: not attempted (auto-reply allowed: {Allowed}, chat monitored: {Monitored}, group: {Group}; the connection's auto-reply switch is {Switch}).", evt.ChatId, autoReplyAllowed, passesMonitoring, isGroup, connection.AutoReplyEnabled);
         if (!repliedByRule && autoReplyAllowed && passesMonitoring && !IsCallNotice(evt.Preview))
             // The reply can legitimately take minutes (response delay, batching, the AI call). If the caller hangs up meanwhile -- the
         // WhatsApp service's HTTP client gives up after ~5 minutes, or it restarts -- the request token is cancelled; the reply must
@@ -761,31 +763,37 @@ public static class IntegrationsModule
             // `force` is an automation rule asking for a reply: it bypasses scope, hours and cooldown (the rule
             // is the user's explicit instruction) but never the pause switch or a chat set to "Never".
             var receivedAt = DateTime.UtcNow.AddSeconds(-2); // the webhook fires within moments of the message
-            if (settings.Paused) return;
-            if (settings.AutoReplyBlockedChats.Contains(chatId) || chatRule?.AutoReply == "Never") return;
+            if (settings.Paused) { logger.LogInformation("WhatsApp auto-reply for {ChatId}: no reply, the connection is paused.", chatId); return; }
+            if (settings.AutoReplyBlockedChats.Contains(chatId) || chatRule?.AutoReply == "Never") { logger.LogInformation("WhatsApp auto-reply for {ChatId}: no reply, this chat is blocked or set to Never.", chatId); return; }
             var forcedIn = force || chatRule?.AutoReply == "Always";
-            if (!forcedIn && settings.AutoReplyScope == "SelectedOnly" && !settings.AutoReplyAllowedChats.Contains(chatId)) return;
+            if (!forcedIn && settings.AutoReplyScope == "SelectedOnly" && !settings.AutoReplyAllowedChats.Contains(chatId)) { logger.LogInformation("WhatsApp auto-reply for {ChatId}: no reply, scope is 'selected chats only' and this chat is not selected.", chatId); return; }
 
             // Busy mode (set on the owner's profile, for all apps) overrides the active-hours rules: being busy IS the reason to answer.
             var busyProfile = await BusyMode.LoadAsync(db, connection.UserId, ct);
             var busy = BusyMode.IsBusy(busyProfile, DateTime.UtcNow, settings.Timezone);
             var withinHours = busy || IsWithinActiveHours(settings);
             var useOutsideHoursMessage = !busy && !force && !withinHours && !string.IsNullOrWhiteSpace(settings.OutsideHoursMessage);
-            if (!force && !settings.OperateContinuously && !withinHours && !useOutsideHoursMessage) return;
+            if (!force && !settings.OperateContinuously && !withinHours && !useOutsideHoursMessage)
+            {
+                var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BusyMode.ResolveTimezone(new BusyProfile(), settings.Timezone));
+                logger.LogInformation("WhatsApp auto-reply for {ChatId}: no reply, outside the active hours {Start}-{End} (days {Days}) in timezone {Timezone}; it is {Local:ddd HH:mm} there. Turn on 'Operate continuously' or fix the timezone.",
+                    chatId, settings.ActiveHoursStart, settings.ActiveHoursEnd, string.Join(",", settings.ActiveDays), settings.Timezone, nowLocal);
+                return;
+            }
 
             var messages = db.GetCollection<WhatsAppMessage>("whatsappMessages");
 
             if (!forcedIn && settings.AutoReplyScope == "UnknownOnly")
             {
                 var everReplied = await messages.Find(m => m.ConnectionId == connection.Id && m.ChatId == chatId && m.FromMe).AnyAsync(ct);
-                if (everReplied) return; // "unknown contacts only" — we've talked to this one before
+                if (everReplied) { logger.LogInformation("WhatsApp auto-reply for {ChatId}: no reply, scope is 'unknown contacts only' and you have chatted here before.", chatId); return; }
             }
 
             var autoReplyState = db.GetCollection<WhatsAppAutoReplyState>("whatsappAutoReplyState");
             if (!force && settings.CooldownSeconds > 0)
             {
                 var state = await autoReplyState.Find(s => s.ConnectionId == connection.Id && s.ChatId == chatId).FirstOrDefaultAsync(ct);
-                if (state is not null && (DateTime.UtcNow - state.LastRepliedAt).TotalSeconds < settings.CooldownSeconds) return;
+                if (state is not null && (DateTime.UtcNow - state.LastRepliedAt).TotalSeconds < settings.CooldownSeconds) { logger.LogInformation("WhatsApp auto-reply for {ChatId}: no reply, still within the {Seconds}s cooldown since the last reply.", chatId, settings.CooldownSeconds); return; }
             }
 
             // If the owner has been typing in this chat themselves a moment ago, they are in the conversation: the assistant must not
@@ -861,9 +869,9 @@ public static class IntegrationsModule
                 // AI see and answer these messages — that opt-in is the provider-data-sharing consent here.
                 var userContext = new UserAiContext(connection.UserId, MemoryEnabled: false, AllowProviderDataSharing: true);
                 var summary = await SummarizeOlderConversationAsync(settings, connection.Id, chatId, messages, orchestrator, userContext, logger, ct);
-                var prompt = BuildAutoReplyPrompt(settings, chatId, chatName, messageText, isGroup, summary, busyNote: BusyMode.ActiveNote(busyProfile, DateTime.UtcNow, settings.Timezone));
+                var (instructions, senderMessage) = BuildAutoReplyParts(settings, chatId, chatName, messageText, isGroup, summary, busyNote: BusyMode.ActiveNote(busyProfile, DateTime.UtcNow, settings.Timezone));
                 var history = await BuildAutoReplyHistoryAsync(settings, connection.Id, chatId, messages, ct);
-                var result = await orchestrator.RespondAsync(new AssistantRequest(userContext, prompt, history));
+                var result = await orchestrator.RespondAsync(new AssistantRequest(userContext, senderMessage, history, SystemPrompt: instructions));
 
                 if (result.IsSimulated || string.IsNullOrWhiteSpace(result.Text))
                 {
@@ -871,6 +879,7 @@ public static class IntegrationsModule
                     return;
                 }
                 if (result.Text.Trim().Equals("NO_REPLY", StringComparison.OrdinalIgnoreCase)) return; // hit a never-respond topic
+                if (HumanReply.LooksWrong(result.Text)) { logger.LogWarning("WhatsApp auto-reply for {ChatId} dropped: the AI answered in Daksha's own voice instead of the owner's.", chatId); return; }
                 if (ReplyGate.ModelSaidNeedBoss(result.Text))
                 {
                     // Second line of defence: the model itself judged this beyond small talk. Same as a gate hold.
@@ -931,8 +940,8 @@ public static class IntegrationsModule
         try
         {
             var history = await BuildAutoReplyHistoryAsync(settings, connection.Id, chatId, messages, ct);
-            var prompt = HumanReply.BuildPrompt(settings, gate.Verdict, savedContact, HumanReply.AlreadyIntroduced(history), chatName ?? "", messageText, busyNote);
-            var result = await orchestrator.RespondAsync(new AssistantRequest(new UserAiContext(connection.UserId, MemoryEnabled: false, AllowProviderDataSharing: true), prompt, history));
+            var instructions = HumanReply.BuildInstructions(settings, gate.Verdict, savedContact, HumanReply.AlreadyIntroduced(history), chatName ?? "", busyNote);
+            var result = await orchestrator.RespondAsync(new AssistantRequest(new UserAiContext(connection.UserId, MemoryEnabled: false, AllowProviderDataSharing: true), messageText, history, SystemPrompt: instructions));
             if (result.IsSimulated) return fallback;
             return HumanReply.Clean(result.Text) ?? fallback;
         }
@@ -1088,7 +1097,7 @@ public static class IntegrationsModule
         }
     }
 
-    public static string BuildAutoReplyPrompt(WhatsAppSettings settings, string chatId, string? chatName, string messageText, bool isGroup, string? summary = null, string channel = "WhatsApp", string? busyNote = null)
+    public static (string Instructions, string UserMessage) BuildAutoReplyParts(WhatsAppSettings settings, string chatId, string? chatName, string messageText, bool isGroup, string? summary = null, string channel = "WhatsApp", string? busyNote = null)
     {
         var who = chatName ?? chatId;
         // Explicit about point of view and output format: without this, a model asked to "reply on someone's
@@ -1146,9 +1155,16 @@ public static class IntegrationsModule
         if (!string.IsNullOrWhiteSpace(summary))
             instructions += $" Background on the earlier conversation (older than the messages shown to you): {summary}";
 
-        return messageText.Contains('\n')
-            ? $"{instructions} They sent several messages in a row (oldest first, one per line). Read them all and answer them together in a single reply:\n{messageText}"
-            : $"{instructions} The message you're replying to: \"{messageText}\"";
+        if (messageText.Contains('\n'))
+            instructions += " They sent several messages in a row (oldest first, one per line). Read them all and answer them together in a single reply.";
+        return (instructions, messageText);
+    }
+
+    /// <summary>The whole prompt as one string (instructions, then the message). The live auto-reply sends the two apart: see <see cref="BuildAutoReplyParts"/>.</summary>
+    public static string BuildAutoReplyPrompt(WhatsAppSettings settings, string chatId, string? chatName, string messageText, bool isGroup, string? summary = null, string channel = "WhatsApp", string? busyNote = null)
+    {
+        var (instructions, message) = BuildAutoReplyParts(settings, chatId, chatName, messageText, isGroup, summary, channel, busyNote);
+        return message.Contains('\n') ? $"{instructions}:\n{message}" : $"{instructions} The message you're replying to: \"{message}\"";
     }
 
     private static async Task<IReadOnlyList<(string Role, string Content)>?> BuildAutoReplyHistoryAsync(

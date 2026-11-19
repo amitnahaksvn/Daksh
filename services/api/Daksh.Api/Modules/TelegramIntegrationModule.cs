@@ -561,8 +561,8 @@ public static class TelegramAutoReply
                 recent.Reverse();
                 history = recent.Select(m => (m.FromMe ? "assistant" : "user", m.Text)).ToList();
             }
-            var prompt = HumanReply.BuildPrompt(settings, gate.Verdict, savedContact: false, HumanReply.AlreadyIntroduced(history), chatName ?? "", text, busyNote);
-            var result = await sp.GetRequiredService<IAssistantOrchestrator>().RespondAsync(new AssistantRequest(new UserAiContext(connection.UserId, MemoryEnabled: false, AllowProviderDataSharing: true), prompt, history));
+            var instructions = HumanReply.BuildInstructions(settings, gate.Verdict, savedContact: false, HumanReply.AlreadyIntroduced(history), chatName ?? "", busyNote);
+            var result = await sp.GetRequiredService<IAssistantOrchestrator>().RespondAsync(new AssistantRequest(new UserAiContext(connection.UserId, MemoryEnabled: false, AllowProviderDataSharing: true), text, history, SystemPrompt: instructions));
             return result.IsSimulated ? fallback : HumanReply.Clean(result.Text) ?? fallback;
         }
         catch (Exception ex) { logger.LogInformation(ex, "Human-style holding reply failed; using the template for {ChatId}", chatId); return fallback; }
@@ -653,10 +653,11 @@ public static class TelegramAutoReply
                     history = recent.Select(m => (m.FromMe ? "assistant" : "user", m.Text)).ToList();
                 }
                 var userContext = new UserAiContext(connection.UserId, MemoryEnabled: false, AllowProviderDataSharing: true);
-                var prompt = IntegrationsModule.BuildAutoReplyPrompt(settings, chatId, trigger.ChatName, text, trigger.IsGroup, null, "Telegram", BusyMode.ActiveNote(busyProfile, DateTime.UtcNow, settings.Timezone));
-                var result = await sp.GetRequiredService<IAssistantOrchestrator>().RespondAsync(new AssistantRequest(userContext, prompt, history));
+                var (instructions, senderMessage) = IntegrationsModule.BuildAutoReplyParts(settings, chatId, trigger.ChatName, text, trigger.IsGroup, null, "Telegram", BusyMode.ActiveNote(busyProfile, DateTime.UtcNow, settings.Timezone));
+                var result = await sp.GetRequiredService<IAssistantOrchestrator>().RespondAsync(new AssistantRequest(userContext, senderMessage, history, SystemPrompt: instructions));
                 if (result.IsSimulated || string.IsNullOrWhiteSpace(result.Text)) { logger.LogWarning("Telegram auto-reply for {ChatId}: the AI gave no usable answer", chatId); return; }
                 if (result.Text.Trim().Equals("NO_REPLY", StringComparison.OrdinalIgnoreCase)) return;
+                if (HumanReply.LooksWrong(result.Text)) { logger.LogWarning("Telegram auto-reply for {ChatId} dropped: the AI answered in Daksha's own voice instead of the owner's.", chatId); return; }
                 if (ReplyGate.ModelSaidNeedBoss(result.Text))
                 {
                     var hold = await ReplyGateFlow.ResolveAsync(db, settings, connection.Id, chatId, trigger.ChatName, text, trigger.IsGroup,

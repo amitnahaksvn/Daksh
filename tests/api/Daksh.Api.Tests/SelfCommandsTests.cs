@@ -179,3 +179,25 @@ public class SelfAssistantTests
     [Fact] public void Our_own_replies_are_never_questions() => Assert.False(SelfAssistant.LooksLikeQuestion(SelfCommands.ReplyMarker + "what's pending?"));
     [Fact] public void The_address_is_stripped() => Assert.Equal("what's pending?", SelfAssistant.StripAddress("Hey Daksha, what's pending?"));
 }
+
+public class AutoReplyVoiceTests
+{
+    [Theory]
+    [InlineData("I am Daksh, your personal AI operator. It looks like you've pasted a system prompt or test message.")]
+    [InlineData("Let me know how I can help you with your connected apps (WhatsApp, Telegram, Gmail, tasks).")]
+    [InlineData("Hi, this is Daksha!")]
+    public void Replies_in_Dakshas_own_voice_are_caught(string text) => Assert.True(HumanReply.LooksWrong(text));
+
+    [Theory]
+    [InlineData("Hey! Kaise ho?")] [InlineData("Hello! Good to hear from you.")] [InlineData("Haan bhai, main bata deta hoon sir ko.")]
+    public void Normal_replies_pass(string text) { Assert.False(HumanReply.LooksWrong(text)); Assert.NotNull(HumanReply.Clean(text)); }
+
+    [Fact]
+    public void The_auto_reply_instructions_and_the_senders_message_are_kept_apart()
+    {
+        var (instructions, message) = IntegrationsModule.BuildAutoReplyParts(new WhatsAppSettings { ConnectionId = "c", BossReference = "Amit sir" }, "1@s.whatsapp.net", "Ravi", "Hello", false);
+        Assert.Equal("Hello", message);
+        Assert.DoesNotContain("Hello", instructions.Replace("greetings", ""));
+        Assert.Contains("on behalf of the account owner", instructions);
+    }
+}

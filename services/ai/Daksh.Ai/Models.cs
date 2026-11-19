@@ -9,7 +9,8 @@ public enum ModelLocality { Local, Cloud }
 public sealed record UserAiContext(string UserId, bool MemoryEnabled, bool AllowProviderDataSharing);
 
 /// <param name="Context">Data pulled from the user's connected apps for this question. It is given to the model as data, never as instructions.</param>
-public sealed record AssistantRequest(UserAiContext User, string Message, IReadOnlyList<(string Role, string Content)>? History = null, string? Context = null);
+/// <param name="SystemPrompt">Replaces Daksha's own assistant persona. Used when the model must speak FOR the owner to someone else (auto-replies), where "You are Daksh, a personal AI operator" is the wrong voice.</param>
+public sealed record AssistantRequest(UserAiContext User, string Message, IReadOnlyList<(string Role, string Content)>? History = null, string? Context = null, string? SystemPrompt = null);
 
 public sealed record AssistantResult(
     string Text,
