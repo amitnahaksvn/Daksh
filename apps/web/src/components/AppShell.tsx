@@ -36,7 +36,7 @@ function MobileBar() {
 /** A search box that is not wired up yet. It looks and types like a real one, does nothing, and says so. */
 function TopSearch() {
   return (
-    <label className="flex min-w-0 max-w-3xl flex-1 items-center gap-2 rounded-full border border-dashed border-danger/60 bg-surface-2 px-4 py-2 text-sm text-muted focus-within:border-solid focus-within:border-accent focus-within:ring-2 focus-within:ring-[color-mix(in_srgb,var(--accent)_35%,transparent)]">
+    <label className="flex min-w-0 max-w-3xl flex-1 items-center gap-2 rounded-full border border-dashed border-danger/60 bg-surface-2 px-4 py-2 text-sm text-muted">
       <svg aria-hidden viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
       <input type="search" aria-label="Search everything (placeholder)" placeholder="Search messages, mail, tasks, people…" className="field-in-pill min-w-0 flex-1 appearance-none border-0 bg-transparent p-0 text-text placeholder:text-muted" onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }} />
       <span className="ai-mono hidden rounded-md border border-line px-1.5 py-0.5 text-xs lg:inline">⌘K</span>
