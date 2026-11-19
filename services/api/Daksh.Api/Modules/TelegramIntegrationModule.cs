@@ -505,7 +505,7 @@ public static class TelegramAutoReply
             {
                 "Always" => true,
                 "Never" => false,
-                _ => connection.AutoReplyEnabled && (!message.IsGroup || connection.AutoReplyInGroups),
+                _ => (connection.AutoReplyEnabled || BusyMode.IsBusy(await BusyMode.LoadAsync(db, connection.UserId), DateTime.UtcNow)) && (!message.IsGroup || connection.AutoReplyInGroups),
             };
             if (!repliedByRule && allowed) await RunAsync(scopes, connection, message, chatRule, force: false, logger);
         }
@@ -539,8 +539,10 @@ public static class TelegramAutoReply
             var forcedIn = force || chatRule?.AutoReply == "Always";
             if (!forcedIn && settings.AutoReplyScope == "SelectedOnly" && !settings.AutoReplyAllowedChats.Contains(chatId)) return;
 
-            var withinHours = IntegrationsModule.IsWithinActiveHours(settings);
-            var useOutsideHoursMessage = !force && !withinHours && !string.IsNullOrWhiteSpace(settings.OutsideHoursMessage);
+            var busyProfile = await BusyMode.LoadAsync(db, connection.UserId);
+            var busy = BusyMode.IsBusy(busyProfile, DateTime.UtcNow); // busy mode (profile-wide) overrides the active-hours rules
+            var withinHours = busy || IntegrationsModule.IsWithinActiveHours(settings);
+            var useOutsideHoursMessage = !busy && !force && !withinHours && !string.IsNullOrWhiteSpace(settings.OutsideHoursMessage);
             if (!force && !settings.OperateContinuously && !withinHours && !useOutsideHoursMessage) return;
 
             if (!forcedIn && settings.AutoReplyScope == "UnknownOnly"
@@ -574,6 +576,7 @@ public static class TelegramAutoReply
             var isAi = false;
             if (!force && !string.IsNullOrWhiteSpace(chatRule?.CustomReply)) replyText = chatRule.CustomReply;
             else if (useOutsideHoursMessage) replyText = settings.OutsideHoursMessage!;
+            else if (busy && !force && BusyMode.FixedReply(busyProfile) is { } busyFixed) replyText = busyFixed;
             else if (settings.CustomMessageEnabled && !force)
             {
                 if (string.IsNullOrWhiteSpace(settings.CustomMessage)) return;

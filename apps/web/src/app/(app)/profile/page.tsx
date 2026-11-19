@@ -1,5 +1,6 @@
 "use client";
 import { useState, type FormEvent } from "react";
+import { BusyModeForm } from "@/components/BusyControls";
 import { DatePicker } from "@/components/DatePicker";
 import { buttonClass, Dropdown, ErrorState, inputClass, Loading, Notice, PageHeader, tileClass } from "@/components/ui";
 import { api, ApiError, type UserDetails } from "@/lib/api";
@@ -139,6 +140,7 @@ function PasswordForm() {
 
 const SECTIONS = [
   { id: "personal", label: "Personal details" },
+  { id: "busy", label: "Busy mode" },
   { id: "password", label: "Change password" },
 ] as const;
 type SectionId = (typeof SECTIONS)[number]["id"];
@@ -148,7 +150,7 @@ export default function ProfilePage() {
   const [section, setSection] = useState<SectionId>("personal");
   return (
     <div>
-      <PageHeader title="Profile">Update your personal details and password.</PageHeader>
+      <PageHeader title="Profile">Update your personal details, busy mode and password.</PageHeader>
       <div className="grid gap-4 md:grid-cols-[14rem_minmax(0,1fr)]">
         <nav aria-label="Profile sections" className={`flex gap-1 overflow-x-auto p-2 md:flex-col md:self-start ${tileClass}`}>
           {SECTIONS.map((s) => (
@@ -168,6 +170,8 @@ export default function ProfilePage() {
         <div className="min-w-0">
           {section === "password" ? (
             <PasswordForm />
+          ) : section === "busy" ? (
+            <BusyModeForm />
           ) : (
             <>
               {state.status === "loading" && <Loading />}

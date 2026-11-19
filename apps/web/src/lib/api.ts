@@ -112,6 +112,19 @@ export type RegisterRequest = {
   password: string;
 };
 export type UserDetails = { id: string; firstName: string; lastName: string; gender: string; dateOfBirth: string; email: string; createdAtUtc: string };
+/** "I'm busy" mode, on the profile: while it's active, auto-reply turns itself on for every connected app. */
+export type BusyProfile = {
+  enabled: boolean;
+  timezone: string;
+  start: string;
+  end: string;
+  days: number[];
+  until: string | null;
+  replyMode: "Ai" | "Fixed";
+  fixedMessage: string | null;
+  isBusyNow: boolean;
+};
+export type UpdateBusyRequest = Partial<Omit<BusyProfile, "isBusyNow" | "until">> & { until?: string; clearUntil?: boolean };
 export type UpdateProfileRequest = { firstName: string; lastName: string; gender: string; dateOfBirth: string };
 export type MessageResponse = { message: string };
 export type AccountProfile = { id: string; firstName: string; lastName: string; email: string; accessToken: string; expiresAt: string };
@@ -394,6 +407,8 @@ export const api = {
   register: (req: RegisterRequest) => apiFetch<MessageResponse>("/api/v1/account/register", json(req)),
   verifyOtp: (email: string, otp: string) => apiFetch<AccountProfile>("/api/v1/account/verify-otp", json({ email, otp })),
   me: () => apiFetch<UserDetails>("/api/v1/account/me"),
+  busy: () => apiFetch<BusyProfile>("/api/v1/account/me/busy"),
+  updateBusy: (req: UpdateBusyRequest) => apiFetch<BusyProfile>("/api/v1/account/me/busy", { method: "PUT", body: JSON.stringify(req) }),
   updateMe: (req: UpdateProfileRequest) => apiFetch<UserDetails>("/api/v1/account/me", { method: "PUT", body: JSON.stringify(req) }),
   changePassword: (currentPassword: string, newPassword: string) =>
     apiFetch<MessageResponse>("/api/v1/account/me/password", json({ currentPassword, newPassword })),

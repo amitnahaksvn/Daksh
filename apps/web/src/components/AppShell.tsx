@@ -9,6 +9,7 @@ import { openChatDock } from "@/components/ChatDock";
 import { api, type ConversationSummary } from "@/lib/api";
 import { NotificationBell } from "@/components/NotificationBell";
 import { UserBadge } from "@/components/UserBadge";
+import { BusyChip } from "@/components/BusyControls";
 import { tileClass } from "@/components/ui";
 import { FakeBadge } from "@/components/CommandCentre";
 import { setSidebarCollapsed, sidebarSnapshot, subscribeSidebar } from "@/lib/sidebarPref";
@@ -30,7 +31,7 @@ function MobileBar() {
   return (
     <div className="sticky top-0 z-30 -mx-3 -mt-3 flex items-center justify-between gap-2 bg-canvas/95 px-3 py-2 backdrop-blur md:hidden">
       <DakshaBrand compact />
-      <div className="flex items-center gap-2"><StyleToggle /><NotificationBell /><UserBadge /></div>
+      <div className="flex items-center gap-2"><StyleToggle /><BusyChip /><NotificationBell /><UserBadge /></div>
     </div>
   );
 }
@@ -155,7 +156,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <header className={`z-30 hidden items-center justify-between gap-3 p-3 md:sticky md:top-4 md:flex ${tileClass}`}>
             {/* The search box is hidden for now (TopSearch is kept below). The dashboard page puts its Ask / dashboard tabs here. */}
             <div id="topbar-slot" className="min-w-0 flex-1" />
-            <div className="flex items-center gap-3"><NotificationBell /><UserBadge /></div>
+            <div className="flex items-center gap-3"><BusyChip /><NotificationBell /><UserBadge /></div>
           </header>
           {children}
         </main>

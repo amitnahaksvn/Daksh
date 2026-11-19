@@ -34,6 +34,8 @@ public sealed class ApplicationUser
     public bool LockoutEnabled { get; set; } = true;
     public DateTimeOffset? LockoutEnd { get; set; }
     public int AccessFailedCount { get; set; }
+    /// <summary>"I'm busy" mode: auto-reply on every connected app while the owner is busy.</summary>
+    public BusyProfile Busy { get; set; } = new();
 }
 
 public sealed class PendingRegistration
@@ -187,6 +189,41 @@ public static class AccountModule
         me.MapGet("", GetMeAsync);
         me.MapPut("", UpdateMeAsync).Validate<UpdateProfileRequest>();
         me.MapPost("/password", ChangePasswordAsync).Validate<ChangePasswordRequest>();
+        me.MapGet("/busy", GetBusyAsync);
+        me.MapPut("/busy", UpdateBusyAsync);
+    }
+
+    private static BusyProfileDto ToBusyDto(BusyProfile b) =>
+        new(b.Enabled, b.Timezone, b.Start, b.End, b.Days, b.Until, b.ReplyMode, b.FixedMessage, BusyMode.IsBusy(b, DateTime.UtcNow));
+
+    private static async Task<IResult> GetBusyAsync(IMongoDatabase db, ClaimsPrincipalAccessor who, CancellationToken ct) =>
+        Results.Ok(ToBusyDto(await BusyMode.LoadAsync(db, who.UserId, ct) ?? new BusyProfile()));
+
+    private static async Task<IResult> UpdateBusyAsync(UpdateBusyProfileRequest req, IMongoDatabase db, ClaimsPrincipalAccessor who, CancellationToken ct)
+    {
+        var users = db.GetCollection<ApplicationUser>("users");
+        var user = await users.Find(u => u.Id == who.UserId).FirstOrDefaultAsync(ct);
+        if (user is null) return Results.NotFound();
+        var b = user.Busy ?? new BusyProfile();
+
+        if (req.Timezone is { } tz)
+        {
+            if (tz.Length > 0 && !BusyMode.IsValidTimezone(tz)) return Results.Problem(statusCode: 400, title: "Unknown timezone. Use a name like Asia/Kolkata.");
+            b.Timezone = tz;
+        }
+        if (req.Start is { } start) { if (!TimeSpan.TryParse(start, out _)) return Results.Problem(statusCode: 400, title: "Busy start must be a time like 09:00."); b.Start = start; }
+        if (req.End is { } end) { if (!TimeSpan.TryParse(end, out _)) return Results.Problem(statusCode: 400, title: "Busy end must be a time like 18:00."); b.End = end; }
+        if (req.Days is { } days) b.Days = days.Where(d => d is >= 0 and <= 6).Distinct().Order().ToList();
+        if (req.Until is { } until) b.Until = until.ToUniversalTime();
+        if (req.ClearUntil == true) b.Until = null;
+        if (req.ReplyMode is { } mode) b.ReplyMode = mode == "Fixed" ? "Fixed" : "Ai";
+        if (req.FixedMessage is { } msg) b.FixedMessage = msg.Length > 1000 ? msg[..1000] : msg;
+        // Starting a busy period from the quick button also switches the mode on.
+        if (req.Enabled is { } enabled) b.Enabled = enabled;
+        else if (req.Until is not null) b.Enabled = true;
+
+        await users.UpdateOneAsync(u => u.Id == who.UserId, Builders<ApplicationUser>.Update.Set(u => u.Busy, b), cancellationToken: ct);
+        return Results.Ok(ToBusyDto(b));
     }
 
     private static UserDetails ToDetails(ApplicationUser u) =>

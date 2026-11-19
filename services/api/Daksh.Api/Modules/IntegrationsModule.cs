@@ -710,7 +710,7 @@ public static class IntegrationsModule
         {
             "Always" => true,
             "Never" => false,
-            _ => connection.AutoReplyEnabled && (!isGroup || connection.AutoReplyInGroups),
+            _ => (connection.AutoReplyEnabled || BusyMode.IsBusy(await BusyMode.LoadAsync(db, connection.UserId, ct), DateTime.UtcNow)) && (!isGroup || connection.AutoReplyInGroups),
         };
         if (!repliedByRule && autoReplyAllowed && passesMonitoring && !IsCallNotice(evt.Preview))
             // The reply can legitimately take minutes (response delay, batching, the AI call). If the caller hangs up meanwhile -- the
@@ -740,8 +740,11 @@ public static class IntegrationsModule
             var forcedIn = force || chatRule?.AutoReply == "Always";
             if (!forcedIn && settings.AutoReplyScope == "SelectedOnly" && !settings.AutoReplyAllowedChats.Contains(chatId)) return;
 
-            var withinHours = IsWithinActiveHours(settings);
-            var useOutsideHoursMessage = !force && !withinHours && !string.IsNullOrWhiteSpace(settings.OutsideHoursMessage);
+            // Busy mode (set on the owner's profile, for all apps) overrides the active-hours rules: being busy IS the reason to answer.
+            var busyProfile = await BusyMode.LoadAsync(db, connection.UserId, ct);
+            var busy = BusyMode.IsBusy(busyProfile, DateTime.UtcNow);
+            var withinHours = busy || IsWithinActiveHours(settings);
+            var useOutsideHoursMessage = !busy && !force && !withinHours && !string.IsNullOrWhiteSpace(settings.OutsideHoursMessage);
             if (!force && !settings.OperateContinuously && !withinHours && !useOutsideHoursMessage) return;
 
             var messages = db.GetCollection<WhatsAppMessage>("whatsappMessages");
@@ -792,6 +795,10 @@ public static class IntegrationsModule
             else if (useOutsideHoursMessage)
             {
                 replyText = settings.OutsideHoursMessage!;
+            }
+            else if (busy && !force && BusyMode.FixedReply(busyProfile) is { } busyFixed)
+            {
+                replyText = busyFixed;
             }
             else if (isBusiness && !force && !string.IsNullOrWhiteSpace(settings.BusinessMessage))
             {
