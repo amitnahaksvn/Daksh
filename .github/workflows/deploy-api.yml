@@ -1,0 +1,31 @@
+name: Deploy api
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - global.json
+      - Directory.Build.props
+      - infrastructure/docker/api.Dockerfile
+      - services/api/**
+      - services/platform/**
+      - services/shared/**
+      - services/integrations/**
+      - services/ai/**
+      - .github/workflows/deploy-api.yml
+      - .github/workflows/_deploy-container-app.yml
+
+permissions:
+  id-token: write
+  contents: read
+  packages: write
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/_deploy-container-app.yml
+    with:
+      service: api
+      dockerfile: infrastructure/docker/api.Dockerfile
+      container_app: ${{ vars.AZURE_CONTAINERAPP_API || 'daksh-api' }}
+
+    secrets: inherit

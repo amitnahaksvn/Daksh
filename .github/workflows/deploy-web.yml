@@ -1,0 +1,25 @@
+name: Deploy web
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - apps/web/**
+      - infrastructure/docker/web.Dockerfile
+      - .github/workflows/deploy-web.yml
+      - .github/workflows/_deploy-container-app.yml
+
+permissions:
+  id-token: write
+  contents: read
+  packages: write
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/_deploy-container-app.yml
+    with:
+      service: web
+      dockerfile: infrastructure/docker/web.Dockerfile
+      container_app: ${{ vars.AZURE_CONTAINERAPP_WEB || 'daksh-web' }}
+      build_args: NEXT_PUBLIC_API_URL=https://${{ vars.API_FQDN }}
+    secrets: inherit
