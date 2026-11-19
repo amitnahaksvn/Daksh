@@ -74,7 +74,7 @@ export function AssistantChat({ tall = false }: { tall?: boolean }) {
   const submit = (e: React.FormEvent) => { e.preventDefault(); void send(); };
 
   return (
-    <section aria-label="Conversation" className={`flex flex-col gap-4 p-4 ${tall ? "min-h-[calc(100vh-17rem)]" : ""} ${tileClass}`}>
+    <section aria-label="Conversation" className={`flex flex-col gap-4 p-4 ${tall ? "min-h-[calc(100dvh-15rem)] md:min-h-[calc(100dvh-12rem)]" : ""} ${tileClass}`}>
       <ol aria-live="polite" className={`flex flex-1 flex-col gap-3 ${tall ? "min-h-[16rem]" : "min-h-64"}`}>
         {lines.length === 0 && !busy && (
           <li className={`flex flex-1 flex-col items-center justify-center gap-4 text-center ${tall ? "py-16" : "py-6"}`}>
