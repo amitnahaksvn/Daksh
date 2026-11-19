@@ -3,9 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ThemeHero } from "./ThemeHero";
 import { AppShell } from "./AppShell";
 import { api, type DashboardApp } from "@/lib/api";
-import { THEMES, STYLE_KEY, LAYOUT_KEY } from "@/lib/theme";
+import { THEMES, STYLE_KEY } from "@/lib/theme";
 
-vi.mock("next/link", () => ({ default: ({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) => <a href={href} className={className}>{children}</a> }));
+vi.mock("next/link", () => ({ default: ({ href, children, className, ...rest }: { href: string; children: React.ReactNode; className?: string; "aria-current"?: "page" }) => <a href={href} className={className} aria-current={rest["aria-current"]}>{children}</a> }));
 vi.mock("next/navigation", () => ({ usePathname: () => "/dashboard", useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("next/image", () => ({ default: () => null }));
 vi.mock("./NotificationBell", () => ({ NotificationBell: () => null }));
@@ -45,19 +45,28 @@ describe("every theme has its own dashboard hero", () => {
   });
 });
 
-describe("app shell follows the theme", () => {
-  it.each([["hybrid", "sidebar"], ["ratna", "rail"], ["galaxy", "top"]])("%s uses the %s shell", (id, shell) => {
+describe("every theme has a sidebar menu of its own", () => {
+  it.each(THEMES.map((t) => t.id))("%s renders a sidebar with its own menu and both destinations", (id) => {
     window.localStorage.setItem(STYLE_KEY, id);
     const { container } = render(<AppShell><p>page</p></AppShell>);
-    expect(container.querySelector(`[data-shell="${shell}"]`)).not.toBeNull();
+    expect(container.querySelector(`[data-nav="${id}"]`)).not.toBeNull();
+    expect(container.querySelector("aside")).not.toBeNull();
+    const nav = screen.getAllByRole("navigation", { name: "Main" })[0];
+    expect(nav.textContent).toContain("Dashboard");
+    expect(nav.textContent).toContain("Apps");
+    expect(nav.querySelector('[aria-current="page"]')).not.toBeNull(); // the current page is marked
     expect(screen.getByText("page")).toBeTruthy();
     expect(screen.getByLabelText("Main (mobile)")).toBeTruthy();
   });
 
-  it.each([["galaxy", "sidebar"], ["hybrid", "top"], ["prana", "rail"]])("%s can be switched to the %s layout by choice", (id, layout) => {
-    window.localStorage.setItem(STYLE_KEY, id);
-    window.localStorage.setItem(LAYOUT_KEY, layout);
-    const { container } = render(<AppShell><p>page</p></AppShell>);
-    expect(container.querySelector(`[data-shell="${layout}"]`)).not.toBeNull();
+  it("draws the menu differently in each theme", () => {
+    const seen = new Set<string>();
+    for (const t of THEMES) {
+      window.localStorage.setItem(STYLE_KEY, t.id);
+      const { container, unmount } = render(<AppShell><p>x</p></AppShell>);
+      seen.add(container.querySelector("aside nav")!.innerHTML);
+      unmount();
+    }
+    expect(seen.size).toBe(THEMES.length);
   });
 });
