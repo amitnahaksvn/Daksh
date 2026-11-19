@@ -29,7 +29,7 @@ public static class TasksModule
 {
     public static void MapTasksAndReminders(this IEndpointRouteBuilder app)
     {
-        var t = app.MapGroup("/api/v1/tasks").RequireAuthorization().WithTags("Tasks");
+        var t = app.MapGroup("/api/v1/tasks").RequireAuthorization(AuthSetup.UserScheme).WithTags("Tasks");
 
         t.MapGet("/", (HttpContext http) =>
             Results.Problem(statusCode: 501, title: "Tasks are unavailable: pending MongoDB rebuild."));
@@ -40,7 +40,7 @@ public static class TasksModule
         t.MapPost("/{id:guid}/complete", (Guid id, HttpContext http) =>
             Results.Problem(statusCode: 501, title: "Tasks are unavailable: pending MongoDB rebuild."));
 
-        var r = app.MapGroup("/api/v1/reminders").RequireAuthorization().WithTags("Reminders");
+        var r = app.MapGroup("/api/v1/reminders").RequireAuthorization(AuthSetup.UserScheme).WithTags("Reminders");
 
         r.MapGet("/", (HttpContext http) =>
             Results.Problem(statusCode: 501, title: "Reminders are unavailable: pending MongoDB rebuild."));
