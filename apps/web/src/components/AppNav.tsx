@@ -6,6 +6,7 @@ export const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/apps", label: "Apps" },
   { href: "/lists", label: "Lists" },
+  { href: "/calendar", label: "Calendar" },
 ];
 
 export function AppNav() {

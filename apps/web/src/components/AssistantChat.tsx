@@ -43,7 +43,7 @@ export function AssistantChat({ tall = false }: { tall?: boolean }) {
   // The owner has not yet allowed the AI provider to see their data: hold the question and ask once.
   const [consent, setConsent] = useState(false);
   const box = useRef<HTMLTextAreaElement>(null);
-  const endRef = useRef<HTMLLIElement>(null);
+  const listRef = useRef<HTMLOListElement>(null);
 
   // The sidebar's chat history opens a past chat here, or starts a fresh one (no id).
   useEffect(() => {
@@ -68,8 +68,8 @@ export function AssistantChat({ tall = false }: { tall?: boolean }) {
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
   }, [text]);
-  // Keep the newest message in view.
-  useEffect(() => { endRef.current?.scrollIntoView?.({ block: "end" }); }, [lines, busy]);
+  // Keep the newest message in view by scrolling the conversation itself (never the page), so the message box stays put.
+  useEffect(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight; }, [lines, busy]);
 
   async function send() {
     const message = text.trim();
@@ -112,8 +112,9 @@ export function AssistantChat({ tall = false }: { tall?: boolean }) {
   }
 
   return (
-    <section aria-label="Conversation" className={`flex flex-col gap-4 p-4 ${tall ? "min-h-[calc(100dvh-11rem)] md:min-h-[calc(100dvh-9.5rem)]" : ""} ${tileClass}`}>
-      <ol aria-live="polite" className={`flex flex-1 flex-col gap-3 ${tall ? "min-h-[16rem]" : "min-h-64"}`}>
+    // A fixed-height column: the conversation fills it and scrolls inside, while the message box below never moves.
+    <section aria-label="Conversation" className={`flex flex-col gap-4 p-4 ${tall ? "h-[calc(100dvh-11rem)] md:h-[calc(100dvh-9.5rem)]" : "max-h-[75dvh]"} ${tileClass}`}>
+      <ol ref={listRef} aria-live="polite" className={`flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain ${tall ? "" : "min-h-64"}`}>
         {lines.length === 0 && !busy && (
           <li className={`flex flex-1 flex-col items-center justify-center gap-4 text-center ${tall ? "py-6" : "py-6"}`}>
             <Orb size={tall ? 88 : 64} />
@@ -154,10 +155,9 @@ export function AssistantChat({ tall = false }: { tall?: boolean }) {
             <span className="sr-only">Daksh is thinking</span>
           </li>
         )}
-        <li ref={endRef} aria-hidden className="h-0" />
       </ol>
       {consent && (
-        <div role="alert" className="rounded-2xl border border-line bg-surface-2 p-4 text-sm">
+        <div role="alert" className="shrink-0 rounded-2xl border border-line bg-surface-2 p-4 text-sm">
           <p className="font-semibold">Allow Daksha to use its AI provider?</p>
           <p className="mt-1 text-muted">To answer, your question and any app data it needs (for example the chat or the mail you ask about) are sent to the AI provider. Daksha only reads; it never sends or changes anything from here. You can turn this off later in your privacy settings.</p>
           <div className="mt-3 flex gap-2">
@@ -166,8 +166,8 @@ export function AssistantChat({ tall = false }: { tall?: boolean }) {
           </div>
         </div>
       )}
-      {error && <p role="alert" className="text-sm font-medium text-danger">{error}</p>}
-      <form onSubmit={submit} className="flex items-end gap-2 rounded-2xl border border-line bg-surface-2 p-2">
+      {error && <p role="alert" className="shrink-0 text-sm font-medium text-danger">{error}</p>}
+      <form onSubmit={submit} className="flex shrink-0 items-end gap-2 rounded-2xl border border-line bg-surface-2 p-2">
         <label htmlFor="message" className="sr-only">Message</label>
         <textarea
           id="message" ref={box} rows={1} value={text} onChange={(e) => setText(e.target.value)} maxLength={4000}

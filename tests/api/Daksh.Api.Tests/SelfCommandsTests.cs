@@ -209,8 +209,25 @@ public class SelfAssistantTests
         Assert.Equal("17:30", SelfAssistant.ParseIntent("{\"intent\":\"busy\",\"until\":\"17:30\"}").Command!.UntilClock);
     }
 
-    [Theory] [InlineData("a")] [InlineData("")] [InlineData("https://example.com")]
-    public void Trivial_messages_are_not_candidates(string text) => Assert.False(SelfAssistant.IsCandidate(text));
+    [Theory] [InlineData("")] [InlineData("   ")]
+    public void Empty_messages_are_not_candidates(string text) => Assert.False(SelfAssistant.IsCandidate(text));
+
+    [Theory] [InlineData("a")] [InlineData("https://example.com")] [InlineData("remember the wifi password is abc")]
+    public void Everything_else_in_your_own_chat_is_for_Daksha(string text) => Assert.True(SelfAssistant.IsCandidate(text));
+
+    [Theory]
+    [InlineData("https://youtu.be/abc123", "link")] [InlineData("www.example.com/page", "link")] [InlineData("📷 Photo", "photo")] [InlineData("🎥 Video", "video")]
+    [InlineData("🎤 Voice message", "voice note")] [InlineData("🎵 Audio", "voice note")] [InlineData("📄 Document", "file")]
+    public void A_link_or_media_with_no_instruction_is_a_drop(string text, string kind) => Assert.Equal(kind, SelfAssistant.DropKind(text));
+
+    [Theory] [InlineData("save https://example.com to reading list")] [InlineData("what is on my calendar")] [InlineData("Photo of the receipt for Ravi")]
+    public void Text_with_an_instruction_or_caption_is_not_a_drop(string text) => Assert.Null(SelfAssistant.DropKind(text));
+
+    [Theory] [InlineData("hi")] [InlineData("Hello!")] [InlineData("hey daksha")] [InlineData("good morning")] [InlineData("are you there?")] [InlineData("test")]
+    public void Greetings_are_for_the_assistant(string text) { Assert.True(SelfAssistant.IsGreeting(text)); Assert.True(SelfAssistant.LooksLikeQuestion(text)); }
+
+    [Theory] [InlineData("hi mom is coming at 5")] [InlineData("buy milk")] [InlineData("high protein diet plan")]
+    public void Other_text_is_not_a_greeting(string text) => Assert.False(SelfAssistant.IsGreeting(text));
 
     [Fact] public void Our_own_replies_are_not_candidates() => Assert.False(SelfAssistant.IsCandidate(SelfCommands.ReplyMarker + "hello there"));
 

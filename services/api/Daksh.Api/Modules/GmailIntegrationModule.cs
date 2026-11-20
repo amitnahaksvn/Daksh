@@ -141,7 +141,7 @@ public static partial class GmailIntegrationModule
             ["include_granted_scopes"] = "true",
             ["state"] = state,
             ["access_type"] = "offline",
-            ["prompt"] = "consent",
+            ["prompt"] = "consent select_account", // always show Google's account chooser, so a second (third…) Google account can be added instead of silently re-using the signed-in one
             ["code_challenge"] = codeChallenge,
             ["code_challenge_method"] = "S256",
         });

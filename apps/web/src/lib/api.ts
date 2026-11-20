@@ -127,6 +127,9 @@ export type BusyProfile = {
   isBusyNow: boolean;
 };
 export type UpdateBusyRequest = Partial<Omit<BusyProfile, "isBusyNow" | "until">> & { until?: string; clearUntil?: boolean };
+export type CalendarEvent = { id: string; title: string; start: string; end: string; allDay: boolean; location?: string | null; htmlLink?: string | null; accountId?: string; account?: string };
+export type CalendarAccount = { id: string; email: string; hasCalendar: boolean; isDefault: boolean; error?: string | null };
+export type CalendarEvents = { connected: boolean; status: "Ok" | "NeedsAccess" | "Failed"; message?: string | null; timezone: string; today: string; events: CalendarEvent[]; accounts: CalendarAccount[] };
 export type ListItem = { id: string; list: string; text: string; done: boolean; createdAt: string };
 /** Copy one-time codes from email to your own WhatsApp / Telegram chat. */
 export type OtpForward = { enabled: boolean; whatsApp: boolean; telegram: boolean; whatsAppConnected: boolean; telegramConnected: boolean };
@@ -416,6 +419,11 @@ export const api = {
   addListItem: (list: string, text: string) => apiFetch<ListItem>("/api/v1/lists", { method: "POST", body: JSON.stringify({ list, text }) }),
   toggleListItem: (id: string) => apiFetch<void>(`/api/v1/lists/${id}/toggle`, { method: "POST" }),
   deleteListItem: (id: string) => apiFetch<void>(`/api/v1/lists/${id}`, { method: "DELETE" }),
+  calendarEvents: (from: string, to: string) => apiFetch<CalendarEvents>(`/api/v1/calendar/events?from=${from}&to=${to}`),
+  addCalendarEvent: (title: string, start: string, minutes: number, location?: string, accountId?: string) => apiFetch<CalendarEvent>("/api/v1/calendar/events", { method: "POST", body: JSON.stringify({ title, start, minutes, location: location || null, accountId: accountId || null }) }),
+  updateCalendarEvent: (id: string, accountId: string | undefined, change: { title?: string; start?: string; minutes?: number; location?: string }) =>
+    apiFetch<CalendarEvent>(`/api/v1/calendar/events/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ ...change, accountId: accountId || null }) }),
+  deleteCalendarEvent: (id: string, accountId?: string) => apiFetch<void>(`/api/v1/calendar/events/${encodeURIComponent(id)}${accountId ? `?account=${encodeURIComponent(accountId)}` : ""}`, { method: "DELETE" }),
   otpForward: () => apiFetch<OtpForward>("/api/v1/account/me/otp-forward"),
   updateOtpForward: (req: Partial<Pick<OtpForward, "enabled" | "whatsApp" | "telegram">>) => apiFetch<OtpForward>("/api/v1/account/me/otp-forward", { method: "PUT", body: JSON.stringify(req) }),
   busy: () => apiFetch<BusyProfile>("/api/v1/account/me/busy"),

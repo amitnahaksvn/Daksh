@@ -15,7 +15,8 @@ export function callbackError(reason: string | null) {
 }
 
 /** "Continue with Google": opens Google sign-in in a popup; the popup reports back via postMessage. */
-export function GmailConnectCard({ onConnected, initialError }: { onConnected: () => void; initialError?: string | null }) {
+export function GmailConnectCard({ onConnected, initialError, title = "Connect your Gmail account", description = "Continue to Google to sign in and approve Gmail access. Daksh never asks for or stores your Google password.", buttonLabel = "Continue with Google" }:
+  { onConnected: () => void; initialError?: string | null; title?: string; description?: string; buttonLabel?: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(initialError ?? null);
   const popupRef = useRef<Window | null>(null);
@@ -62,13 +63,11 @@ export function GmailConnectCard({ onConnected, initialError }: { onConnected: (
 
   return (
     <section className={`p-6 ${tileClass}`}>
-      <h2 className="text-xl font-bold">Connect your Gmail account</h2>
-      <p className="mt-2 text-sm text-muted">
-        Continue to Google to sign in and approve Gmail access. Daksh never asks for or stores your Google password.
-      </p>
+      <h2 className="text-xl font-bold">{title}</h2>
+      <p className="mt-2 text-sm text-muted">{description}</p>
       {error && <p role="alert" className="mt-3 rounded-[1.25rem] bg-danger-bg p-3 text-sm text-danger">{error}</p>}
       <button onClick={connect} disabled={busy} className={`${buttonClass} mt-5`}>
-        {busy ? "Waiting for Google…" : "Continue with Google"}
+        {busy ? "Waiting for Google…" : buttonLabel}
       </button>
     </section>
   );

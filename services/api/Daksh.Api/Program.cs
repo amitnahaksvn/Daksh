@@ -70,6 +70,7 @@ app.MapHealthChecks("/health/ready", new() { Predicate = r => r.Tags.Contains("r
 app.MapAssistant();
 app.MapTasksAndReminders();
 ListsModule.Map(app);
+CalendarModule.Map(app);
 app.MapPlatform();
 app.MapAccount();
 app.MapIntegrations();

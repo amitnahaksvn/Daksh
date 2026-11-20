@@ -14,6 +14,13 @@ namespace Daksh.Api.Modules;
 public static class SelfAssistant
 {
     private static readonly Regex Addressed = new(@"^\s*(hey |hi |ok |okay )?(daksha|daksh)\b[\s,:\-]*", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    /// <summary>"hi", "hello", "are you there", "good morning", "test": said to your own chat, that is you talking to the assistant.</summary>
+    private static readonly Regex Greeting = new(
+        @"^\s*(hi+|hii+|hey+|hello+|hola|namaste|namaskar|yo|sup|good\s+(morning|afternoon|evening|night)|gm|are\s+you\s+(there|working|up|awake)|you\s+there|test(ing)?|ping)\b[\s\p{P}\p{S}]*(daksha|daksh)?[\s\p{P}\p{S}]*$",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    public static bool IsGreeting(string? text) => Greeting.IsMatch(text ?? "");
+
     private static readonly Regex QuestionStart = new(
         @"^\s*(what|whats|what's|who|whom|when|where|which|why|how|any|anything|is|are|do|does|did|have|has|can|could|show|tell|give|list|check|find|search|read|summari[sz]e|remind|pending|status|latest|last|new)\b",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -22,28 +29,52 @@ public static class SelfAssistant
     public static bool LooksLikeQuestion(string? text)
     {
         var t = (text ?? "").Trim();
-        if (t.Length < 3 || t.Length > 500 || t.StartsWith(SelfCommands.ReplyMarker, StringComparison.Ordinal)) return false;
+        if (t.Length > 500 || t.StartsWith(SelfCommands.ReplyMarker, StringComparison.Ordinal)) return false;
+        if (IsGreeting(t)) return true;
+        if (t.Length < 3) return false;
         if (SelfCommands.Parse(t).Kind != SelfCommandKind.None) return false;
         if (Regex.IsMatch(t, @"^\s*(https?://|www\.)\S+\s*$", RegexOptions.IgnoreCase)) return false; // a pasted link is a note
-        return Addressed.IsMatch(t) || t.EndsWith('?') || QuestionStart.IsMatch(t);
+        return IsGreeting(t) || Addressed.IsMatch(t) || t.EndsWith('?') || QuestionStart.IsMatch(t);
     }
 
-    /// <summary>True when a message in your own chat is worth looking at: not our own reply, not empty, not just a pasted link.</summary>
+    /// <summary>True for anything the owner types or drops in their own chat except our own replies and empty messages: it is all meant for Daksha.</summary>
     public static bool IsCandidate(string? text)
     {
         var t = (text ?? "").Trim();
-        if (t.Length < 2 || t.Length > 1000 || t.StartsWith(SelfCommands.ReplyMarker, StringComparison.Ordinal)) return false;
-        return !Regex.IsMatch(t, @"^\s*(https?://|www\.)\S+\s*$", RegexOptions.IgnoreCase);
+        return t.Length is >= 1 and <= 4000 && !t.StartsWith(SelfCommands.ReplyMarker, StringComparison.Ordinal);
     }
+
+    private static readonly Regex BareLink = new(@"^\s*(https?://|www\.)\S+\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly HashSet<string> MediaLabels = new(StringComparer.OrdinalIgnoreCase)
+        { "📷 Photo", "🎥 Video", "🎤 Voice message", "📄 Document", "🎵 Audio", "Sticker", "Photo", "Video", "Voice message", "Document", "Audio", "GIF" };
+
+    /// <summary>What was dropped when it came with no instruction: a bare link, or a photo/video/voice note/file with no caption. Null for ordinary text.</summary>
+    public static string? DropKind(string? text)
+    {
+        var t = (text ?? "").Trim();
+        if (BareLink.IsMatch(t)) return "link";
+        if (MediaLabels.Contains(t)) return t.Contains("Photo", StringComparison.OrdinalIgnoreCase) ? "photo" : t.Contains("Video", StringComparison.OrdinalIgnoreCase) || t == "GIF" ? "video"
+            : t.Contains("Voice", StringComparison.OrdinalIgnoreCase) || t.Contains("Audio", StringComparison.OrdinalIgnoreCase) ? "voice note" : t == "Sticker" ? "sticker" : "file";
+        return null;
+    }
+
+    private static string AskAboutDrop(string kind) => kind switch
+    {
+        "link" => "🔗 What should I do with this link? I can save it to a list (like Reading or To-do), put it on your calendar, or note it for later. Just tell me.",
+        "voice note" => "🎤 What should I do with this voice note? I can't listen to audio yet, but tell me what it's about and I can add it to a list, set it on your calendar, or message someone about it.",
+        "sticker" => "What would you like me to do with this?",
+        _ => $"📎 What should I do with this {kind}? I can't open {(kind == "file" ? "files" : kind + "s")} yet, but tell me what it's about and I can add it to a list, put it on your calendar, or message someone about it.",
+    };
 
     private const string IntentPrompt = """
         You watch the private "message yourself" chat of a user. They write there both notes to themselves and requests to their personal AI assistant, and never say the assistant's name.
-        Decide whether the message is meant FOR the assistant (a request to do something, or a question about their lists, busy status, email, chats, OTPs, reminders, calendar, tasks) or is just a note to self (a thought, a reminder text, a pasted snippet, an address, a draft, small talk).
+        Everything they write here is meant FOR the assistant: treat it as them talking to you. Work out what they want: a request to do something, or a question about their lists, busy status, email, chats, OTPs, reminders, calendar, tasks, or just a chat.
         The user is the account owner and what they ask is an order. Polite or indirect phrasing ("can you add...", "please...", "could you...", "I want you to...") is a request for the assistant, never a note.
-        Choose "ignore" only when the message plainly is not asking the assistant for anything.
+        Greetings and small talk to the assistant ("hi", "hello", "are you there", "good morning", "thanks", "test") are for the assistant: choose "question" so it replies.
+        If the message is something dropped with no instruction (a pasted snippet, address, forwarded text, a thought, a name) and you cannot tell what they want, choose "ask" and write ONE short friendly question in "ask" offering two or three things you can do (save to a list, put on the calendar, message someone). Do not choose "ask" when the message is a question or request you can answer or act on.
         Reply with ONE line of JSON and nothing else:
-        {"intent":"ignore|question|busy|free|add|remove|show|event|calendar|send","list":null,"text":null,"minutes":null,"until":null,"note":null,"title":null,"start":null,"location":null,"from":null,"to":null}
-        - "question": they want information or help; the assistant will answer it.
+        {"intent":"question|ask|busy|free|add|remove|show|event|calendar|send","list":null,"text":null,"minutes":null,"until":null,"note":null,"title":null,"start":null,"location":null,"from":null,"to":null,"ask":null}
+        - "question": they want information, help, or are just chatting; the assistant will answer it.
         - "busy": they want auto-replies on. Set "minutes" (number) or "until" ("HH:mm", 24h), and "note" for a reason if given.
         - "free": they want auto-replies off.
         - "add": add "text" to the list named in "list". Use one of the user's existing lists when the wording matches it; set "list" to null whenever the user did not name a list (do not guess one).
@@ -70,13 +101,26 @@ public static class SelfAssistant
             var name = ListsModule.CleanName(Regex.Replace(text.Trim(), @"^(to |in |into |on |the |my )+|(\s+list)\s*$", "", RegexOptions.IgnoreCase));
             return await SelfCommands.ExecuteAsync(db, userId, new SelfCommand(SelfCommandKind.AddItem, name, pending), DateTime.UtcNow, ct);
         }
-        if (cmd.Kind != SelfCommandKind.None) return await SelfCommands.ExecuteAsync(db, userId, cmd, DateTime.UtcNow, ct);
+        var dropped = TakeDrop(userId);
+        if (cmd.Kind != SelfCommandKind.None)
+        {
+            // "add this to my reading list" right after dropping a link: "this" means the thing just dropped.
+            if (dropped is not null && cmd.Kind == SelfCommandKind.AddItem && Regex.IsMatch(cmd.Text ?? "", @"^(this|it|that|this one|that one|the (link|photo|video|file|image|pic|picture|voice note))$", RegexOptions.IgnoreCase))
+                cmd = cmd with { Text = dropped };
+            return await SelfCommands.ExecuteAsync(db, userId, cmd, DateTime.UtcNow, ct);
+        }
 
+        if (DropKind(text) is { } kind && cmd.Kind == SelfCommandKind.None)
+        {
+            SetDrop(userId, text.Trim());
+            return SelfCommands.ReplyMarker + AskAboutDrop(kind);
+        }
+        if (IsGreeting(text)) return await AnswerAsync(db, orchestrator, protector, config, clients, userId, text, log, ct); // a hello is always answered; no classifier call needed
         var privacy = await PrivacyStore.GetAsync(db, userId, ct);
         if (!privacy.AllowProviderDataSharing)
         {
-            // Without consent nothing can be sent to the AI to judge the message, so only the obvious questions are acted on.
-            return LooksLikeQuestion(text) ? await AnswerAsync(db, orchestrator, protector, config, clients, userId, text, log, ct) : null;
+            // Without consent nothing can be sent to the AI, so tell the owner what to switch on rather than staying silent.
+            return await AnswerAsync(db, orchestrator, protector, config, clients, userId, text, log, ct);
         }
 
         SelfIntent intent;
@@ -86,19 +130,23 @@ public static class SelfAssistant
             var tz = await CalendarAssistant.TimezoneAsync(db, userId, ct);
             var now = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
             var known = (lists.Count == 0 ? "The user has no lists yet." : "The user's existing lists: " + string.Join(", ", lists) + ".")
-                + $"\nCurrent local time: {now:dddd yyyy-MM-dd HH:mm} ({tz.Id}).";
+                + $"\nCurrent local time: {now:dddd yyyy-MM-dd HH:mm} ({tz.Id})."
+                + (dropped is null ? "" : $"\nA moment ago the user dropped this in the chat without an instruction: \"{dropped}\". Their message is most likely an instruction about it (\"save it\", \"add this to my reading list\", \"remind me\"); when so, use its content as the item \"text\".");
             var result = await orchestrator.RespondAsync(new AssistantRequest(new UserAiContext(userId, false, AllowProviderDataSharing: true), text, null, known, IntentPrompt), ct);
             intent = ParseIntent(result.IsSimulated ? null : result.Text);
         }
         catch (Exception ex)
         {
-            log.LogWarning(ex, "Could not read the intent of a message in the owner's own chat for user {UserId}; leaving it alone", userId);
-            return null;
+            log.LogWarning(ex, "Could not read the intent of a message in the owner's own chat for user {UserId}", userId);
+            return SelfCommands.ReplyMarker + "ℹ️ I couldn't process that right now. Please try again in a minute.";
         }
 
         log.LogInformation("Own-chat message read as {Intent} for user {UserId}", intent.Name, userId);
         switch (intent.Name)
         {
+            case "ask":
+                SetDrop(userId, text.Trim());
+                return SelfCommands.ReplyMarker + (intent.Arg("ask") ?? "What would you like me to do with this? I can save it to a list, put it on your calendar, or message someone about it.");
             case "event":
             {
                 if (intent.Arg("title") is not { } title || !DateTime.TryParse(intent.Arg("start"), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var start))
@@ -131,9 +179,14 @@ public static class SelfAssistant
             return SelfCommands.ReplyMarker + $"Which list should I add \"{add.Text}\" to? ({options}, or any new name). Reply with the list name, or \"cancel\".";
         }
         if (intent.Command is { } c) return await SelfCommands.ExecuteAsync(db, userId, c, DateTime.UtcNow, ct);
-        if (intent.Name == "question") return await AnswerAsync(db, orchestrator, protector, config, clients, userId, text, log, ct);
-        return null;
+        // A question, chat, or anything the reader could not place: Daksha answers it.
+        return await AnswerAsync(db, orchestrator, protector, config, clients, userId, text, log, ct, dropped);
     }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string Text, DateTime At)> Drops = new();
+    private static void SetDrop(string userId, string what) => Drops[userId] = (what.Length > 500 ? what[..500] : what, DateTime.UtcNow);
+    /// <summary>What the owner dropped in the last few minutes without saying what to do with it (so "save it" next makes sense). Taking it clears it.</summary>
+    private static string? TakeDrop(string userId) => Drops.TryRemove(userId, out var d) && DateTime.UtcNow - d.At <= TimeSpan.FromMinutes(10) ? d.Text : null;
 
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string Text, DateTime At)> PendingAdds = new();
     private static readonly TimeSpan PendingFor = TimeSpan.FromMinutes(10);
@@ -172,7 +225,7 @@ public static class SelfAssistant
                 else if (prop.Value.ValueKind == JsonValueKind.Number) args[prop.Name] = prop.Value.GetRawText();
             switch (name)
             {
-                case "event": case "calendar": case "send": return new(name, null, args);
+                case "event": case "calendar": case "send": case "ask": return new(name, null, args);
                 case "question": return new("question");
                 case "free": return new("free", new SelfCommand(SelfCommandKind.Free));
                 case "show": return new("show", new SelfCommand(SelfCommandKind.ShowLists));
@@ -199,7 +252,7 @@ public static class SelfAssistant
 
     /// <summary>Answers a question for the account owner. Returns the message to send back (already marked as ours), or null if it should not be answered.</summary>
     public static async Task<string?> AnswerAsync(IMongoDatabase db, IAssistantOrchestrator orchestrator, ISecretProtector protector, IConfiguration config,
-        IHttpClientFactory clients, string userId, string text, ILogger log, CancellationToken ct)
+        IHttpClientFactory clients, string userId, string text, ILogger log, CancellationToken ct, string? dropped = null)
     {
         var question = StripAddress(text);
         if (question.Length < 2) return null;
@@ -220,7 +273,7 @@ public static class SelfAssistant
             catch (Exception ex) { log.LogWarning(ex, "Could not gather app data for a chat question; answering without it"); context = new AssistantContextResult("", []); }
 
             var chatStyle = "The person writing is the owner of this account and is giving you an instruction; do what they ask as far as your abilities and the app data allow. Never refuse or say you are not allowed or cannot 'from this chat'; if something truly cannot be done, say plainly what you can do instead (add or remove list items, set busy/free, answer questions about their data). Answer for a chat message: short, plain text, no markdown headings. Use short lines or a dash list when listing several things.";
-            var result = await orchestrator.RespondAsync(new AssistantRequest(new UserAiContext(userId, privacy.MemoryEnabled, AllowProviderDataSharing: true), question, null, chatStyle + "\n" + context.Text), ct);
+            var result = await orchestrator.RespondAsync(new AssistantRequest(new UserAiContext(userId, privacy.MemoryEnabled, AllowProviderDataSharing: true), question, null, chatStyle + (dropped is null ? "" : $"\nThe user earlier dropped this in the chat: \"{dropped}\". Their message is probably about it. You cannot open links or view images/videos/files, so say so briefly if that is what they ask for.") + "\n" + context.Text), ct);
             if (result.IsSimulated || string.IsNullOrWhiteSpace(result.Text)) return Reply("ℹ️ I couldn't get an answer from the AI right now. Please try again in a minute.");
             return Reply(result.Text.Trim());
         }
