@@ -15,15 +15,18 @@ public static class GmailScopes
     public const string Modify = "https://www.googleapis.com/auth/gmail.modify";
     public const string Labels = "https://www.googleapis.com/auth/gmail.labels";
     public const string SettingsBasic = "https://www.googleapis.com/auth/gmail.settings.basic";
+    /// <summary>Google Calendar: view and create events. Asked for in the same Google sign-in as Gmail so one approval covers both.</summary>
+    public const string Calendar = "https://www.googleapis.com/auth/calendar.events";
     /// <summary>Only scope that allows permanent deletion. Restricted: needs Google security assessment.</summary>
     public const string Full = "https://mail.google.com/";
 
-    /// <summary>What every account is connected with: read + send.</summary>
+    /// <summary>What accounts connected before Calendar was added have: read + send. New sign-ins also ask for <see cref="Calendar"/>.</summary>
     public static readonly string[] Base = [ReadOnly, Send];
 
     /// <summary>Optional feature groups the UI can request, and the single scope each one adds.</summary>
     public static readonly IReadOnlyDictionary<string, string> Features = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
+        ["calendar"] = Calendar,
         ["compose"] = Compose,
         ["modify"] = Modify,
         ["labels"] = Labels,
@@ -34,7 +37,7 @@ public static class GmailScopes
     /// <summary>Space-delimited scope string for the base scopes plus the requested feature groups. Unknown names are ignored.</summary>
     public static string ForFeatures(string? features)
     {
-        var scopes = new List<string>(Base);
+        var scopes = new List<string>(Base) { Calendar }; // every new sign-in also asks for Calendar; Google lets the user untick it
         foreach (var name in (features ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             if (Features.TryGetValue(name, out var scope) && !scopes.Contains(scope)) scopes.Add(scope);
         return string.Join(' ', scopes);
@@ -55,6 +58,7 @@ public static class GmailScopes
     {
         ReadOnly => "Read your email so Daksha can show, search and summarise it.",
         Send => "Send email on your behalf when you ask Daksha to.",
+        Calendar => "See your Google Calendar and add events when you ask Daksha to.",
         Compose => "Create, edit and send drafts.",
         Modify => "Archive, trash, star, mark read/unread and label messages.",
         Labels => "Create, rename and delete Gmail labels.",

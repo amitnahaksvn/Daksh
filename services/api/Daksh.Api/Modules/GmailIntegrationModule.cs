@@ -56,7 +56,7 @@ public static partial class GmailIntegrationModule
 {
     private const string IntegrationKey = "gmail";
     private const string CredentialKey = "gmail-oauth-token";
-    private const string GmailScope = "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send";
+    private const string GmailScope = "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/calendar.events";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public static IServiceCollection AddGmailIntegration(this IServiceCollection services)

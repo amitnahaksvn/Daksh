@@ -176,6 +176,44 @@ public class SelfAssistantTests
     [InlineData("buy milk")] [InlineData("busy for 2 hours")] [InlineData("free")] [InlineData("remember to call mom tomorrow")] [InlineData("https://example.com/page")] [InlineData("ok")] [InlineData("")]
     public void Notes_and_commands_are_not_questions(string text) => Assert.False(SelfAssistant.LooksLikeQuestion(text));
 
+    [Theory]
+    [InlineData("{\"intent\":\"ignore\"}")] [InlineData("not json")] [InlineData("")] [InlineData("{\"intent\":\"dance\"}")] [InlineData("{\"intent\":\"add\",\"text\":null}")]
+    public void Unclear_intents_are_ignored(string raw) => Assert.Equal("ignore", SelfAssistant.ParseIntent(raw).Name);
+
+    [Fact] public void A_question_intent_is_read_even_with_chatter_around_it() => Assert.Equal("question", SelfAssistant.ParseIntent("Sure: {\"intent\":\"question\"} done").Name);
+
+    [Fact]
+    public void An_add_intent_becomes_a_list_command()
+    {
+        var c = SelfAssistant.ParseIntent("{\"intent\":\"add\",\"list\":\"amazon\",\"text\":\"headphones\"}").Command!;
+        Assert.Equal(SelfCommandKind.AddItem, c.Kind); Assert.Equal("headphones", c.Text);
+    }
+
+    [Fact] public void An_add_intent_without_a_list_leaves_it_unset() => Assert.Null(SelfAssistant.ParseIntent("{\"intent\":\"add\",\"list\":null,\"text\":\"wardrobe organiser\"}").Command!.List);
+
+    [Fact]
+    public void Event_calendar_and_send_intents_keep_their_details()
+    {
+        var e = SelfAssistant.ParseIntent("{\"intent\":\"event\",\"title\":\"Dentist\",\"start\":\"2026-11-21T17:00\",\"minutes\":45}");
+        Assert.Equal("event", e.Name); Assert.Equal("Dentist", e.Arg("title")); Assert.Equal("2026-11-21T17:00", e.Arg("start")); Assert.Equal("45", e.Arg("minutes"));
+        var s = SelfAssistant.ParseIntent("{\"intent\":\"send\",\"to\":\"Ravi\",\"text\":\"Running late\"}");
+        Assert.Equal("send", s.Name); Assert.Equal("Ravi", s.Arg("to")); Assert.Equal("Running late", s.Arg("text"));
+        Assert.Equal("calendar", SelfAssistant.ParseIntent("{\"intent\":\"calendar\",\"from\":\"2026-11-21\"}").Name);
+    }
+
+    [Fact]
+    public void A_busy_intent_carries_its_length_and_note()
+    {
+        var c = SelfAssistant.ParseIntent("{\"intent\":\"busy\",\"minutes\":90,\"note\":\"in a meeting\"}").Command!;
+        Assert.Equal(TimeSpan.FromMinutes(90), c.Duration); Assert.Equal("in a meeting", c.Note);
+        Assert.Equal("17:30", SelfAssistant.ParseIntent("{\"intent\":\"busy\",\"until\":\"17:30\"}").Command!.UntilClock);
+    }
+
+    [Theory] [InlineData("a")] [InlineData("")] [InlineData("https://example.com")]
+    public void Trivial_messages_are_not_candidates(string text) => Assert.False(SelfAssistant.IsCandidate(text));
+
+    [Fact] public void Our_own_replies_are_not_candidates() => Assert.False(SelfAssistant.IsCandidate(SelfCommands.ReplyMarker + "hello there"));
+
     [Fact] public void Our_own_replies_are_never_questions() => Assert.False(SelfAssistant.LooksLikeQuestion(SelfCommands.ReplyMarker + "what's pending?"));
     [Fact] public void The_address_is_stripped() => Assert.Equal("what's pending?", SelfAssistant.StripAddress("Hey Daksha, what's pending?"));
 }
@@ -200,4 +238,45 @@ public class AutoReplyVoiceTests
         Assert.DoesNotContain("Hello", instructions.Replace("greetings", ""));
         Assert.Contains("on behalf of the account owner", instructions);
     }
+}
+
+public class SelfSendTests
+{
+    private sealed class FakeApp(params string[] names) : ISelfMessenger
+    {
+        public string AppName => "FakeChat";
+        public List<(string Chat, string Text)> Sent { get; } = [];
+        public bool Fail { get; set; }
+        public Task<IReadOnlyList<ChatTarget>> FindAsync(string query, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<ChatTarget>>(names.Where(n => n.Contains(query, StringComparison.OrdinalIgnoreCase)).Select(n => new ChatTarget("id:" + n, n)).ToList());
+        public Task SendAsync(string chatId, string text, CancellationToken ct) { if (Fail) throw new InvalidOperationException(); Sent.Add((chatId, text)); return Task.CompletedTask; }
+    }
+
+    [Fact]
+    public async Task One_match_is_sent_to_on_any_app()
+    {
+        var app = new FakeApp("Ravi Kumar", "Meera");
+        var reply = await SelfSend.RunAsync(app, "ravi", "Running late", default);
+        Assert.Equal([("id:Ravi Kumar", "Running late")], app.Sent);
+        Assert.StartsWith("✅", reply); Assert.Contains("FakeChat", reply);
+    }
+
+    [Fact]
+    public async Task An_exact_name_wins_over_longer_matches()
+    {
+        var app = new FakeApp("Ravi", "Ravi Kumar");
+        await SelfSend.RunAsync(app, "Ravi", "hi", default);
+        Assert.Equal("id:Ravi", Assert.Single(app.Sent).Chat);
+    }
+
+    [Fact]
+    public async Task Several_matches_or_none_send_nothing()
+    {
+        var app = new FakeApp("Ravi Kumar", "Ravi Shah");
+        Assert.Contains("more than one", await SelfSend.RunAsync(app, "Ravi", "hi", default));
+        Assert.Contains("couldn't find", await SelfSend.RunAsync(app, "Zed", "hi", default));
+        Assert.Empty(app.Sent);
+    }
+
+    [Fact] public async Task A_failed_send_is_reported_not_thrown() => Assert.StartsWith("ℹ️", await SelfSend.RunAsync(new FakeApp("Ravi") { Fail = true }, "Ravi", "hi", default));
 }

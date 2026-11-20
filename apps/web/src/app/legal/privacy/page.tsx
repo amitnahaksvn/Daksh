@@ -20,6 +20,7 @@ export default function PrivacyPage() {
       <ul>
         <li><strong>gmail.readonly</strong> — to list and display your messages inside Daksha.</li>
         <li><strong>gmail.send</strong> — to send an email only when you ask us to.</li>
+        <li><strong>calendar.events</strong> — to show your Google Calendar events and add an event only when you ask us to.</li>
       </ul>
       <p>We use this data solely to provide these user-facing features. We do not sell it, use it for advertising, or transfer it to third parties except as needed to operate the feature or to comply with law. We do not allow humans to read your Gmail data unless you give consent, it is necessary for security or abuse investigation, or it is required by law. Authorization tokens are encrypted at rest.</p>
       <p>Daksha&rsquo;s use and transfer of information received from Google APIs adheres to the <a className="underline" href="https://developers.google.com/terms/api-services-user-data-policy#limited-use">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>

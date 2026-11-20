@@ -82,7 +82,12 @@ public static class SelfCommands
     /// <summary>Runs a command for a user and returns the confirmation to send back, or null when the text wasn't a command.</summary>
     public static async Task<string?> RunAsync(IMongoDatabase db, string userId, string? text, DateTime utcNow, CancellationToken ct = default)
     {
-        var cmd = Parse(text);
+        return await ExecuteAsync(db, userId, Parse(text), utcNow, ct);
+    }
+
+    /// <summary>Runs an already-parsed command (from the keyword parser or the AI intent reader) and returns the confirmation to send back.</summary>
+    public static async Task<string?> ExecuteAsync(IMongoDatabase db, string userId, SelfCommand cmd, DateTime utcNow, CancellationToken ct = default)
+    {
         if (cmd.Kind == SelfCommandKind.None) return null;
         var users = db.GetCollection<ApplicationUser>("users");
 

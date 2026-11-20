@@ -411,25 +411,27 @@ public static class TelegramIntegrationModule
         // A message the owner types in their own "Saved Messages" may be a command ("busy for 2 hours", "buy milk"): do it and confirm there.
         if (!stored.IsGroup && !string.IsNullOrEmpty(connection.SelfChatId) && stored.ChatId == connection.SelfChatId
             && !stored.Text.StartsWith(SelfCommands.ReplyMarker, StringComparison.Ordinal)
-            && (SelfCommands.Parse(stored.Text).Kind != SelfCommandKind.None || SelfAssistant.LooksLikeQuestion(stored.Text)) && SelfCommandSeen.First(connection.Id, stored.MessageId))
+            && SelfAssistant.IsCandidate(stored.Text) && SelfCommandSeen.First(connection.Id, stored.MessageId))
         {
             // A command is done and confirmed; anything else that reads like a question is answered by the assistant, in this same chat.
-            var confirmation = await SelfCommands.RunAsync(db, connection.UserId, stored.Text, DateTime.UtcNow, ct);
-            if (confirmation is null)
+            string? confirmation;
             {
                 using var askScope = scopes.CreateScope();
                 var asp = askScope.ServiceProvider;
-                confirmation = await SelfAssistant.AnswerAsync(db, asp.GetRequiredService<IAssistantOrchestrator>(), asp.GetRequiredService<ISecretProtector>(), config,
-                    asp.GetRequiredService<IHttpClientFactory>(), connection.UserId, stored.Text, loggers.CreateLogger("SelfAssistant"), CancellationToken.None);
+                confirmation = await SelfAssistant.HandleAsync(db, asp.GetRequiredService<IAssistantOrchestrator>(), asp.GetRequiredService<ISecretProtector>(), config,
+                    asp.GetRequiredService<IHttpClientFactory>(), connection.UserId, stored.Text, loggers.CreateLogger("SelfAssistant"), CancellationToken.None,
+                    messenger: new TelegramSelfMessenger(db, asp.GetRequiredService<TelegramIntegrationProvider>(), connection));
             }
             if (confirmation is not null)
+            {
                 try
                 {
                     using var scope = scopes.CreateScope();
                     await SendAndStoreAsync(db, scope.ServiceProvider.GetRequiredService<TelegramIntegrationProvider>(), connection.Id, stored.ChatId, confirmation, isAiGenerated: true, ct);
                 }
                 catch (Exception ex) { loggers.CreateLogger("SelfCommands").LogWarning(ex, "Could not confirm a self-command on Telegram for connection {ConnectionId}", connection.Id); }
-            return Results.Ok();
+                return Results.Ok();
+            }
         }
 
         // From here on Telegram runs through the same settings, rules and intelligence as WhatsApp — the

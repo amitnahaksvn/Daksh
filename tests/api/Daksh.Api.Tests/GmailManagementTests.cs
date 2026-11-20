@@ -7,10 +7,10 @@ namespace Daksh.Api.Tests;
 public class GmailScopeAndPermissionTests
 {
     [Fact]
-    public void Base_connection_requests_only_read_and_send()
+    public void Base_connection_requests_read_send_and_calendar_only()
     {
         var scope = GmailScopes.ForFeatures(null);
-        Assert.Equal($"{GmailScopes.ReadOnly} {GmailScopes.Send}", scope);
+        Assert.Equal($"{GmailScopes.ReadOnly} {GmailScopes.Send} {GmailScopes.Calendar}", scope);
         Assert.DoesNotContain(GmailScopes.Modify, scope);
         Assert.DoesNotContain(GmailScopes.Full, scope);
     }
