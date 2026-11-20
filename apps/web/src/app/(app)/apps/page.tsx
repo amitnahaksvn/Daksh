@@ -1,4 +1,5 @@
 "use client";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { AppCard, BrandTile } from "@/components/integrations";
 import { Modal } from "@/components/Modal";
@@ -36,7 +37,7 @@ const APP_META: Record<string, { priority: Priority; description: string }> = {
   "zoho-mail": { priority: "Low", description: "Connect Zoho Mail for a business or personal domain." },
   "proton-mail": { priority: "Low", description: "Bridge a Proton Mail inbox for reading and sending." },
 
-  "google-calendar": { priority: "Low", description: "Read and write events on a connected Google Calendar." },
+  "google-calendar": { priority: "Medium", description: "See, add, edit and delete events across all your Google accounts. Uses the same Google sign-in as Gmail." },
   "microsoft-outlook-calendar": { priority: "Low", description: "Read and write events on a connected Outlook Calendar." },
   "apple-calendar": { priority: "Low", description: "Sync events with Apple Calendar via a local bridge." },
   calendly: { priority: "Low", description: "Pull booked meetings and availability from Calendly." },
@@ -320,6 +321,7 @@ function CategoryPills({ apps, active, onChange }: { apps: AppCatalogEntry[]; ac
 }
 
 function AppsPageContent({ apps }: { apps: AppCatalogEntry[] }) {
+  const router = useRouter();
   const [category, setCategory] = useState("All");
   const [query, setQuery] = useState("");
   const [whatsAppOpen, setWhatsAppOpen] = useState(false);
@@ -334,6 +336,10 @@ function AppsPageContent({ apps }: { apps: AppCatalogEntry[] }) {
   const gmailStatus: ConnectionStatusValue | undefined = gmailDetail.status === "ready"
     ? gmailDetail.data.connection?.status ?? "NotConnected"
     : undefined;
+
+  // Google Calendar has no connection of its own: it is "connected" when any of your Google accounts was granted Calendar.
+  const { state: calendarNow } = useApi(() => { const d = new Date(); const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; return api.calendarEvents(k, k); });
+  const calendarStatus: ConnectionStatusValue = calendarNow.status === "ready" && calendarNow.data.connected ? "Connected" : "NotConnected";
 
   const { state: telegramDetail, reload: reloadTelegramDetail } = useApi(() => api.appDetail("telegram"));
   const telegramStatus: ConnectionStatusValue | undefined = telegramDetail.status === "ready"
@@ -428,8 +434,8 @@ function AppsPageContent({ apps }: { apps: AppCatalogEntry[] }) {
                       app={app}
                       priority={APP_META[app.integrationKey]?.priority ?? "Low"}
                       description={APP_META[app.integrationKey]?.description ?? app.description}
-                      status={app.integrationKey === "whatsapp" ? whatsAppStatus : app.integrationKey === "gmail" ? gmailStatus : app.integrationKey === "telegram" ? telegramStatus : undefined}
-                      onConfigure={app.integrationKey === "whatsapp" ? () => setWhatsAppOpen(true) : app.integrationKey === "telegram" ? () => setTelegramOpen(true) : app.integrationKey === "gmail" ? () => setGmailOpen(true) : undefined}
+                      status={app.integrationKey === "whatsapp" ? whatsAppStatus : app.integrationKey === "gmail" ? gmailStatus : app.integrationKey === "telegram" ? telegramStatus : app.integrationKey === "google-calendar" ? calendarStatus : undefined}
+                      onConfigure={app.integrationKey === "whatsapp" ? () => setWhatsAppOpen(true) : app.integrationKey === "telegram" ? () => setTelegramOpen(true) : app.integrationKey === "gmail" ? () => setGmailOpen(true) : app.integrationKey === "google-calendar" ? () => router.push("/calendar") : undefined}
                     />
                   ))}
                 </ul>

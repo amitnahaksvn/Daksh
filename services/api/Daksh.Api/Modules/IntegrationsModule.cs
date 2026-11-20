@@ -439,7 +439,8 @@ public static class IntegrationsModule
             await catalog.UpdateOneAsync(c => c.IntegrationKey == s.Key, update, new UpdateOptions { IsUpsert = true }, ct);
         }
 
-        await catalog.UpdateOneAsync(c => c.IntegrationKey == "gmail",
+        // Gmail is live, and so is Google Calendar: it rides on the same Google sign-in (the Calendar permission is requested with Gmail's).
+        await catalog.UpdateManyAsync(c => c.IntegrationKey == "gmail" || c.IntegrationKey == "google-calendar",
             Builders<IntegrationCatalogEntry>.Update.Set(c => c.IsEnabled, true), cancellationToken: ct);
     }
 
