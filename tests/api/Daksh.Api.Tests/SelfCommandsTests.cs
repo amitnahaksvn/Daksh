@@ -229,6 +229,16 @@ public class SelfAssistantTests
     [Theory] [InlineData("hi mom is coming at 5")] [InlineData("buy milk")] [InlineData("high protein diet plan")]
     public void Other_text_is_not_a_greeting(string text) => Assert.False(SelfAssistant.IsGreeting(text));
 
+    [Fact]
+    public void The_chat_voice_is_casual_and_does_not_name_apps_or_introduce_itself()
+    {
+        var p = SelfAssistant.ChatSystemPrompt;
+        Assert.Contains("casual", p);
+        Assert.Contains("Never introduce yourself", p);
+        Assert.Contains("Never mention Gmail, WhatsApp, Telegram", p);
+        Assert.DoesNotContain("personal AI operator.", p.Replace("\"your AI operator/assistant\"", ""));
+    }
+
     [Fact] public void Our_own_replies_are_not_candidates() => Assert.False(SelfAssistant.IsCandidate(SelfCommands.ReplyMarker + "hello there"));
 
     [Fact] public void Our_own_replies_are_never_questions() => Assert.False(SelfAssistant.LooksLikeQuestion(SelfCommands.ReplyMarker + "what's pending?"));
