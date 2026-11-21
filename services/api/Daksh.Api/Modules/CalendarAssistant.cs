@@ -25,15 +25,22 @@ public static class CalendarAssistant
     public static async Task<IReadOnlyList<CalendarAccountInfo>> AccountsAsync(IMongoDatabase db, string userId, CancellationToken ct)
     {
         var accounts = await db.GetCollection<GmailAccountDoc>("gmailAccounts").Find(a => a.UserId == userId && a.Enabled).ToListAsync(ct);
-        return accounts.OrderByDescending(a => a.IsDefault).ThenBy(a => a.Email)
+        var list = accounts.OrderByDescending(a => a.IsDefault).ThenBy(a => a.Email)
             .Select(a => new CalendarAccountInfo(a.ConnectionId, a.Email, !string.IsNullOrWhiteSpace(a.GrantedScopes) && GmailScopes.Satisfies(GmailScopes.Parse(a.GrantedScopes), GmailScopes.Calendar), a.IsDefault))
             .ToList();
+        // The owner's Outlook calendar, when Microsoft is connected with Calendar, is one more account (listed after the Google ones).
+        if (await MicrosoftCalendar.InfoAsync(db, userId, ct) is { } outlook) list.Add(outlook with { IsDefault = list.Count == 0 });
+        return list;
     }
 
     /// <summary>The connection to use for a write: the requested account if it has Calendar, otherwise the default one that does. Null when none can.</summary>
     public static async Task<string?> CalendarAccountAsync(IMongoDatabase db, string userId, string? preferred, CancellationToken ct)
     {
-        var usable = (await AccountsAsync(db, userId, ct)).Where(a => a.HasCalendar).ToList();
+        // A read-only Outlook account can be read but not written to, so it is never picked for a write.
+        var all = (await AccountsAsync(db, userId, ct)).Where(a => a.HasCalendar).ToList();
+        var usable = new List<CalendarAccountInfo>();
+        foreach (var a in all)
+            if (!await MicrosoftCalendar.OwnsAsync(db, userId, a.Id, ct) || await MicrosoftCalendar.CanWriteAsync(db, userId, a.Id, ct)) usable.Add(a);
         return (usable.FirstOrDefault(a => a.Id == preferred) ?? usable.FirstOrDefault())?.Id;
     }
 
@@ -74,6 +81,8 @@ public static class CalendarAssistant
         {
             try
             {
+                if (await MicrosoftCalendar.OwnsAsync(db, userId, a.Id, ct))
+                    return (Account: a, Events: (await MicrosoftCalendar.ListAsync(db, protector, config, clients, userId, fromLocal, toLocal, ct)).ToList(), Error: (string?)null);
                 using var doc = await GmailIntegrationModule.GmailApiForAsync(userId, a.Id, url, HttpMethod.Get, null, db, protector, config, clients, ct);
                 var events = doc.RootElement.TryGetProperty("items", out var items)
                     ? items.EnumerateArray().Where(e => !(e.TryGetProperty("status", out var st) && st.GetString() == "cancelled")).Select(e => ToDto(e, tz, a)).ToList()
@@ -82,6 +91,8 @@ public static class CalendarAssistant
             }
             catch (GmailIntegrationException ex) when (ex.StatusCode is 401 or 403) { return (Account: a, Events: new List<CalendarEventDto>(), Error: (string?)"Reconnect this account and tick Calendar."); }
             catch (GmailIntegrationException ex) { return (Account: a, Events: new List<CalendarEventDto>(), Error: (string?)ex.Message); }
+            catch (MicrosoftException ex) { return (Account: a, Events: new List<CalendarEventDto>(), Error: (string?)ex.Message); }
+            catch (HttpRequestException) { return (Account: a, Events: new List<CalendarEventDto>(), Error: (string?)"Microsoft could not be reached."); }
         }));
 
         // The same meeting on two of your accounts (an invite sent to both) is shown once.
@@ -106,6 +117,8 @@ public static class CalendarAssistant
         object Stamp(DateTime t) => new { dateTime = t.ToString("yyyy-MM-dd'T'HH:mm:ss"), timeZone = tz.Id };
         try
         {
+            if (await MicrosoftCalendar.OwnsAsync(db, userId, connection, ct))
+                return new(CalendarStatus.Ok, await MicrosoftCalendar.CreateAsync(db, protector, config, clients, userId, title, startLocal, minutes, location, ct));
             using var doc = await GmailIntegrationModule.GmailApiForAsync(userId, connection, Api, HttpMethod.Post,
                 new { summary = title, location, start = Stamp(startLocal), end = Stamp(end) }, db, protector, config, clients, ct);
             var used = (await AccountsAsync(db, userId, ct)).FirstOrDefault(a => a.Id == connection);
@@ -113,6 +126,8 @@ public static class CalendarAssistant
         }
         catch (GmailIntegrationException ex) when (ex.StatusCode is 401 or 403) { return new(CalendarStatus.NeedsAccess, Message: ReconnectMessage); }
         catch (GmailIntegrationException ex) { return new(CalendarStatus.Failed, Message: ex.Message); }
+        catch (MicrosoftException ex) when (ex.StatusCode is 401 or 403 or 409) { return new(CalendarStatus.NeedsAccess, Message: ex.Message); }
+        catch (MicrosoftException ex) { return new(CalendarStatus.Failed, Message: ex.Message); }
     }
 
     /// <summary>Changes an event on the account it lives on. Null fields are left alone; <paramref name="location"/> "" clears it. Without <paramref name="startLocal"/> the times are not touched (all-day events).</summary>
@@ -123,6 +138,12 @@ public static class CalendarAssistant
         var account = (await AccountsAsync(db, userId, ct)).FirstOrDefault(a => a.Id == accountId && a.HasCalendar);
         if (account is null) return new(CalendarStatus.NeedsAccess, Message: ReconnectMessage);
         var tz = await TimezoneAsync(db, userId, ct);
+        if (await MicrosoftCalendar.OwnsAsync(db, userId, account.Id, ct))
+        {
+            try { return new(CalendarStatus.Ok, await MicrosoftCalendar.UpdateAsync(db, protector, config, clients, userId, eventId, title, startLocal, minutes, location, ct)); }
+            catch (MicrosoftException ex) when (ex.StatusCode is 401 or 403 or 409) { return new(CalendarStatus.NeedsAccess, Message: ex.Message); }
+            catch (MicrosoftException ex) { return new(CalendarStatus.Failed, Message: ex.Message); }
+        }
         var body = new Dictionary<string, object?>();
         if (title is not null) body["summary"] = title;
         if (location is not null) body["location"] = location.Length == 0 ? null : location;
@@ -145,6 +166,12 @@ public static class CalendarAssistant
     {
         var connection = await CalendarAccountAsync(db, userId, accountId, ct);
         if (connection is null) return new(CalendarStatus.NeedsAccess, Message: ReconnectMessage);
+        if (await MicrosoftCalendar.OwnsAsync(db, userId, connection, ct))
+        {
+            try { await MicrosoftCalendar.DeleteAsync(db, protector, config, clients, userId, eventId, ct); return new(CalendarStatus.Ok, true); }
+            catch (MicrosoftException ex) when (ex.StatusCode is 401 or 403 or 409) { return new(CalendarStatus.NeedsAccess, Message: ex.Message); }
+            catch (MicrosoftException ex) { return new(CalendarStatus.Failed, Message: ex.Message); }
+        }
         try
         {
             using var doc = await GmailIntegrationModule.GmailApiForAsync(userId, connection, $"{Api}/{Uri.EscapeDataString(eventId)}", HttpMethod.Delete, null, db, protector, config, clients, ct);

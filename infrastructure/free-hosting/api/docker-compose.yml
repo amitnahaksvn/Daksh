@@ -15,6 +15,10 @@ services:
     environment:
       ASPNETCORE_URLS: http://+:8080
       DOTNET_GCHeapHardLimit: "0x1C000000"   # ~448 MB heap cap on a 1 GB VM
+      # Microsoft sign-in (non-secret). The client id and secret stay in .env on the VM. The redirect URI must also be registered in Entra.
+      Microsoft__OAuth__Tenant: common
+      Microsoft__OAuth__RedirectUri: https://api.140-245-242-128.sslip.io/api/integrations/microsoft/callback
+      Microsoft__OAuth__FrontendUrl: https://qa.daksha.ampalab.com/apps/microsoft
     mem_limit: 640m
 volumes:
   caddy_data:

@@ -25,6 +25,7 @@ builder.Services.AddScoped<ClaimsPrincipalAccessor>();
 builder.Services.AddDakshIntegrations(builder.Configuration);
 builder.Services.AddDakshWhatsAppIntegration(builder.Configuration);
 builder.Services.AddGmailIntegration();
+builder.Services.AddMicrosoftIntegration();
 builder.Services.AddTelegramIntegration(builder.Configuration);
 builder.Services.AddSignalR();
 builder.Services.AddHostedService<WhatsAppReminderService>();
@@ -53,6 +54,7 @@ await AccountModule.EnsureAccountIndexesAsync(app.Services.GetRequiredService<Mo
 await IntegrationsModule.EnsureIntegrationIndexesAndCatalogAsync(app.Services.GetRequiredService<MongoDB.Driver.IMongoDatabase>());
 await GmailIntegrationModule.EnsureGmailIndexesAsync(app.Services.GetRequiredService<MongoDB.Driver.IMongoDatabase>());
 await GmailIntegrationModule.EnsureGmailManagementIndexesAsync(app.Services.GetRequiredService<MongoDB.Driver.IMongoDatabase>());
+await MicrosoftIntegrationModule.EnsureMicrosoftIndexesAsync(app.Services.GetRequiredService<MongoDB.Driver.IMongoDatabase>());
 await TelegramIntegrationModule.EnsureTelegramIndexesAsync(app.Services.GetRequiredService<MongoDB.Driver.IMongoDatabase>());
 await WhatsAppSettingsModule.EnsureIndexesAsync(app.Services.GetRequiredService<MongoDB.Driver.IMongoDatabase>());
 
@@ -75,6 +77,7 @@ app.MapPlatform();
 app.MapAccount();
 app.MapIntegrations();
 app.MapGmailIntegration();
+app.MapMicrosoftIntegration();
 app.MapTelegramIntegration();
 app.MapChatAssist();
 app.MapDashboardApps();

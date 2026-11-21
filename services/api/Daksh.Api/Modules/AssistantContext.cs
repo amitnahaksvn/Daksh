@@ -73,7 +73,7 @@ public static class AssistantContextBuilder
         $"Chat with {name}:\n" + string.Join("\n", messages.OrderBy(m => m.At).Select(m => $"[{m.At.ToLocalTime():d MMM HH:mm}] {(m.FromMe ? "Me" : m.Who)}: {Clip(m.Text, 300)}"));
 
     public static async Task<AssistantContextResult> BuildAsync(IMongoDatabase db, string userId, string question,
-        Func<string?, Task<IReadOnlyList<GmailMessageSummary>?>> recentMail, CancellationToken ct, Func<string, string, Task<string?>>? readMail = null)
+        Func<string?, Task<IReadOnlyList<GmailMessageSummary>?>> recentMail, CancellationToken ct, Func<string, string, Task<string?>>? readMail = null, Func<string, Task<AssistantContextResult>>? microsoft = null)
     {
         var sources = new List<string>();
         var sb = new StringBuilder();
@@ -233,6 +233,13 @@ public static class AssistantContextBuilder
                     ? "Gmail is connected but no emails have been synced yet and the live inbox could not be read right now (it may be rate limited or need to be reconnected)."
                     : "Gmail is not connected.");
             }
+        }
+
+        // The owner's Microsoft account (Outlook mail and calendar, OneDrive, Azure DevOps), looked at only for what the question is about.
+        if (microsoft is not null && connections.Any(c => c.IntegrationKey == MicrosoftIntegrationModule.IntegrationKey && c.Status == ConnectionStatus.Connected))
+        {
+            var ms = await microsoft(question);
+            if (!string.IsNullOrWhiteSpace(ms.Text)) { sb.AppendLine().AppendLine(ms.Text); foreach (var s in ms.Sources) if (!sources.Contains(s)) sources.Add(s); }
         }
 
         if (intent.Lists || intent.Tasks || overview)

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChatAvatar } from "@/components/ChatAvatar";
 import { Linkified } from "@/components/Linkified";
-import { AssistBar, DayDivider, EmojiButton, exportChat, sameDay } from "@/components/ChatExtras";
+import { DayDivider, EmojiButton, exportChat, sameDay } from "@/components/ChatExtras";
 import { buttonClass, inputClass } from "@/components/ui";
 import { api, ApiError, type WhatsAppChat, type WhatsAppGroupInfo, type WhatsAppMessage, type WhatsAppPresence, type WhatsAppReaction } from "@/lib/api";
 import { getIntegrationsHub } from "@/lib/signalr";
@@ -97,14 +97,14 @@ function MessageBubble({ m, chat, connectionId, onMediaLoaded, onReply, onReact,
 
   if (m.deleted) {
     return (
-      <div className={`max-w-[85%] rounded-lg px-3 py-1.5 text-[13px] italic text-[var(--wa-meta)] shadow-sm ${m.fromMe ? "ml-auto rounded-tr-none bg-[var(--wa-out)]" : "rounded-tl-none bg-[var(--wa-in)]"}`}>
+      <div className={`w-fit max-w-[80%] rounded-lg px-2 py-1 text-[13px] italic text-[var(--wa-meta)] shadow-sm ${m.fromMe ? "self-end rounded-tr-none bg-[var(--wa-out)]" : "rounded-tl-none bg-[var(--wa-in)]"}`}>
         🚫 {m.fromMe ? "You deleted this message" : "This message was deleted"}
       </div>
     );
   }
   const showText = !(m.hasMedia && LABELS.has(m.text));
   return (
-    <div className={`group relative max-w-[85%] rounded-lg px-2.5 py-1.5 text-[14px] leading-snug text-[var(--wa-text)] shadow-sm ${m.fromMe ? "ml-auto rounded-tr-none bg-[var(--wa-out)]" : "rounded-tl-none bg-[var(--wa-in)]"}`}>
+    <div className={`group relative w-fit min-w-[4.5rem] max-w-[80%] rounded-lg px-2 py-1 text-[13px] leading-[1.3] text-[var(--wa-text)] shadow-sm ${m.fromMe ? "self-end rounded-tr-none bg-[var(--wa-out)]" : "rounded-tl-none bg-[var(--wa-in)]"}`}>
       {!m.fromMe && chat.isGroup && <p className="text-xs font-medium text-[var(--wa-accent)]">{m.chatName ?? "Unknown"}</p>}
       {m.quotedText && (
         <div className={`mb-1 truncate rounded-md border-l-4 border-[var(--wa-accent)] px-2 py-1 text-xs text-[var(--wa-meta)] ${m.fromMe ? "bg-[var(--wa-quote-out)]" : "bg-[var(--wa-quote-in)]"}`}>{m.quotedText}</div>
@@ -121,7 +121,7 @@ function MessageBubble({ m, chat, connectionId, onMediaLoaded, onReply, onReact,
       <div className="-mb-0.5 mt-0.5 flex items-center justify-end gap-1.5 text-[var(--wa-meta)]">
         {m.starred && <span aria-label="Starred" title="Starred" className="text-xs">★</span>}
         {m.edited && <span className="text-[10px] italic opacity-70">edited</span>}
-        <span className="text-[10px] opacity-70">{new Date(m.timestamp).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+        <span className="text-[10px] opacity-70">{new Date(m.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
         {m.fromMe && <MessageTicks status={m.status} />}
         <button type="button" onClick={() => { setOpenedAt(Date.now()); setMenu(menu === "closed" ? "actions" : "closed"); }} aria-label="Message options" aria-expanded={menu !== "closed"} className="rounded px-1 text-xs opacity-0 transition-opacity focus:opacity-100 group-hover:opacity-80">⋯</button>
       </div>
@@ -427,11 +427,11 @@ export function ChatThread({ connectionId, chat, onClose, onMinimize, onSent, bo
       </div>
       {showGroup && chat.isGroup && <GroupInfoPanel connectionId={connectionId} chat={chat} onClose={() => setShowGroup(false)} />}
       {search !== null && <div className="shrink-0 bg-[var(--wa-header)] px-3 pb-2"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search in this chat…" aria-label="Search in this chat" className="field-in-pill w-full rounded-full bg-[var(--wa-input)] px-4 py-2 text-sm text-[var(--wa-text)] placeholder:text-[var(--wa-meta)]" autoFocus /></div>}
-      <div ref={scrollRef} className={`wa-wall ${embedded ? "min-h-0 flex-1" : bodyHeightClass} space-y-1 overflow-y-auto px-3 py-2`}>
+      <div ref={scrollRef} className={`wa-wall ${embedded ? "min-h-0 flex-1" : bodyHeightClass} overflow-y-auto px-3 py-2`}>
         {!visible ? <p className="text-sm text-[var(--wa-meta)]">Loading…</p>
           : visible.length === 0 ? <p className="text-sm text-[var(--wa-meta)]">{query ? "No messages match." : "No messages yet."}</p>
           : visible.map((m, i) => (
-            <div key={m.messageId} className="contents">
+            <div key={m.messageId} className={`flex flex-col ${i > 0 && visible[i - 1].fromMe !== m.fromMe ? "mt-2" : "mt-px"}`}>
               {(i === 0 || !sameDay(visible[i - 1].timestamp, m.timestamp)) && <DayDivider iso={m.timestamp} />}
               <MessageBubble m={m} chat={chat} connectionId={connectionId} onMediaLoaded={keepAtBottom}
                 onReply={() => setReplyingTo(m)}
@@ -452,7 +452,6 @@ export function ChatThread({ connectionId, chat, onClose, onMinimize, onSent, bo
           <button onClick={() => { setReplyingTo(null); setEditing(null); setFile(null); if (editing) setText(""); }} aria-label="Cancel" className="shrink-0 text-[var(--wa-meta)] hover:text-[var(--wa-text)]">✕</button>
         </div>
       )}
-      <div className="bg-[var(--wa-header)]"><AssistBar compact={embedded} channel="whatsapp" connectionId={connectionId} chatId={chat.chatId} onUse={(t) => { setText(t); setEditing(null); }} /></div>
       <div className="flex shrink-0 items-end gap-2 bg-[var(--wa-header)] px-2 py-2">
         <input ref={fileInput} type="file" className="sr-only" aria-label="Attach a file" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setFile(f); setEditing(null); } e.target.value = ""; }} />
         <div className="flex min-w-0 flex-1 items-center rounded-3xl bg-[var(--wa-input)] px-1.5">

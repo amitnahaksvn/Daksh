@@ -442,6 +442,10 @@ public static class IntegrationsModule
         // Gmail is live, and so is Google Calendar: it rides on the same Google sign-in (the Calendar permission is requested with Gmail's).
         await catalog.UpdateManyAsync(c => c.IntegrationKey == "gmail" || c.IntegrationKey == "google-calendar",
             Builders<IntegrationCatalogEntry>.Update.Set(c => c.IsEnabled, true), cancellationToken: ct);
+
+        // One Microsoft sign-in powers Outlook mail, Outlook calendar, OneDrive and Azure DevOps, so all four are live together.
+        await catalog.UpdateManyAsync(c => c.IntegrationKey == "microsoft-outlook" || c.IntegrationKey == "microsoft-outlook-calendar" || c.IntegrationKey == "onedrive" || c.IntegrationKey == "azure-devops",
+            Builders<IntegrationCatalogEntry>.Update.Set(c => c.IsEnabled, true), cancellationToken: ct);
     }
 
     private static IIntegrationProvider? FindProvider(IEnumerable<IIntegrationProvider> providers, string key) =>

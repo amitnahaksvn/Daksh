@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { DashboardAppCard } from "@/components/integrations";
 import { buttonClass, EmptyState, ErrorState, Loading } from "@/components/ui";
+import { MicrosoftDashboardCard } from "@/components/MicrosoftDashboardCard";
 import { GMAIL_CARD_HINT_KEY, GmailCardPlaceholder, GmailDashboardCard } from "@/components/GmailDashboardCard";
 import { CommandCentre } from "@/components/CommandCentre";
 import { api, type AvailableDashboardApp, type DashboardApp, type DashboardLayoutItem, type DashboardWidget } from "@/lib/api";
@@ -220,6 +221,8 @@ function DashboardBody({ apps, onRemove, onReload }: { apps: DashboardApp[]; onR
             >
               {app.integrationKey === "gmail"
                 ? <GmailDashboardCard app={app} onChanged={reloadAfterSave} />
+                : app.integrationKey === "microsoft-outlook"
+                ? <MicrosoftDashboardCard app={app} onChanged={reloadAfterSave} />
                 : <DashboardAppCard app={app} onRemove={onRemove} />}
             </DashboardTile>
           ))}

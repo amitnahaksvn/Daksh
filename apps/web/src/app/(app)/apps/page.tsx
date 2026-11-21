@@ -1,12 +1,14 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { AppCard, BrandTile } from "@/components/integrations";
+import { AppCard, BrandTile, StatusChip } from "@/components/integrations";
 import { Modal } from "@/components/Modal";
 import { ErrorState, Loading, inputClass, tileClass } from "@/components/ui";
 import { GmailManagePanel } from "@/components/GmailManagePanel";
 import { WhatsAppConnectPanel } from "@/components/WhatsAppConnectPanel";
 import { TelegramConnectPanel } from "@/components/TelegramConnectPanel";
+import { MicrosoftManagePanel } from "@/components/MicrosoftManagePanel";
+import { microsoftCallbackError } from "@/components/MicrosoftParts";
 import { api, type AppCatalogEntry, type ConnectionStatusValue } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 
@@ -32,20 +34,20 @@ const APP_META: Record<string, { priority: Priority; description: string }> = {
   "twitch-chat": { priority: "Low", description: "Read and post to a Twitch channel's chat." },
   "sms-twilio": { priority: "Medium", description: "Send and receive SMS through a Twilio number." },
   gmail: { priority: "High", description: "Read, search and send email from your Gmail inbox." },
-  "microsoft-outlook": { priority: "High", description: "Connect Outlook Mail to read and send on your behalf." },
+  "microsoft-outlook": { priority: "High", description: "Read, search and send Outlook email. One Microsoft sign-in also covers Calendar, OneDrive and Azure DevOps." },
   "yahoo-mail": { priority: "Low", description: "Connect a Yahoo Mail inbox via IMAP/SMTP." },
   "zoho-mail": { priority: "Low", description: "Connect Zoho Mail for a business or personal domain." },
   "proton-mail": { priority: "Low", description: "Bridge a Proton Mail inbox for reading and sending." },
 
   "google-calendar": { priority: "Medium", description: "See, add, edit and delete events across all your Google accounts. Uses the same Google sign-in as Gmail." },
-  "microsoft-outlook-calendar": { priority: "Low", description: "Read and write events on a connected Outlook Calendar." },
+  "microsoft-outlook-calendar": { priority: "Medium", description: "See and add Outlook events, shown in Calendar next to Google. Uses the same Microsoft sign-in." },
   "apple-calendar": { priority: "Low", description: "Sync events with Apple Calendar via a local bridge." },
   calendly: { priority: "Low", description: "Pull booked meetings and availability from Calendly." },
 
   zoom: { priority: "Low", description: "Schedule, join and manage Zoom meetings." },
 
   "google-drive": { priority: "Low", description: "Browse, read and write files in a connected Google Drive." },
-  onedrive: { priority: "Low", description: "Browse, read and write files in a connected OneDrive." },
+  onedrive: { priority: "Medium", description: "Browse and search your OneDrive files. Uses the same Microsoft sign-in." },
   sharepoint: { priority: "Low", description: "Read and manage documents in a SharePoint site." },
   dropbox: { priority: "Low", description: "Browse, read and write files in a connected Dropbox." },
   box: { priority: "Low", description: "Browse, read and write files in a connected Box account." },
@@ -73,7 +75,7 @@ const APP_META: Record<string, { priority: Priority; description: string }> = {
   github: { priority: "Low", description: "Read issues, PRs and repos on a connected GitHub account." },
   gitlab: { priority: "Low", description: "Read issues, MRs and repos on a connected GitLab account." },
   bitbucket: { priority: "Low", description: "Read repos and pull requests on a connected Bitbucket account." },
-  "azure-devops": { priority: "Low", description: "Read work items, repos and pipelines in Azure DevOps." },
+  "azure-devops": { priority: "Medium", description: "See the work items assigned to you. Uses the same Microsoft sign-in (work or school account)." },
   jira: { priority: "Low", description: "Read and update issues in a connected Jira project." },
   sentry: { priority: "Low", description: "Read error events and issues from a connected Sentry project." },
   "docker-hub": { priority: "Low", description: "Browse images and tags on a connected Docker Hub account." },
@@ -327,6 +329,18 @@ function AppsPageContent({ apps }: { apps: AppCatalogEntry[] }) {
   const [whatsAppOpen, setWhatsAppOpen] = useState(false);
   const [telegramOpen, setTelegramOpen] = useState(false);
   const [gmailOpen, setGmailOpen] = useState(false);
+  const [microsoftOpen, setMicrosoftOpen] = useState(false);
+  // Microsoft sends the browser back here after sign-in (?microsoft=connected or ?error=...).
+  const [microsoftNotice] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    const p = new URLSearchParams(window.location.search);
+    if (p.get("microsoft") === "connected") return "Microsoft connected.";
+    return p.get("error") ? microsoftCallbackError(p.get("error")) : null;
+  });
+  // One Microsoft sign-in powers Outlook mail, Outlook calendar, OneDrive and Azure DevOps: each tile is "connected" when its service is on.
+  const { state: microsoftDetail, reload: reloadMicrosoft } = useApi(() => api.microsoftStatus());
+  const microsoftStatusFor = (feature: "mail" | "calendar" | "onedrive" | "devops"): ConnectionStatusValue | undefined =>
+    microsoftDetail.status !== "ready" ? undefined : microsoftDetail.data.connected && microsoftDetail.data.features.includes(feature) ? "Connected" : "NotConnected";
   // The catalogue list has no per-user connection data (it's not personalized) — fetch WhatsApp's real
   // status separately so its tile shows "Connected"/"Connecting"/etc. instead of always falling back to
   // the "Coming soon" badge every unbuilt integration gets.
@@ -345,6 +359,19 @@ function AppsPageContent({ apps }: { apps: AppCatalogEntry[] }) {
   const telegramStatus: ConnectionStatusValue | undefined = telegramDetail.status === "ready"
     ? telegramDetail.data.connection?.status ?? "NotConnected"
     : undefined;
+
+  const statusOf = (key: string): ConnectionStatusValue | undefined =>
+    key === "whatsapp" ? whatsAppStatus : key === "gmail" ? gmailStatus : key === "telegram" ? telegramStatus : key === "google-calendar" ? calendarStatus
+      : key === "microsoft-outlook" ? microsoftStatusFor("mail") : key === "microsoft-outlook-calendar" ? microsoftStatusFor("calendar")
+      : key === "onedrive" ? microsoftStatusFor("onedrive") : key === "azure-devops" ? microsoftStatusFor("devops") : undefined;
+  const configureFor = (key: string): (() => void) | undefined =>
+    key === "whatsapp" ? () => setWhatsAppOpen(true) : key === "telegram" ? () => setTelegramOpen(true) : key === "gmail" ? () => setGmailOpen(true) : key === "google-calendar" ? () => router.push("/calendar")
+      : ["microsoft-outlook", "microsoft-outlook-calendar", "onedrive", "azure-devops"].includes(key) ? () => setMicrosoftOpen(true) : undefined;
+  // Every app that works today (enabled), gathered at the top of the page: connected ones first, then the rest of the live apps.
+  const showEnabledTop = category === "All" && !query;
+  const enabledApps = apps.filter((a) => a.isEnabled)
+    .sort((a, b) => Number(statusOf(b.integrationKey) === "Connected") - Number(statusOf(a.integrationKey) === "Connected"));
+  const connectedCount = enabledApps.filter((a) => statusOf(a.integrationKey) === "Connected").length;
 
   const filtered = apps.filter((a) => {
     if (category !== "All" && category !== "More" && a.category !== category) return false;
@@ -367,7 +394,7 @@ function AppsPageContent({ apps }: { apps: AppCatalogEntry[] }) {
 
   const sections = CATEGORY_ORDER.filter((c) => category === "All" || category === c).map((c) => ({
     category: c,
-    apps: filtered.filter((a) => a.category === c).sort(byPinnedFirst),
+    apps: filtered.filter((a) => a.category === c && !(showEnabledTop && a.isEnabled)).sort(byPinnedFirst),
   }));
   const showEmptyCategoryNotice = category !== "All" && category !== "More" && sections.every((s) => s.apps.length === 0) && !query;
 
@@ -408,6 +435,38 @@ function AppsPageContent({ apps }: { apps: AppCatalogEntry[] }) {
         </div>
       </header>
 
+      {microsoftNotice && <p role="status" className="mb-4 rounded-[1.25rem] border border-line bg-surface p-4 text-sm font-semibold">{microsoftNotice}</p>}
+
+      {showEnabledTop && enabledApps.length > 0 && (
+        <section aria-label="Enabled apps" className="mb-6">
+          <div className="mb-3 flex items-center justify-between px-1">
+            <div>
+              <h2 className="text-base font-bold">Enabled apps</h2>
+              <p className="text-xs text-muted">Everything that works today, in one place.</p>
+            </div>
+            <span className="shrink-0 text-xs font-semibold text-muted">{connectedCount} of {enabledApps.length} connected</span>
+          </div>
+          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {enabledApps.map((app) => {
+              const status = statusOf(app.integrationKey);
+              const connected = status === "Connected";
+              return (
+                <li key={app.integrationKey}>
+                  <button type="button" onClick={configureFor(app.integrationKey)} className={`flex w-full items-center gap-3 p-4 text-left transition-colors hover:bg-surface-2 ${tileClass}`}>
+                    <BrandTile icon={app.icon} color={app.color} size={40} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-semibold">{app.name}</span>
+                      <span className="mt-0.5 block">{status ? <StatusChip status={status} /> : <span className="text-xs text-muted">Checking…</span>}</span>
+                    </span>
+                    <span className="shrink-0 text-xs font-semibold text-accent">{connected ? "Manage" : "Connect"}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
       {showEmptyCategoryNotice ? (
         <p className="rounded-[1.25rem] border border-dashed border-line bg-surface p-8 text-center text-sm text-muted">
           No apps in this category yet — check back soon.
@@ -434,8 +493,8 @@ function AppsPageContent({ apps }: { apps: AppCatalogEntry[] }) {
                       app={app}
                       priority={APP_META[app.integrationKey]?.priority ?? "Low"}
                       description={APP_META[app.integrationKey]?.description ?? app.description}
-                      status={app.integrationKey === "whatsapp" ? whatsAppStatus : app.integrationKey === "gmail" ? gmailStatus : app.integrationKey === "telegram" ? telegramStatus : app.integrationKey === "google-calendar" ? calendarStatus : undefined}
-                      onConfigure={app.integrationKey === "whatsapp" ? () => setWhatsAppOpen(true) : app.integrationKey === "telegram" ? () => setTelegramOpen(true) : app.integrationKey === "gmail" ? () => setGmailOpen(true) : app.integrationKey === "google-calendar" ? () => router.push("/calendar") : undefined}
+                      status={statusOf(app.integrationKey)}
+                      onConfigure={configureFor(app.integrationKey)}
                     />
                   ))}
                 </ul>
@@ -464,6 +523,10 @@ function AppsPageContent({ apps }: { apps: AppCatalogEntry[] }) {
         }}
       >
         <TelegramConnectPanel />
+      </Modal>
+
+      <Modal wide fixedHeight open={microsoftOpen} onClose={() => { setMicrosoftOpen(false); reloadMicrosoft(); }}>
+        <MicrosoftManagePanel onChanged={reloadMicrosoft} />
       </Modal>
 
       <Modal

@@ -225,6 +225,25 @@ export type ActivityItem = {
 export type AppDetail = { catalog: AppCatalogEntry; connection: ConnectionStatusDto | null };
 export type QrResponse = { qr: string | null; expiresAt: string | null; status: string };
 export type ConnectResponse = { connectionId: string; status: string };
+export type MicrosoftFeature = "mail" | "calendar" | "onedrive" | "devops";
+export type MicrosoftStatus = { configured: boolean; connected: boolean; connectionId: string | null; email: string | null; displayName: string | null; features: MicrosoftFeature[]; error: string | null; write: boolean; devOpsOrg: string | null; devOpsToken: boolean };
+export type MicrosoftSettings = {
+  signature: string; showImages: boolean; mailCount: number; mailFilter: "inbox" | "unread" | "flagged" | "important";
+  calendarDays: 1 | 3 | 7 | 14; calendarCount: number; calendarShowAllDay: boolean;
+  fileCount: number; fileSource: "recent" | "shared";
+  workItemCount: number; workItemScope: "assigned" | "created"; workItemIncludeClosed: boolean; devOpsDefaultOrg: string | null; showOnDashboard: boolean;
+};
+export type MicrosoftSettingsUpdate = Partial<Omit<MicrosoftSettings, "showOnDashboard">>;
+export type MicrosoftAdminApproval = { link: string; message: string };
+export type OutlookMessageSummary = { id: string; from: string; fromAddress: string; subject: string; preview: string; received: string | null; isRead: boolean; hasAttachments: boolean };
+export type OutlookMessagePage = { messages: OutlookMessageSummary[]; nextSkip: number | null };
+export type OutlookMessage = { id: string; from: string; to: string; subject: string; received: string | null; body: string; isHtml: boolean };
+export type DriveItem = { id: string; name: string; isFolder: boolean; size: number; modified: string | null; webUrl: string | null; mimeType: string | null };
+export type DriveListing = { folderId: string | null; folderName: string; items: DriveItem[] };
+export type DevOpsWorkItem = { id: number; title: string; state: string; type: string; project: string; url: string };
+export type DevOpsSummary = { organizations: string[]; organization: string | null; projects: string[]; workItems: DevOpsWorkItem[] };
+export type MicrosoftDashboard = { connected: boolean; email: string | null; features: MicrosoftFeature[]; unread: number | null; messages: OutlookMessageSummary[]; events: CalendarEvent[]; files: DriveItem[]; workItems: DevOpsWorkItem[]; errors: string[] };
+
 export type GmailAuthorizationResponse = { authorizationUrl: string };
 export type GmailMessageSummary = {
   id: string;
@@ -437,6 +456,34 @@ export const api = {
   appCatalog: () => apiFetch<AppCatalogEntry[]>("/api/integrations"),
   appDetail: (integrationKey: string) => apiFetch<AppDetail>(`/api/integrations/${integrationKey}`),
   connectWhatsApp: () => apiFetch<ConnectResponse>("/api/integrations/whatsapp/connect", { method: "POST" }),
+  microsoftStatus: () => apiFetch<MicrosoftStatus>("/api/integrations/microsoft/status"),
+  connectMicrosoft: (features: MicrosoftFeature[], write = false) => apiFetch<{ authorizationUrl: string }>(`/api/integrations/microsoft/connect?features=${features.join(",")}&write=${write}`, { method: "POST" }),
+  disableMicrosoftWrite: () => apiFetch<void>("/api/integrations/microsoft/write", json({ enabled: false })),
+  microsoftAdminApproval: (domain: string, features: MicrosoftFeature[], write: boolean) =>
+    apiFetch<MicrosoftAdminApproval>(`/api/integrations/microsoft/admin-approval?domain=${encodeURIComponent(domain.trim())}&features=${features.join(",")}&write=${write}`),
+  disableMicrosoftFeature: (feature: MicrosoftFeature) => apiFetch<void>("/api/integrations/microsoft/features/disable", json({ feature })),
+  setDevOpsToken: (organization: string, token: string) => apiFetch<void>("/api/integrations/microsoft/devops/token", json({ organization, token })),
+  removeDevOpsToken: () => apiFetch<void>("/api/integrations/microsoft/devops/token", { method: "DELETE" }),
+  microsoftSettings: () => apiFetch<MicrosoftSettings>("/api/integrations/microsoft/settings"),
+  updateMicrosoftSettings: (update: MicrosoftSettingsUpdate) => apiFetch<MicrosoftSettings>("/api/integrations/microsoft/settings", { method: "PUT", body: JSON.stringify(update) }),
+  disconnectMicrosoft: () => apiFetch<void>("/api/integrations/microsoft/disconnect", { method: "POST" }),
+  microsoftDashboard: () => apiFetch<MicrosoftDashboard>("/api/integrations/microsoft/dashboard"),
+  outlookMessages: (query: string, skip?: number | null, folder = "inbox") => {
+    const params = new URLSearchParams({ folder });
+    if (query.trim()) params.set("q", query.trim());
+    if (skip) params.set("skip", String(skip));
+    return apiFetch<OutlookMessagePage>(`/api/integrations/microsoft/mail/messages?${params.toString()}`);
+  },
+  outlookMessage: (id: string) => apiFetch<OutlookMessage>(`/api/integrations/microsoft/mail/messages/${encodeURIComponent(id)}`),
+  sendOutlookMessage: (message: { to: string; subject: string; body: string }) => apiFetch<void>("/api/integrations/microsoft/mail/messages", json(message)),
+  markOutlookRead: (id: string, isRead: boolean) => apiFetch<void>(`/api/integrations/microsoft/mail/messages/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ isRead }) }),
+  oneDriveFiles: (folderId?: string | null, query?: string) => {
+    const params = new URLSearchParams();
+    if (folderId) params.set("folderId", folderId);
+    if (query?.trim()) params.set("q", query.trim());
+    return apiFetch<DriveListing>(`/api/integrations/microsoft/onedrive/files?${params.toString()}`);
+  },
+  devOpsSummary: (org?: string) => apiFetch<DevOpsSummary>(`/api/integrations/microsoft/devops/summary${org ? `?org=${encodeURIComponent(org)}` : ""}`),
   gmailSettings: () => apiFetch<GmailSettings>("/api/integrations/gmail/settings"),
   updateGmailSettings: (update: GmailSettingsUpdate) => apiFetch<GmailSettings>("/api/integrations/gmail/settings", { method: "PUT", body: JSON.stringify(update) }),
   connectGmail: () => apiFetch<GmailAuthorizationResponse>("/api/integrations/gmail/connect", { method: "POST" }),
