@@ -16,6 +16,10 @@ services:
       ASPNETCORE_URLS: http://+:8080
       DOTNET_GCHeapHardLimit: "0x1C000000"   # ~448 MB heap cap on a 1 GB VM
       # Microsoft sign-in (non-secret). The client id and secret stay in .env on the VM. The redirect URI must also be registered in Entra.
+      # Shopping carts run on the bridges VM; the live sign-in view is reached by the browser through its public host. The internal key stays in .env.
+      Integrations__Shopping__BaseUrl: https://shopping.140-245-252-254.sslip.io
+      Integrations__Shopping__Stores: flipkart   # Amazon refuses the cloud server's address; its cart works only from a local helper
+      Integrations__Shopping__PublicStreamUrl: wss://shopping.140-245-252-254.sslip.io/stream
       Microsoft__OAuth__Tenant: common
       Microsoft__OAuth__RedirectUri: https://api.140-245-242-128.sslip.io/api/integrations/microsoft/callback
       Microsoft__OAuth__FrontendUrl: https://qa.daksha.ampalab.com/apps/microsoft

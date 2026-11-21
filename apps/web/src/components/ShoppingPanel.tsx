@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { BrandTile } from "@/components/integrations";
+import { RemoteBrowser } from "@/components/RemoteBrowser";
 import { buttonClass, EmptyState, ErrorState, inputClass, Loading, secondaryButtonClass } from "@/components/ui";
 import { api, ApiError, type AddToCartResult, type ListItem, type ShoppingStore } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
@@ -28,12 +29,21 @@ export function ShoppingPanel({ storeKey, icon, color, onChanged }: { storeKey: 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<AddToCartResult | null>(null);
+  // Cloud sign-in: a live view of the server's browser, where the user signs in.
+  const [streamUrl, setStreamUrl] = useState<string | null>(null);
 
   const loadItems = () => api.lists().then((all) => setItems(all.filter((i) => i.list.toLowerCase() === LIST.toLowerCase() && !i.done)), () => setItems([]));
   useEffect(() => { const t = setTimeout(() => void loadItems(), 0); return () => clearTimeout(t); }, []);
 
   // While the sign-in window is open on this computer, keep checking until it finishes.
   const signingIn = state.status === "ready" && state.data.find((s) => s.key === storeKey)?.session === "signing_in";
+  // The panel was reopened (or the page reloaded) while a sign-in is open: ask for a fresh live-view address.
+  useEffect(() => {
+    if (!signingIn || streamUrl) return;
+    let live = true;
+    api.shoppingSession(storeKey).then((s) => { if (live && s.streamUrl) setStreamUrl(s.streamUrl); }, () => undefined);
+    return () => { live = false; };
+  }, [signingIn, streamUrl, storeKey]);
   useEffect(() => {
     if (!signingIn) return;
     const id = window.setInterval(() => { reload(); onChanged?.(); }, 3000);
@@ -95,8 +105,8 @@ export function ShoppingPanel({ storeKey, icon, color, onChanged }: { storeKey: 
 
       {helperDown && (
         <div role="alert" className="mt-4 rounded-xl border border-line bg-surface-2 p-3 text-sm">
-          <p className="font-semibold">Daksha&apos;s shopping helper is not running on this computer.</p>
-          <p className="mt-1 text-muted">It uses your own Chrome to fill your cart. Start it from <code className="ai-mono">services/shopping</code> (<code className="ai-mono">npm start</code>), then reopen this panel.</p>
+          <p className="font-semibold">Daksha&apos;s shopping helper is not available right now.</p>
+          <p className="mt-1 text-muted">It fills your cart in a real browser. Try again in a minute. If you run Daksha yourself, start the helper in <code className="ai-mono">services/shopping</code>.</p>
           <button type="button" onClick={reload} className={`${secondaryButtonClass} mt-2`}>Check again</button>
         </div>
       )}
@@ -105,14 +115,18 @@ export function ShoppingPanel({ storeKey, icon, color, onChanged }: { storeKey: 
         <div className="mt-4 rounded-xl border border-line p-4 text-sm">
           {store.session === "signing_in" ? (
             <>
-              <p className="font-semibold">Waiting for you to sign in to {store.name}…</p>
-              <p className="mt-1 text-muted">A Chrome window opened on this computer. Sign in there, including any code or captcha. It closes by itself once you are in. Daksha never sees your password.</p>
+              <p className="font-semibold">Sign in to {store.name}</p>
+              {streamUrl ? (
+                <div className="mt-2"><RemoteBrowser url={streamUrl} onDone={() => { setStreamUrl(null); reload(); onChanged?.(); }} /></div>
+              ) : (
+                <p className="mt-1 text-muted">A Chrome window opened on this computer. Sign in there, including any code or captcha. It closes by itself once you are in. Daksha never sees your password.</p>
+              )}
             </>
           ) : (
             <>
               <p className="font-semibold">Connect your {store.name} account</p>
-              <p className="mt-1 text-muted">Daksha opens a real Chrome window where you sign in yourself. After that you can say what you want and Daksha adds it to your {store.name} cart. It stops there: you open {store.name} to check and pay.</p>
-              <button type="button" disabled={busy} onClick={() => void run(() => api.startShoppingSession(store.key), "Could not open the sign-in window.")} className={`${buttonClass} mt-3 px-5`}>Sign in to {store.name}</button>
+              <p className="mt-1 text-muted">Daksha opens a private browser where you sign in yourself. After that you can say what you want and Daksha adds it to your {store.name} cart. It stops there: you open {store.name} to check and pay.</p>
+              <button type="button" disabled={busy} onClick={() => void run(async () => { const s = await api.startShoppingSession(store.key); if (s.streamUrl) setStreamUrl(s.streamUrl); }, "Could not open the sign-in window.")} className={`${buttonClass} mt-3 px-5`}>Sign in to {store.name}</button>
             </>
           )}
         </div>
@@ -155,7 +169,7 @@ export function ShoppingPanel({ storeKey, icon, color, onChanged }: { storeKey: 
 
       {!cartMode && (
         <p className="mt-4 rounded-xl border border-line bg-surface-2 p-3 text-sm text-muted">
-          Daksha cannot fill a {store.name} cart yet. It keeps your shopping list and opens each item on {store.name}, where you add it and check out yourself.
+          Daksha cannot fill a {store.name} cart from here. It keeps your shopping list and opens each item on {store.name}, where you add it and check out yourself.
         </p>
       )}
 

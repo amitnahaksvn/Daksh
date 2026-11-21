@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Daksh.Api.Auth;
 using MongoDB.Driver;
@@ -8,6 +10,7 @@ namespace Daksh.Api.Modules;
 
 public sealed record ShoppingStoreDto(string Key, string Name, string Home, string SearchUrl, bool Connected, string? ConnectionId, bool Cart = false, string Session = "none");
 public sealed record AddToCartRequest(string[]? Items);
+public sealed record ShoppingSessionDto(string State, bool Remote = false, string? StreamUrl = null);
 public sealed record CartItemResult(string Query, string Status, string? Title, string? Price, string? Note);
 public sealed record CartLine(string Title, string? Price);
 public sealed record CartSummaryDto(int? Count, string? Total, IReadOnlyList<CartLine> Items, string Url);
@@ -28,11 +31,16 @@ public static class ShoppingModule
         ["flipkart"] = ("Flipkart", "https://www.flipkart.com/", "https://www.flipkart.com/search?q={0}"),
     };
 
-    /// <summary>Stores whose cart Daksha can fill through the local shopping helper.</summary>
-    public static readonly HashSet<string> CartStores = ["amazon", "flipkart"];
+    /// <summary>
+    /// Stores whose cart Daksha can fill in this deployment (setting Integrations:Shopping:Stores, default "amazon,flipkart"). It differs by where the helper runs:
+    /// on a user's own computer both work, but Amazon refuses requests from the cloud server's address, so QA lists only Flipkart. The others fall back to the shopping list.
+    /// </summary>
+    public static HashSet<string> CartStores { get; private set; } = ["amazon", "flipkart"];
 
     public static IServiceCollection AddShopping(this IServiceCollection services, IConfiguration config)
     {
+        var configured = (config["Integrations:Shopping:Stores"] ?? "amazon,flipkart").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Where(Stores.ContainsKey);
+        CartStores = new HashSet<string>(configured, StringComparer.OrdinalIgnoreCase);
         services.AddHttpClient("shopping", c =>
         {
             c.BaseAddress = new Uri((config["Integrations:Shopping:BaseUrl"] ?? "http://127.0.0.1:4300").TrimEnd('/') + "/");
@@ -49,14 +57,31 @@ public static class ShoppingModule
         g.MapPost("/{key}/enable", EnableAsync);
         g.MapDelete("/{key}", DisableAsync);
         g.MapPost("/{key}/session/start", StartSessionAsync);
+        g.MapGet("/{key}/session", SessionStreamAsync);
         g.MapDelete("/{key}/session", EndSessionAsync);
         g.MapPost("/{key}/cart/add", AddToCartAsync);
         g.MapGet("/{key}/cart", ReadCartAsync);
     }
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-    private sealed record SessionDto(string State);
+    private sealed record SessionDto(string State, bool Remote = false);
     private sealed record ServiceError(string? Error, string? Code);
+
+    private static string B64u(byte[] b) => Convert.ToBase64String(b).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+    /// <summary>
+    /// The address of the live sign-in view (cloud mode), with a signed token that works for one user and one store for ten minutes. The helper checks the same signature.
+    /// Format: base64url(JSON {u, s, e}) + "." + base64url(HMAC-SHA256(internal key, first part)).
+    /// </summary>
+    internal static string? StreamUrl(IConfiguration config, string userId, string store)
+    {
+        var baseUrl = config["Integrations:Shopping:PublicStreamUrl"];
+        var key = config["Integrations:Shopping:InternalServiceKey"];
+        if (string.IsNullOrWhiteSpace(baseUrl) || string.IsNullOrWhiteSpace(key)) return null;
+        var payload = B64u(Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(new { u = userId, s = store, e = DateTimeOffset.UtcNow.AddMinutes(10).ToUnixTimeSeconds() })));
+        var mac = B64u(HMACSHA256.HashData(Encoding.UTF8.GetBytes(key), Encoding.UTF8.GetBytes(payload)));
+        return $"{baseUrl.TrimEnd('/')}?t={payload}.{mac}";
+    }
 
     /// <summary>"signing_in" / "connected" / "none", or "unavailable" when the helper is not running on this computer.</summary>
     private static async Task<string> SessionStateAsync(IHttpClientFactory clients, string userId, string key, CancellationToken ct)
@@ -70,7 +95,7 @@ public static class ShoppingModule
         catch (TaskCanceledException) { return "unavailable"; }
     }
 
-    private static IResult Unavailable() => Results.Problem(statusCode: 503, title: "Daksha's shopping helper is not running on this computer.",
+    private static IResult Unavailable() => Results.Problem(statusCode: 503, title: "Daksha's shopping helper is not available right now.",
         detail: "Start it (services/shopping) so Daksha can use your own Chrome to fill your cart.", extensions: new Dictionary<string, object?> { ["code"] = "helper_unavailable" });
 
     /// <summary>Passes the helper's answer (or its error) back to the web app.</summary>
@@ -90,15 +115,25 @@ public static class ShoppingModule
         else if (state == "none" && open) await DisableForAsync(key, db, userId, ct);
     }
 
-    private static async Task<IResult> StartSessionAsync(string key, IHttpClientFactory clients, ClaimsPrincipalAccessor who, CancellationToken ct)
+    private static async Task<IResult> StartSessionAsync(string key, IHttpClientFactory clients, IConfiguration config, ClaimsPrincipalAccessor who, CancellationToken ct)
     {
         if (!CartStores.Contains(key)) return Results.NotFound();
         try
         {
             using var res = await clients.CreateClient("shopping").PostAsync($"sessions/{Uri.EscapeDataString(who.UserId)}/{key}/start", null, ct);
-            return await RelayAsync<SessionDto>(res, ct);
+            if (!res.IsSuccessStatusCode) return await RelayAsync<SessionDto>(res, ct);
+            var s = await res.Content.ReadFromJsonAsync<SessionDto>(Json, ct);
+            return Results.Ok(new ShoppingSessionDto(s?.State ?? "signing_in", s?.Remote ?? false, s?.Remote == true ? StreamUrl(config, who.UserId, key) : null));
         }
         catch (HttpRequestException) { return Unavailable(); }
+    }
+
+    /// <summary>A fresh live-view address while a cloud sign-in is open (the panel asks again if the page was reloaded).</summary>
+    private static async Task<IResult> SessionStreamAsync(string key, IHttpClientFactory clients, IConfiguration config, ClaimsPrincipalAccessor who, CancellationToken ct)
+    {
+        if (!CartStores.Contains(key)) return Results.NotFound();
+        var state = await SessionStateAsync(clients, who.UserId, key, ct);
+        return Results.Ok(new ShoppingSessionDto(state, state == "signing_in", state == "signing_in" ? StreamUrl(config, who.UserId, key) : null));
     }
 
     private static async Task<IResult> EndSessionAsync(string key, IMongoDatabase db, IHttpClientFactory clients, ClaimsPrincipalAccessor who, CancellationToken ct)
@@ -161,7 +196,7 @@ public static class ShoppingModule
             var tail = added == 0 ? "Nothing was added." : $"{added} of {done.Results.Count} added to your {store.Name} cart" + (done.Cart?.Total is { } t ? $" (cart total {t})" : "") + ". Open the cart to check and place the order yourself:\n" + store.Home + (key == "amazon" ? "cart" : "viewcart");
             return string.Join("\n", lines) + "\n\n" + tail;
         }
-        catch (HttpRequestException) { return "ℹ️ Daksha's shopping helper is not running on this computer."; }
+        catch (HttpRequestException) { return "ℹ️ Daksha's shopping helper is not available right now."; }
         catch (TaskCanceledException) { return "ℹ️ The store took too long. Check your cart on the store."; }
     }
 

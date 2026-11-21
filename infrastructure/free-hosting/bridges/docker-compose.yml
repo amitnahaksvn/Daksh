@@ -4,9 +4,9 @@ services:
     image: caddy:2
     restart: unless-stopped
     ports: ["80:80", "443:443"]
-    environment: { WHATSAPP_HOST: "${WHATSAPP_HOST}", TELEGRAM_HOST: "${TELEGRAM_HOST}" }
+    environment: { WHATSAPP_HOST: "${WHATSAPP_HOST}", TELEGRAM_HOST: "${TELEGRAM_HOST}", SHOPPING_HOST: "${SHOPPING_HOST}" }
     volumes: ["./Caddyfile:/etc/caddy/Caddyfile:ro", "caddy_data:/data"]
-    depends_on: [whatsapp, telegram]
+    depends_on: [whatsapp, telegram, shopping]
     mem_limit: 96m
   whatsapp:
     image: ghcr.io/${GHCR_OWNER}/daksh-whatsapp:${TAG:-latest}
@@ -20,5 +20,23 @@ services:
     env_file: .env
     environment: { PORT: "4200", NODE_OPTIONS: "--max-old-space-size=256" }
     mem_limit: 320m
+  # Shopping carts: a headless browser the user signs in to through a live view in the web app, then adds items to their Amazon/Flipkart cart.
+  # Sign-in sessions are kept in the shopping_profiles volume (on this VM's disk). It never opens checkout or payment.
+  shopping:
+    image: ghcr.io/${GHCR_OWNER}/daksh-shopping:${TAG:-latest}
+    restart: unless-stopped
+    environment:
+      INTERNAL_SERVICE_KEY: "${INTERNAL_SERVICE_KEY}"
+      PORT: "4300"
+      HOST: "0.0.0.0"
+      SHOPPING_REMOTE_SIGNIN: "1"
+      SHOPPING_BROWSER_CHANNEL: ""
+      SHOPPING_NO_SANDBOX: "1"
+      SHOPPING_PROFILES_DIR: /data/profiles
+      NODE_OPTIONS: "--max-old-space-size=128"
+    volumes: ["shopping_profiles:/data/profiles"]
+    shm_size: 256m
+    mem_limit: 560m
 volumes:
   caddy_data:
+  shopping_profiles:

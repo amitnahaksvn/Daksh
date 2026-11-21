@@ -5,3 +5,7 @@
 {$TELEGRAM_HOST} {
 	reverse_proxy telegram:4200
 }
+
+{$SHOPPING_HOST} {
+	reverse_proxy shopping:4300
+}

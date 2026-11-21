@@ -1,12 +1,14 @@
+import http from "node:http";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { adapters, NotSignedInError, VerificationError } from "./adapters/index.js";
 import { config } from "./config.js";
 import * as sessions from "./sessions.js";
+import { attachStream } from "./stream.js";
 
 const app = express();
 app.use(express.json({ limit: "100kb" }));
 
-app.get("/health", (_req, res) => res.json({ status: "ok", stores: Object.keys(adapters) }));
+app.get("/health", (_req, res) => res.json({ status: "ok", stores: Object.keys(adapters), remoteSignIn: config.remoteSignIn }));
 
 // Everything else is internal-only: the .NET API is the sole caller, authenticated by a shared secret never exposed to the browser.
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -28,12 +30,12 @@ function fail(res: Response, err: unknown): void {
 
 app.get("/sessions/:userId/:store", async (req, res) => {
   const p = params(req, res); if (!p) return;
-  res.json({ state: await sessions.getState(p.userId, p.store) });
+  res.json({ state: await sessions.getState(p.userId, p.store), remote: config.remoteSignIn });
 });
 
 app.post("/sessions/:userId/:store/start", async (req, res) => {
   const p = params(req, res); if (!p) return;
-  try { res.json({ state: await sessions.startSignIn(p.userId, p.store) }); } catch (err) { fail(res, err); }
+  try { res.json({ state: await sessions.startSignIn(p.userId, p.store), remote: config.remoteSignIn }); } catch (err) { fail(res, err); }
 });
 
 app.delete("/sessions/:userId/:store", async (req, res) => {
@@ -55,4 +57,6 @@ app.get("/cart/:userId/:store", async (req, res) => {
   try { res.json(await sessions.readCart(p.userId, p.store)); } catch (err) { fail(res, err); }
 });
 
-app.listen(config.port, "127.0.0.1", () => console.log(`Shopping service listening on 127.0.0.1:${config.port}`));
+const server = http.createServer(app);
+attachStream(server); // the live sign-in view (cloud mode); it has its own signed-token check, separate from the internal key above
+server.listen(config.port, config.host, () => console.log(`Shopping service listening on ${config.host}:${config.port}${config.remoteSignIn ? " (remote sign-in)" : ""}`));

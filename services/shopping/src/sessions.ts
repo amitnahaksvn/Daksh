@@ -6,7 +6,7 @@ import { config } from "./config.js";
 
 export type SessionState = "none" | "signing_in" | "connected";
 
-const signingIn = new Map<string, { startedAt: number }>();
+const signingIn = new Map<string, { startedAt: number; page?: Page; ready?: Promise<void> }>();
 const locks = new Map<string, Promise<unknown>>();
 
 const safe = (s: string) => s.replace(/[^a-zA-Z0-9_-]/g, "");
@@ -31,13 +31,19 @@ async function exclusive<T>(userId: string, store: string, fn: () => Promise<T>)
   return run;
 }
 
-function launch(userId: string, store: string, headless: boolean): Promise<BrowserContext> {
+/** The browser page the user is signing in on (cloud mode), for the live view to show. Null when no sign-in is running. */
+export function getRemotePage(userId: string, store: string): Page | null {
+  const p = signingIn.get(keyOf(userId, store))?.page;
+  return p && !p.isClosed() ? p : null;
+}
+
+function launch(userId: string, store: string, headless: boolean, viewport?: { width: number; height: number }): Promise<BrowserContext> {
   return chromium.launchPersistentContext(profileDir(userId, store), {
     channel: config.browserChannel || undefined,
     headless,
-    viewport: headless ? { width: 1280, height: 900 } : null,
+    viewport: viewport ?? (headless ? { width: 1280, height: 900 } : null),
     locale: "en-IN",
-    args: headless ? [] : ["--no-first-run", "--no-default-browser-check"],
+    args: [...(headless ? [] : ["--no-first-run", "--no-default-browser-check"]), ...(config.noSandbox ? ["--no-sandbox", "--disable-dev-shm-usage"] : [])],
   });
 }
 
@@ -50,13 +56,19 @@ export async function startSignIn(userId: string, store: string): Promise<Sessio
   if (!adapter) throw new Error("Unknown store.");
   const k = keyOf(userId, store);
   if (signingIn.has(k)) return "signing_in";
-  signingIn.set(k, { startedAt: Date.now() });
+  let markReady: () => void = () => undefined;
+  const ready = new Promise<void>((resolve) => { markReady = resolve; });
+  signingIn.set(k, { startedAt: Date.now(), ready });
   void exclusive(userId, store, async () => {
     let ctx: BrowserContext | null = null;
     try {
       await fs.mkdir(profileDir(userId, store), { recursive: true });
-      ctx = await launch(userId, store, false);
+      // Cloud: headless, at a fixed size, shown to the user through the live view. Local: a real Chrome window on the user's own computer.
+      ctx = await launch(userId, store, config.remoteSignIn, config.remoteSignIn ? config.streamViewport : undefined);
       const page = ctx.pages()[0] ?? (await ctx.newPage());
+      const entry = signingIn.get(k);
+      if (entry) entry.page = page;
+      markReady();
       await page.goto(adapter.loginUrl, { waitUntil: "domcontentloaded", timeout: 60000 }).catch(() => undefined);
       const deadline = Date.now() + config.signInTimeoutMs;
       let closed = false;
@@ -72,11 +84,14 @@ export async function startSignIn(userId: string, store: string): Promise<Sessio
       }
     } catch { /* the window was closed or the browser could not start: the state below stays "none" */ }
     finally {
+      markReady(); // never leave the caller waiting if the browser failed to open
       await ctx?.close().catch(() => undefined);
       signingIn.delete(k);
     }
   });
-  return "signing_in";
+  // Answer once the browser is open, so the live view can connect straight away.
+  await Promise.race([ready, new Promise<void>((resolve) => setTimeout(resolve, 25000))]);
+  return signingIn.has(k) ? "signing_in" : "none";
 }
 
 export async function signOut(userId: string, store: string): Promise<void> {
