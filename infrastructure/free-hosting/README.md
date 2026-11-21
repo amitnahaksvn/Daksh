@@ -10,7 +10,7 @@
 Never create billable resources for Daksha. Both VMs are `VM.Standard.E2.1.Micro` (Always Free); stay within 2 of them + one 200 GB block-storage total.
 
 ## URLs
-- Web: https://proud-field-07d6c6b00.8.azurestaticapps.net
+- Web: https://qa.daksha.ampalab.com (also https://proud-field-07d6c6b00.8.azurestaticapps.net)
 - API health: https://api.140-245-242-128.sslip.io/health/live
 - WhatsApp health: https://whatsapp.140-245-252-254.sslip.io/health
 - Telegram health: https://telegram.140-245-252-254.sslip.io/health
