@@ -1,0 +1,20 @@
+# VM 1 (Oracle Always Free micro): the API + Caddy. Copy .env.example to .env here and fill it in.
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment: { API_HOST: "${API_HOST}" }
+    volumes: ["./Caddyfile:/etc/caddy/Caddyfile:ro", "caddy_data:/data"]
+    depends_on: [api]
+    mem_limit: 96m
+  api:
+    image: ghcr.io/${GHCR_OWNER}/daksh-api:${TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      DOTNET_GCHeapHardLimit: "0x1C000000"   # ~448 MB heap cap on a 1 GB VM
+    mem_limit: 640m
+volumes:
+  caddy_data:

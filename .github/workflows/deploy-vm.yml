@@ -1,0 +1,84 @@
+# Builds the api / whatsapp / telegram images, pushes them to GHCR, then rolls them out over SSH to the two free
+# Oracle VMs: the API VM (api + Caddy) and the bridges VM (whatsapp + telegram + Caddy). Nothing here touches Azure.
+# Secrets: VM_API_HOST, VM_BRIDGES_HOST, VM_USER, VM_SSH_KEY.
+name: Deploy services to Oracle VMs
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - global.json
+      - Directory.Build.props
+      - services/**
+      - infrastructure/docker/**
+      - infrastructure/free-hosting/**
+      - .github/workflows/deploy-vm.yml
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: deploy-vm
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - { service: api, dockerfile: infrastructure/docker/api.Dockerfile }
+          - { service: whatsapp, dockerfile: infrastructure/docker/whatsapp.Dockerfile }
+          - { service: telegram, dockerfile: infrastructure/docker/telegram.Dockerfile }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
+      - id: owner
+        run: echo "name=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64   # the free micro VMs are x86; add linux/arm64 if you move to the A1 ARM shape
+          push: true
+          tags: |
+            ghcr.io/${{ steps.owner.outputs.name }}/daksh-${{ matrix.service }}:${{ github.sha }}
+            ghcr.io/${{ steps.owner.outputs.name }}/daksh-${{ matrix.service }}:latest
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 1
+      matrix:
+        include:
+          - { target: api, host_secret: VM_API_HOST }
+          - { target: bridges, host_secret: VM_BRIDGES_HOST }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Copy compose files
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ matrix.target == 'api' && secrets.VM_API_HOST || secrets.VM_BRIDGES_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          source: infrastructure/free-hosting/${{ matrix.target }}/docker-compose.yml,infrastructure/free-hosting/${{ matrix.target }}/Caddyfile
+          target: ~/daksh
+          strip_components: 3
+      - name: Pull and restart
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ matrix.target == 'api' && secrets.VM_API_HOST || secrets.VM_BRIDGES_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script: |
+            cd ~/daksh
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+            TAG=${{ github.sha }} docker compose pull
+            TAG=${{ github.sha }} docker compose up -d --remove-orphans
+            docker image prune -f

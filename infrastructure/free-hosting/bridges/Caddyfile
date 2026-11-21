@@ -1,0 +1,7 @@
+{$WHATSAPP_HOST} {
+	reverse_proxy whatsapp:4100
+}
+
+{$TELEGRAM_HOST} {
+	reverse_proxy telegram:4200
+}
