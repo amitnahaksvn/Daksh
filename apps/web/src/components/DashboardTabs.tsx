@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
+import { AdSlots } from "@/components/AdSlots";
 import { AssistantChat } from "@/components/AssistantChat";
 import { DashboardContent } from "@/components/DashboardPage";
 import { ErrorState } from "@/components/ui";
@@ -40,6 +41,16 @@ export function DashboardTabs() {
   const [busy, setBusy] = useState(false);
   const renameBox = useRef<HTMLInputElement>(null);
   useEffect(() => { if (renaming) renameBox.current?.select(); }, [renaming]);
+
+  // The Ask page is exactly one screen tall on desktop (the conversation scrolls inside its own box), so the page itself never scrolls.
+  const onAsk = current === ASK_TAB;
+  useEffect(() => {
+    if (!onAsk || typeof window === "undefined" || window.innerWidth < 768) return;
+    const html = document.documentElement;
+    const before = html.style.overflowY;
+    html.style.overflowY = "hidden";
+    return () => { html.style.overflowY = before; };
+  }, [onAsk]);
 
   // The sidebar can ask for a particular tab ("New chat", or one of the listed dashboards).
   useEffect(() => {
@@ -153,7 +164,10 @@ export function DashboardTabs() {
       {state.status === "error" && !tabs && <ErrorState error={state.error} onRetry={reload} />}
 
       {current === ASK_TAB ? (
-        <div role="tabpanel" id="panel-ask" aria-labelledby="tab-ask" className="flex w-full flex-1 flex-col"><AssistantChat tall /></div>
+        <div role="tabpanel" id="panel-ask" aria-labelledby="tab-ask" className="grid w-full flex-1 gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]">
+          <div className="flex min-w-0 flex-col"><AssistantChat tall /></div>
+          <AdSlots />
+        </div>
       ) : tab ? (
         <div role="tabpanel" id={`panel-${tab.id}`} aria-labelledby={`tab-${tab.id}`}><DashboardContent key={tab.id} widgets={tab.widgets} /></div>
       ) : null}

@@ -1,11 +1,13 @@
-import type { Metadata } from "next";
+"use client";
+import { useSyncExternalStore } from "react";
 import { LegalPage } from "@/components/LegalPage";
 
-export const metadata: Metadata = { title: "Approval received — Daksha" };
+const subscribe = () => () => undefined;
+const readStatus = () => new URLSearchParams(window.location.search).get("status") ?? "ok";
 
-/** Where a company's IT administrator lands after approving Daksha from the one-time link. Public: they may have no Daksha account. */
-export default async function ApprovedPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
-  const { status } = await searchParams;
+/** Where a company's IT administrator lands after approving Daksha from the one-time link. Public: they may have no Daksha account. Reads the URL in the browser so it also works in the static export. */
+export default function ApprovedPage() {
+  const status = useSyncExternalStore(subscribe, readStatus, () => "ok");
   const ok = status !== "denied";
   return (
     <LegalPage title={ok ? "Approval received" : "Approval was not completed"}>

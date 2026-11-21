@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import type { IconType } from "react-icons";
+import { SiAmazon, SiBigbasket, SiFlipkart } from "@/components/brandLogos";
 import {
   SiAirtable,
   SiApple,
@@ -66,6 +67,8 @@ import {
   SiXero,
   SiYoutube,
   SiZapier,
+  SiSwiggy,
+  SiZomato,
   SiZoho,
   SiZoom,
 } from "react-icons/si";
@@ -75,6 +78,11 @@ import type { AppCatalogEntry, ConnectionStatusValue, DashboardApp } from "@/lib
 // Maps the backend's "icon" string (a react-icons/si export name, or "mono:<text>" for the handful of
 // brands withdrawn from open icon sets — see docs on the Apps page build) to the actual component.
 const BRAND_ICONS: Record<string, IconType> = {
+  SiAmazon,
+  SiFlipkart,
+  SiBigbasket,
+  SiSwiggy,
+  SiZomato,
   SiWhatsapp,
   SiTelegram,
   SiDiscord,
@@ -150,6 +158,11 @@ export function BrandIcon({ icon, color, size = 26 }: { icon: string; color: str
         {icon.slice(5)}
       </span>
     );
+  }
+  // A brand with its own full-colour logo file (for example Zepto's wordmark): "img:/brands/zepto.svg".
+  if (icon.startsWith("img:")) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={icon.slice(4)} alt="" width={Math.round(size * 1.6)} height={size} style={{ width: "88%", height: "auto", maxHeight: "70%", objectFit: "contain" }} />;
   }
   const Icon = BRAND_ICONS[icon];
   return Icon ? <Icon size={size} color={color} /> : null;

@@ -113,7 +113,7 @@ export function AssistantChat({ tall = false }: { tall?: boolean }) {
 
   return (
     // A fixed-height column: the conversation fills it and scrolls inside, while the message box below never moves.
-    <section aria-label="Conversation" className={`flex flex-col gap-4 p-4 ${tall ? "h-[calc(100dvh-11rem)] md:h-[calc(100dvh-9.5rem)]" : "max-h-[75dvh]"} ${tileClass}`}>
+    <section aria-label="Conversation" className={`flex flex-col gap-4 p-4 ${tall ? "h-[calc(100dvh-11rem)] md:h-[calc(100dvh-7.25rem)]" : "max-h-[75dvh]"} ${tileClass}`}>
       <ol ref={listRef} aria-live="polite" className={`flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain ${tall ? "" : "min-h-64"}`}>
         {lines.length === 0 && !busy && (
           <li className={`flex flex-1 flex-col items-center justify-center gap-4 text-center ${tall ? "py-6" : "py-6"}`}>

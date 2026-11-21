@@ -1,0 +1,22 @@
+{
+  "name": "@daksh/shopping",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shopping carts service. Drives the user's own Chrome (Playwright) to add items to their cart on shopping sites. It never opens checkout or touches payment. Runs on the user's computer; only the .NET API talks to it, over a shared internal key.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node --env-file-if-exists=.env dist/index.js",
+    "dev": "tsx --env-file-if-exists=.env watch src/index.ts"
+  },
+  "dependencies": {
+    "express": "5.3.0",
+    "playwright-core": "1.65.1"
+  },
+  "devDependencies": {
+    "@types/express": "5.0.6",
+    "@types/node": "22.13.10",
+    "tsx": "4.19.3",
+    "typescript": "5.8.2"
+  }
+}

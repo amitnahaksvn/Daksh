@@ -85,7 +85,7 @@ public static class SelfAssistant
         Greetings and small talk to the assistant ("hi", "hello", "are you there", "good morning", "thanks", "test") are for the assistant: choose "question" so it replies.
         If the message is something dropped with no instruction (a pasted snippet, address, forwarded text, a thought, a name) and you cannot tell what they want, choose "ask" and write ONE short friendly question in "ask" offering two or three things you can do (save to a list, put on the calendar, message someone). Do not choose "ask" when the message is a question or request you can answer or act on.
         Reply with ONE line of JSON and nothing else:
-        {"intent":"question|ask|busy|free|add|remove|show|event|calendar|send","list":null,"text":null,"minutes":null,"until":null,"note":null,"title":null,"start":null,"location":null,"from":null,"to":null,"ask":null}
+        {"intent":"question|ask|busy|free|add|remove|show|event|calendar|send|cart","store":null,"list":null,"text":null,"minutes":null,"until":null,"note":null,"title":null,"start":null,"location":null,"from":null,"to":null,"ask":null}
         - "question": they want information, help, or are just chatting; the assistant will answer it.
         - "busy": they want auto-replies on. Set "minutes" (number) or "until" ("HH:mm", 24h), and "note" for a reason if given.
         - "free": they want auto-replies off.
@@ -94,6 +94,7 @@ public static class SelfAssistant
         - "show": show their lists.
         - "event": add a calendar event. Set "title", "start" (local time, "yyyy-MM-ddTHH:mm", worked out from the current time given below), "minutes" (length, 60 if not said) and "location" if given.
         - "calendar": they ask what is on their calendar / schedule / agenda. Set "from" and "to" as local dates "yyyy-MM-dd" (the same day for "today"; "to" is inclusive).
+        - "cart": they want items put in the shopping cart of a shopping app ("add milk and rice to my Amazon cart", "put a USB cable in my Flipkart cart"). Set "store" to the app (amazon, flipkart, bigbasket, zepto, swiggy-instamart, zomato or swiggy) and "text" to the item names separated by commas, each as a short product search ("usb c cable"). They are only added to the cart; the owner places the order themselves. A plain shopping-list request without a store ("add milk to my shopping list") is "add", not "cart".
         - "send": they want a message sent to someone on a messaging app. Set "to" (the person's name or phone number) and "text" (the message, written the way the owner would say it, in the same language they used; keep their own words when they dictate them).
         """;
 
@@ -175,6 +176,13 @@ public static class SelfAssistant
                 if (to < from || to - from > TimeSpan.FromDays(31)) to = from;
                 return SelfCommands.ReplyMarker + await CalendarAssistant.AgendaAsync(db, protector, config, clients, userId, from, to.AddDays(1), ct);
             }
+            case "cart":
+            {
+                var store = (intent.Arg("store") ?? "").Trim().ToLowerInvariant().Replace("instamart", "swiggy-instamart").Replace("swiggy-swiggy-instamart", "swiggy-instamart");
+                var items = (intent.Arg("text") ?? "").Split([',', ';', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Where(i => i.Length is > 0 and <= 120).Take(10).ToList();
+                if (!ShoppingModule.Stores.ContainsKey(store)) return SelfCommands.ReplyMarker + "Which shopping app should I use: Amazon or Flipkart?";
+                return SelfCommands.ReplyMarker + await ShoppingModule.AddForChatAsync(clients, userId, store, items, ct);
+            }
             case "send":
             {
                 if (messenger is null) return SelfCommands.ReplyMarker + "ℹ️ I can't send messages from this chat yet.";
@@ -237,7 +245,7 @@ public static class SelfAssistant
                 else if (prop.Value.ValueKind == JsonValueKind.Number) args[prop.Name] = prop.Value.GetRawText();
             switch (name)
             {
-                case "event": case "calendar": case "send": case "ask": return new(name, null, args);
+                case "event": case "calendar": case "send": case "ask": case "cart": return new(name, null, args);
                 case "question": return new("question");
                 case "free": return new("free", new SelfCommand(SelfCommandKind.Free));
                 case "show": return new("show", new SelfCommand(SelfCommandKind.ShowLists));

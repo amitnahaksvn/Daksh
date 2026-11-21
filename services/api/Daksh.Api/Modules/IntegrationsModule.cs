@@ -324,6 +324,8 @@ public static class IntegrationsModule
             ("twitch-chat", "Twitch Chat", "SiTwitch", "#9146FF", "Messaging", false),
             ("sms-twilio", "SMS (Twilio)", "mono:SMS", "#F22F46", "Messaging", false),
             ("gmail", "Gmail", "SiGmail", "#EA4335", "Email", true),
+            ("amazon", "Amazon", "SiAmazon", "#FF9900", "Shopping", false),
+            ("flipkart", "Flipkart", "SiFlipkart", "#2874F0", "Shopping", false),
             ("microsoft-outlook", "Microsoft Outlook Mail", "mono:O", "#0078D4", "Email", false),
             ("yahoo-mail", "Yahoo Mail", "mono:Y!", "#6001D2", "Email", false),
             ("zoho-mail", "Zoho Mail", "SiZoho", "#E42527", "Email", false),
@@ -441,6 +443,15 @@ public static class IntegrationsModule
 
         // Gmail is live, and so is Google Calendar: it rides on the same Google sign-in (the Calendar permission is requested with Gmail's).
         await catalog.UpdateManyAsync(c => c.IntegrationKey == "gmail" || c.IntegrationKey == "google-calendar",
+            Builders<IntegrationCatalogEntry>.Update.Set(c => c.IsEnabled, true), cancellationToken: ct);
+
+        // These shopping apps block automated browsers, so there is nothing for Daksha to connect to: take them off the Apps page.
+        var removedShopping = new[] { "bigbasket", "zepto", "swiggy-instamart", "zomato", "swiggy" };
+        await catalog.DeleteManyAsync(c => removedShopping.Contains(c.IntegrationKey), ct);
+
+        // The shopping apps are live: each can be turned on, and opens the user's shopping list on the store (no store login is stored).
+        var shoppingKeys = ShoppingModule.Stores.Keys.ToList();
+        await catalog.UpdateManyAsync(c => shoppingKeys.Contains(c.IntegrationKey),
             Builders<IntegrationCatalogEntry>.Update.Set(c => c.IsEnabled, true), cancellationToken: ct);
 
         // One Microsoft sign-in powers Outlook mail, Outlook calendar, OneDrive and Azure DevOps, so all four are live together.

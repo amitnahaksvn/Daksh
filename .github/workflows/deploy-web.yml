@@ -20,8 +20,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm, cache-dependency-path: apps/web/package-lock.json }
       - run: npm ci
-      # Static export can't use the dashboard's `instant` segment config (needs Cache Components, which export lacks).
-      - run: sed -i '/^export const instant = false;$/d' "src/app/(app)/dashboard/page.tsx"
+      # Static export can't use the `instant` segment config (needs Cache Components, which export lacks): drop it from every page that sets it.
+      - run: grep -rl '^export const instant = false;$' src | xargs -r sed -i '/^export const instant = false;$/d'
       - run: npm run build
         env:
           STATIC_EXPORT: "1"
