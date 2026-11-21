@@ -1,0 +1,50 @@
+# Free QA hosting: everything except the web app runs on one free VM (Oracle Always Free recommended).
+# The web app is a static site (see .github/workflows/deploy-web.yml). MongoDB is Atlas M0 (free).
+# Copy .env.example to .env on the VM and fill it in. Images come from GHCR (built by deploy-vm.yml).
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      API_HOST: ${API_HOST}
+      WHATSAPP_HOST: ${WHATSAPP_HOST}
+      TELEGRAM_HOST: ${TELEGRAM_HOST}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on: [api, whatsapp, telegram]
+    mem_limit: 128m
+
+  api:
+    image: ghcr.io/${GHCR_OWNER}/daksh-api:${TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      Integrations__Whatsapp__BaseUrl: http://whatsapp:4100
+      Integrations__Telegram__BaseUrl: http://telegram:4200
+      Cors__AllowedOrigins__0: ${WEB_ORIGIN}
+      DOTNET_GCHeapHardLimit: "0x14000000"   # ~320 MB heap cap so the API stays inside its limit
+    mem_limit: 512m
+
+  whatsapp:
+    image: ghcr.io/${GHCR_OWNER}/daksh-whatsapp:${TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: "4100"
+      DAKSH_API_BASE_URL: http://api:8080
+    mem_limit: 384m
+
+  telegram:
+    image: ghcr.io/${GHCR_OWNER}/daksh-telegram:${TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: "4200"
+      DAKSH_API_BASE_URL: http://api:8080
+    mem_limit: 384m
+
+volumes:
+  caddy_data:

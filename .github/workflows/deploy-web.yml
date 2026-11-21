@@ -1,25 +1,36 @@
-name: Deploy web
+# Deploys the web app as a static site on Azure Static Web Apps (Free plan: $0, no overage billing).
+name: Deploy web (static)
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths:
       - apps/web/**
-      - infrastructure/docker/web.Dockerfile
       - .github/workflows/deploy-web.yml
-      - .github/workflows/_deploy-container-app.yml
 
 permissions:
-  id-token: write
   contents: read
-  packages: write
 
 jobs:
   deploy:
-    uses: ./.github/workflows/_deploy-container-app.yml
-    with:
-      service: web
-      dockerfile: infrastructure/docker/web.Dockerfile
-      container_app: ${{ vars.AZURE_CONTAINERAPP_WEB || 'daksh-web' }}
-      build_args: NEXT_PUBLIC_API_URL=https://${{ vars.API_FQDN }}
-    secrets: inherit
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: apps/web } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: apps/web/package-lock.json }
+      - run: npm ci
+      # Static export can't use the dashboard's `instant` segment config (needs Cache Components, which export lacks).
+      - run: sed -i '/^export const instant = false;$/d' "src/app/(app)/dashboard/page.tsx"
+      - run: npm run build
+        env:
+          STATIC_EXPORT: "1"
+          NEXT_PUBLIC_API_URL: https://${{ vars.API_HOST }}
+      - name: Deploy to Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          action: upload
+          app_location: apps/web/out
+          skip_app_build: true
+          skip_api_build: true

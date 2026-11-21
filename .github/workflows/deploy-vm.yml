@@ -1,0 +1,74 @@
+# Builds api / whatsapp / telegram images, pushes them to GHCR and restarts them on the free VM over SSH.
+# Needs secrets VM_HOST, VM_USER, VM_SSH_KEY. Nothing here touches Azure.
+name: Deploy services to free VM
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - global.json
+      - Directory.Build.props
+      - services/**
+      - infrastructure/docker/**
+      - infrastructure/free-hosting/**
+      - .github/workflows/deploy-vm.yml
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - { service: api, dockerfile: infrastructure/docker/api.Dockerfile }
+          - { service: whatsapp, dockerfile: infrastructure/docker/whatsapp.Dockerfile }
+          - { service: telegram, dockerfile: infrastructure/docker/telegram.Dockerfile }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
+      - id: owner
+        run: echo "name=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64   # the free VM may be ARM (Oracle Ampere / Azure B2pts v2)
+          push: true
+          tags: |
+            ghcr.io/${{ steps.owner.outputs.name }}/daksh-${{ matrix.service }}:${{ github.sha }}
+            ghcr.io/${{ steps.owner.outputs.name }}/daksh-${{ matrix.service }}:latest
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Copy compose files
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          source: infrastructure/free-hosting/docker-compose.yml,infrastructure/free-hosting/Caddyfile
+          target: ~/daksh
+          strip_components: 2
+      - name: Pull and restart
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script: |
+            cd ~/daksh
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+            TAG=${{ github.sha }} docker compose pull
+            TAG=${{ github.sha }} docker compose up -d --remove-orphans
+            docker image prune -f

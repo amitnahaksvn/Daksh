@@ -1,0 +1,13 @@
+# One public HTTPS URL per service. Caddy gets certificates automatically (point each hostname's DNS at the VM).
+# Free hostnames work too, e.g. <ip-with-dashes>.sslip.io -- see README.md.
+{$API_HOST} {
+	reverse_proxy api:8080
+}
+
+{$WHATSAPP_HOST} {
+	reverse_proxy whatsapp:4100
+}
+
+{$TELEGRAM_HOST} {
+	reverse_proxy telegram:4200
+}
