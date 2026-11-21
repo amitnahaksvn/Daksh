@@ -4,8 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logging/logging.dart';
 
 import 'app.dart';
+import 'core/api_client.dart';
+import 'core/providers.dart';
+import 'core/session.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   Logger.root.level = kReleaseMode ? Level.INFO : Level.ALL;
   Logger.root.onRecord.listen((r) => debugPrint('${r.level.name} ${r.loggerName}: ${r.message}'));
   FlutterError.onError = (d) {
@@ -16,5 +20,6 @@ void main() {
     Logger('platform').severe('Uncaught platform error', e, st);
     return true;
   };
-  runApp(ProviderScope(child: DakshApp()));
+  final api = DakshApi(accessToken: await SessionNotifier.savedToken());
+  runApp(ProviderScope(retry: (_, _) => null, overrides: [apiProvider.overrideWithValue(api)], child: DakshApp()));
 }

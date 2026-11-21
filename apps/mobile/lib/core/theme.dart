@@ -18,6 +18,7 @@ class AppTheme {
       'emerald' => const Color(0xFF10B981),
       'rose' => const Color(0xFFF43F5E),
       'amber' => const Color(0xFFF59E0B),
+      'sandhya' => const Color(0xFFE8812B),
       _ => const Color(0xFF8B5CF6),
     };
   }
@@ -26,37 +27,51 @@ class AppTheme {
       _build(Brightness.light, style, accent(palette));
 
   static ThemeData dark({String style = 'bento', String palette = 'violet'}) =>
-      _build(Brightness.dark, style, accent(palette));
+      _build(Brightness.dark, style, palette == 'sandhya' ? const Color(0xFFF2994A) : accent(palette));
 
   static ThemeData _build(Brightness brightness, String style, Color accentColor) {
     final isDark = brightness == Brightness.dark;
+    final gpt = style == 'chatgpt'; // neutral grey, like ChatGPT
+    final web = style == 'sandhya'; // the website's own look: warm cream by day, deep indigo by night, saffron accent
     final isDarkCanvas = isDark || style == 'neural' || style == 'aurora';
-    final canvas = style == 'neural'
+    final canvas = gpt
+        ? (isDark ? const Color(0xFF212121) : Colors.white)
+        : web
+        ? (isDark ? const Color(0xFF0D0C22) : const Color(0xFFF0E7D8))
+        : style == 'neural'
         ? const Color(0xFF06070F)
         : style == 'aurora'
             ? const Color(0xFF0B1020)
             : isDark
                 ? const Color(0xFF111214)
                 : const Color(0xFFECEEF2);
-    final surface = style == 'neural'
+    final surface = gpt
+        ? (isDark ? const Color(0xFF2F2F2F) : const Color(0xFFF4F4F4))
+        : web
+        ? (isDark ? const Color(0xFF1E1C3E) : const Color(0xFFFFFBF3))
+        : style == 'neural'
         ? const Color(0xFF101224)
         : style == 'aurora'
             ? const Color(0xFF0F1220)
             : isDark
                 ? const Color(0xFF1B1C20)
                 : Colors.white;
-    final surface2 = style == 'neural'
+    final surface2 = gpt
+        ? (isDark ? const Color(0xFF303030) : const Color(0xFFECECEC))
+        : web
+        ? (isDark ? const Color(0xFF2A2756) : const Color(0xFFF6EFE3))
+        : style == 'neural'
         ? const Color(0xFF202238)
         : style == 'aurora'
             ? const Color(0xFF202640)
             : isDark
                 ? const Color(0xFF26282D)
                 : const Color(0xFFF4F5F7);
-    final text = isDarkCanvas ? const Color(0xFFF2F3F5) : ink;
-    final muted = isDarkCanvas ? const Color(0xFF9A9EA8) : const Color(0xFF5A5D66);
-    final border = isDarkCanvas ? const Color(0x17FFFFFF) : const Color(0x1417181C);
-    final primary = accentColor;
-    const onPrimary = Colors.white;
+    final text = gpt ? (isDark ? const Color(0xFFECECEC) : const Color(0xFF0D0D0D)) : web ? (isDark ? const Color(0xFFF4EBDD) : const Color(0xFF1E1B3A)) : isDarkCanvas ? const Color(0xFFF2F3F5) : ink;
+    final muted = gpt ? (isDark ? const Color(0xFFB4B4B4) : const Color(0xFF6B6B6B)) : web ? (isDark ? const Color(0xFFB7B0C6) : const Color(0xFF5E5848)) : isDarkCanvas ? const Color(0xFF9A9EA8) : const Color(0xFF5A5D66);
+    final border = gpt ? (isDark ? const Color(0x1AFFFFFF) : const Color(0x1A000000)) : web ? (isDark ? const Color(0x24FFFFFF) : const Color(0x331E1B3A)) : isDarkCanvas ? const Color(0x17FFFFFF) : const Color(0x1417181C);
+    final primary = gpt ? text : accentColor; // ChatGPT's accent is just its own text colour
+    final onPrimary = gpt ? canvas : web ? const Color(0xFF1E1B3A) : Colors.white;
 
     final scheme = ColorScheme(
       brightness: isDarkCanvas ? Brightness.dark : brightness,
@@ -106,6 +121,15 @@ class AppTheme {
       brightness: isDarkCanvas ? Brightness.dark : brightness,
       colorScheme: scheme,
       scaffoldBackgroundColor: canvas,
+      textTheme: web
+          ? Typography.material2021(platform: TargetPlatform.iOS).black.copyWith(
+              displaySmall: TextStyle(fontFamily: 'Georgia', fontWeight: FontWeight.w700, color: text),
+              headlineMedium: TextStyle(fontFamily: 'Georgia', fontWeight: FontWeight.w700, color: text),
+              headlineSmall: TextStyle(fontFamily: 'Georgia', fontWeight: FontWeight.w700, color: text),
+              titleLarge: TextStyle(fontFamily: 'Georgia', fontWeight: FontWeight.w700, color: text),
+              titleMedium: TextStyle(fontFamily: 'Georgia', fontWeight: FontWeight.w700, color: text),
+            ).apply(bodyColor: text, displayColor: text)
+          : null,
       appBarTheme: AppBarTheme(
         backgroundColor: canvas,
         foregroundColor: text,
@@ -113,6 +137,7 @@ class AppTheme {
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
         titleTextStyle: TextStyle(
+          fontFamily: web ? 'Georgia' : null,
           color: text,
           fontSize: 22,
           fontWeight: FontWeight.w800,
