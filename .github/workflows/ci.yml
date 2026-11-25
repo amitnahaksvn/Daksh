@@ -39,6 +39,19 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  desktop:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: apps/desktop } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: apps/desktop/package-lock.json }
+      - run: npm ci
+      - run: npm test
+      # Launches the real Electron app against a local test server.
+      - run: sudo apt-get update && sudo apt-get install -y xvfb
+      - run: xvfb-run -a npm run smoke
+
   mobile:
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: apps/mobile } }

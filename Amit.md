@@ -194,3 +194,16 @@ Notes: read-only. Daksha lists the documents issued to the person (name, issuer,
 
 If something fails, the message shown is the provider's own reason where available (for example a plan limit or a missing permission). The API logs
 carry the same detail without secrets.
+
+---
+
+## Desktop app (Windows and Mac): installers and signing
+
+The desktop project is `apps/desktop` (see its README). Nothing is needed to run it for yourself. To produce installers:
+
+1. GitHub → **Settings → Secrets and variables → Actions → Variables** → add `DAKSHA_APP_URL` = the address of your Daksha web app (for example `https://app.daksha.example.com`).
+2. **Actions → Desktop installers → Run workflow.** Download `daksha-windows` (a `.exe` installer) and `daksha-macos` (`.dmg` and `.zip`) from the run.
+3. Optional signing (removes the "unknown publisher" warnings), as repository **Secrets**:
+   - `CSC_LINK` — your code-signing certificate, base64-encoded (`.pfx` for Windows, `.p12` Developer ID for Mac); `CSC_KEY_PASSWORD` — its password.
+   - macOS notarisation: `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`.
+4. The installers cannot be built on this Linux machine, so they have not been produced yet: the workflow does it on Windows and macOS runners.

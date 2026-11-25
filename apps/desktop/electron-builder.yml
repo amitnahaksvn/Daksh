@@ -1,0 +1,34 @@
+appId: com.daksha.desktop
+productName: Daksha
+copyright: Daksha
+directories:
+  output: dist
+  buildResources: build
+files:
+  - src/**/*
+  - package.json
+asar: true
+protocols:
+  - name: Daksha
+    schemes: [daksha]
+win:
+  icon: build/icon.png
+  target:
+    - { target: nsis, arch: [x64, arm64] }
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+mac:
+  icon: build/icon.png
+  category: public.app-category.productivity
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  target:
+    - { target: dmg, arch: [x64, arm64] }
+    - { target: zip, arch: [x64, arm64] }
+dmg:
+  sign: false

@@ -1,0 +1,24 @@
+{
+  "name": "daksha-desktop",
+  "productName": "Daksha",
+  "version": "1.0.0",
+  "description": "Daksha for Windows and macOS: the full Daksha web app in a native window.",
+  "private": true,
+  "main": "src/main.cjs",
+  "author": "Daksha",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test \"test/*.test.cjs\"",
+    "smoke": "node scripts/smoke.cjs",
+    "icon": "node scripts/make-icon.cjs",
+    "config": "node scripts/write-config.cjs",
+    "dist:win": "npm run config && electron-builder --win --publish never",
+    "dist:mac": "npm run config && electron-builder --mac --publish never",
+    "pack": "npm run config && electron-builder --dir --publish never"
+  },
+  "devDependencies": {
+    "electron": "^45.5.0",
+    "electron-builder": "^26.0.0"
+  }
+}

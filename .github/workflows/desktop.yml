@@ -1,0 +1,46 @@
+name: Desktop installers
+# Builds the Windows (.exe) and macOS (.dmg/.zip) apps. Run it by hand (Actions -> Desktop installers -> Run workflow) or push a tag like desktop-v1.0.0.
+# Installers for each system can only be built on that system, which is why this uses a Windows and a macOS runner.
+on:
+  workflow_dispatch:
+    inputs:
+      app_url:
+        description: "Address of the Daksha web app the installers open (default: the repository variable DAKSHA_APP_URL)"
+        required: false
+  push:
+    tags: ["desktop-v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, script: dist:win, artifact: daksha-windows }
+          - { os: macos-latest, script: dist:mac, artifact: daksha-macos }
+    runs-on: ${{ matrix.os }}
+    defaults: { run: { working-directory: apps/desktop } }
+    env:
+      DAKSHA_DEFAULT_APP_URL: ${{ inputs.app_url || vars.DAKSHA_APP_URL }}
+      # Signing is optional. Without these secrets the installers are unsigned (Windows SmartScreen / macOS Gatekeeper will warn).
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.CSC_LINK != '' && 'true' || 'false' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: apps/desktop/package-lock.json }
+      - run: npm ci
+      - run: npm test
+      - run: npm run ${{ matrix.script }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            apps/desktop/dist/*.exe
+            apps/desktop/dist/*.dmg
+            apps/desktop/dist/*.zip
+          if-no-files-found: error
