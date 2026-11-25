@@ -274,6 +274,26 @@ export type SlackDashboard = { connected: boolean; teamName: string | null; unre
 
 // Apps that connect one account each: GitHub, Notion, Discord and Spotify (they share these generic shapes).
 export type OneAppKey = "github" | "notion" | "discord" | "spotify";
+
+// Apps built on the provider engine (services/api .../MoreApps): each describes itself through GET /api/integrations/{key}/spec.
+export const PROVIDER_APP_KEYS = [
+  "youtube", "google-maps-platform", "uber", "yahoo-mail", "proton-mail", "apple-calendar", "instagram", "facebook-pages", "x", "linkedin",
+  "tiktok", "reddit", "pinterest", "amazon-selling-partner", "shopify", "booking-com", "quickbooks-online", "home-assistant", "irctc", "digilocker",
+] as const;
+export type ProviderAppKey = (typeof PROVIDER_APP_KEYS)[number];
+export type AnyOneAppKey = OneAppKey | ProviderAppKey;
+export const isProviderAppKey = (key: string): key is ProviderAppKey => (PROVIDER_APP_KEYS as readonly string[]).includes(key);
+export type ProviderInput = { key: string; label: string; kind: string; placeholder: string | null; required: boolean; options: string[] | null; optionsView: string | null; default: string | null; hint: string | null };
+export type ProviderView = { id: string; label: string; takesArg: boolean; hidden: boolean; dashboard: boolean; empty: string | null; inputs: ProviderInput[] };
+export type ProviderAction = { id: string; label: string; hint: string | null; inputs: ProviderInput[] };
+export type ProviderSetting = { key: string; label: string; type: "bool" | "enum" | "count" | "text"; hint: string | null; placeholder: string | null; options: string[] | null; default: string | null };
+export type ProviderSpec = {
+  key: ProviderAppKey; name: string; icon: string; color: string; account: string; connectTitle: string; connectBlurb: string; connectLabel: string; writeLabel: string; writeHint: string;
+  auth: "oauth" | "credentials" | "serverkey"; writeNeedsSignIn: boolean; hasWrite: boolean; setupDoc: string;
+  connectFields: ProviderInput[]; views: ProviderView[]; actions: ProviderAction[]; settings: ProviderSetting[];
+};
+export type ProviderItem = { id: string; title: string; subtitle: string | null; url: string | null; badge: string | null; image: string | null; drill: string | null; body: string | null };
+export type ProviderActionResult = { message: string; url: string | null };
 export type OneAppStatus = { configured: boolean; connected: boolean; connectionId: string | null; accountId: string | null; accountName: string | null; write: boolean; scopes: string | null; extra: Record<string, string>; error: string | null };
 export type OneAppSettings = Record<string, string | number | boolean>;
 export type DashItem = { id: string; title: string; subtitle: string | null; url: string | null; badge: string | null };
@@ -578,16 +598,23 @@ export const api = {
 
   // Slack
   // GitHub, Notion, Discord and Spotify: the common calls take the app key.
-  oneAppStatus: (key: OneAppKey) => apiFetch<OneAppStatus>(`/api/integrations/${key}/status`),
-  connectOneApp: (key: OneAppKey, params: Record<string, string | boolean> = {}) => {
+  oneAppStatus: (key: AnyOneAppKey) => apiFetch<OneAppStatus>(`/api/integrations/${key}/status`),
+  connectOneApp: (key: AnyOneAppKey, params: Record<string, string | boolean> = {}) => {
     const query = new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString();
     return apiFetch<{ authorizationUrl: string }>(`/api/integrations/${key}/connect${query ? `?${query}` : ""}`, { method: "POST" });
   },
-  disconnectOneApp: (key: OneAppKey) => apiFetch<void>(`/api/integrations/${key}/disconnect`, { method: "POST" }),
-  setOneAppWrite: (key: OneAppKey, enabled: boolean) => apiFetch<void>(`/api/integrations/${key}/write`, json({ enabled })),
-  oneAppSettings: (key: OneAppKey) => apiFetch<OneAppSettings>(`/api/integrations/${key}/settings`),
-  updateOneAppSettings: (key: OneAppKey, values: OneAppSettings) => apiFetch<OneAppSettings>(`/api/integrations/${key}/settings`, { method: "PUT", body: JSON.stringify(values) }),
-  oneAppDashboard: (key: OneAppKey) => apiFetch<OneAppDashboard>(`/api/integrations/${key}/dashboard`),
+  disconnectOneApp: (key: AnyOneAppKey) => apiFetch<void>(`/api/integrations/${key}/disconnect`, { method: "POST" }),
+  setOneAppWrite: (key: AnyOneAppKey, enabled: boolean) => apiFetch<void>(`/api/integrations/${key}/write`, json({ enabled })),
+  oneAppSettings: (key: AnyOneAppKey) => apiFetch<OneAppSettings>(`/api/integrations/${key}/settings`),
+  updateOneAppSettings: (key: AnyOneAppKey, values: OneAppSettings) => apiFetch<OneAppSettings>(`/api/integrations/${key}/settings`, { method: "PUT", body: JSON.stringify(values) }),
+  oneAppDashboard: (key: AnyOneAppKey) => apiFetch<OneAppDashboard>(`/api/integrations/${key}/dashboard`),
+
+  providerSpec: (key: ProviderAppKey) => apiFetch<ProviderSpec>(`/api/integrations/${key}/spec`),
+  providerStatuses: () => apiFetch<Record<string, boolean>>("/api/integrations/provider-apps/statuses"),
+  providerView: (key: ProviderAppKey, view: string, params: Record<string, string> = {}) => apiFetch<ProviderItem[]>(`/api/integrations/${key}/views/${view}?${new URLSearchParams(params).toString()}`),
+  providerAction: (key: ProviderAppKey, action: string, inputs: Record<string, string>) => apiFetch<ProviderActionResult>(`/api/integrations/${key}/actions/${action}`, json({ inputs })),
+  /** Credential and server-key apps connect by posting what they ask for (OAuth apps use connectOneApp). */
+  connectProviderApp: (key: ProviderAppKey, values: Record<string, string> = {}) => apiFetch<void>(`/api/integrations/${key}/connect`, json(values)),
 
   githubItems: (kind: string, type: string, state: string) => apiFetch<GhItem[]>(`/api/integrations/github/items?kind=${kind}&type=${type}&state=${state}`),
   githubItem: (repo: string, number: number) => apiFetch<GhItemDetail>(`/api/integrations/github/items/${repo}/${number}`),

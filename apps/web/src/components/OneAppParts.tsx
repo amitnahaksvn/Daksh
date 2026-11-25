@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { BrandTile } from "@/components/integrations";
 import { Modal } from "@/components/Modal";
 import { buttonClass, ErrorState, Loading, secondaryButtonClass, tileClass } from "@/components/ui";
-import { api, ApiError, type DashboardApp, type OneAppKey, type OneAppStatus } from "@/lib/api";
+import { api, ApiError, type AnyOneAppKey, type DashboardApp, type OneAppStatus } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 
 /** What the shared GitHub / Notion / Discord / Spotify screens need to know about one app. */
@@ -13,7 +13,7 @@ export type OneAppOption = { id: string; label: string; hint: string; granted: (
 export type OneAppSettingRow = { key: string; label: string; hint?: string; type: "bool" | "enum" | "count" | "text"; options?: { value: string; label: string }[]; noun?: string; placeholder?: string };
 export type OneAppTab = { id: string; label: string; sections: { title: string; hint?: string; rows: OneAppSettingRow[] }[] };
 export type OneAppConfig = {
-  key: OneAppKey; name: string; icon: string; color: string; pageHref: string; account: string;
+  key: AnyOneAppKey; name: string; icon: string; color: string; pageHref: string; account: string;
   connectTitle: string; connectBlurb: string; connectLabel: string;
   writeLabel: string; writeHint: string;
   /** True when turning full access on needs the provider's sign-in again (GitHub, Spotify); false when it is only Daksha's own switch. */
@@ -21,6 +21,8 @@ export type OneAppConfig = {
   options?: OneAppOption[];
   tabs: OneAppTab[];
   setupDoc: string;
+  /** Read-only apps: the full-access switch is not shown. */
+  hideWrite?: boolean;
   /** Replaces the sign-in card (Discord asks for a bot token instead). */
   connect?: (onConnected: () => void) => ReactNode;
   /** Extra controls on the General tab (for example Discord's invite link). */
@@ -45,7 +47,7 @@ export function oneAppCallbackError(name: string, reason: string | null) {
  * Opens the provider's sign-in in a popup and resolves with "connected", "closed" or an error reason.
  * The popup lands on the app's own page, which reports back with postMessage and closes itself. If popups are blocked the page is redirected.
  */
-export function signInOneApp(key: OneAppKey, params: Record<string, string | boolean> = {}): Promise<string> {
+export function signInOneApp(key: AnyOneAppKey, params: Record<string, string | boolean> = {}): Promise<string> {
   const width = 560, height = 720;
   const left = Math.max(0, window.screenX + (window.outerWidth - width) / 2);
   const top = Math.max(0, window.screenY + (window.outerHeight - height) / 2);

@@ -8,7 +8,8 @@ import { GoogleWorkspaceDashboardCard } from "@/components/GoogleWorkspaceDashbo
 import { SlackDashboardCard } from "@/components/SlackDashboardCard";
 import { OneAppDashboardCard } from "@/components/OneAppParts";
 import { ONE_APPS, manageFor } from "@/components/oneAppConfigs";
-import type { OneAppKey } from "@/lib/api";
+import { isProviderAppKey, type OneAppKey } from "@/lib/api";
+import { ProviderDashboardCard } from "@/components/ProviderApp";
 import { GMAIL_CARD_HINT_KEY, GmailCardPlaceholder, GmailDashboardCard } from "@/components/GmailDashboardCard";
 import { CommandCentre } from "@/components/CommandCentre";
 import { api, type AvailableDashboardApp, type DashboardApp, type DashboardLayoutItem, type DashboardWidget } from "@/lib/api";
@@ -234,6 +235,8 @@ function DashboardBody({ apps, onRemove, onReload }: { apps: DashboardApp[]; onR
                 ? <SlackDashboardCard app={app} onChanged={reloadAfterSave} />
                 : app.integrationKey in ONE_APPS
                 ? <OneAppDashboardCard app={app} config={ONE_APPS[app.integrationKey as OneAppKey]} manage={manageFor(app.integrationKey as OneAppKey)} onChanged={reloadAfterSave} />
+                : isProviderAppKey(app.integrationKey)
+                ? <ProviderDashboardCard app={app} onChanged={reloadAfterSave} />
                 : <DashboardAppCard app={app} onRemove={onRemove} />}
             </DashboardTile>
           ))}

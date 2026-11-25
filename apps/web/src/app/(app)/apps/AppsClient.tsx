@@ -14,7 +14,8 @@ import { OneAppManagePanel } from "@/components/OneAppManagePanel";
 import { ONE_APPS } from "@/components/oneAppConfigs";
 import { ShoppingPanel } from "@/components/ShoppingPanel";
 import { microsoftCallbackError } from "@/components/MicrosoftParts";
-import { api, type AppCatalogEntry, type ConnectionStatusValue, type OneAppKey } from "@/lib/api";
+import { api, isProviderAppKey, type AppCatalogEntry, type ConnectionStatusValue, type OneAppKey, type ProviderAppKey } from "@/lib/api";
+import { ProviderManagePanel } from "@/components/ProviderApp";
 import { useApi } from "@/lib/useApi";
 
 
@@ -430,6 +431,9 @@ function AppsPageContent({ apps }: { apps: AppCatalogEntry[] }) {
   const [googleOpen, setGoogleOpen] = useState(false);
   const [slackOpen, setSlackOpen] = useState(false);
   const [oneAppOpen, setOneAppOpen] = useState<OneAppKey | null>(null);
+  const [providerOpen, setProviderOpen] = useState<ProviderAppKey | null>(null);
+  // YouTube, Instagram, Shopify and the other provider-engine apps: one call says which are connected.
+  const { state: providerDetail, reload: reloadProvider } = useApi(() => api.providerStatuses());
   // The shopping apps: each is "connected" once the user turns it on. Its panel keeps their shopping list and opens items on the store.
   const [shoppingKey, setShoppingKey] = useState<string | null>(null);
   const { state: shopping, reload: reloadShopping } = useApi(() => api.shoppingStores());
@@ -491,12 +495,14 @@ function AppsPageContent({ apps }: { apps: AppCatalogEntry[] }) {
       : key === "google-drive" ? googleStatusFor("drive") : key === "google-docs" ? googleStatusFor("docs") : key === "google-sheets" ? googleStatusFor("sheets") : key === "google-slides" ? googleStatusFor("slides")
       : key === "slack" ? slackStatus
       : key in ONE_APPS ? oneAppStatuses[key as OneAppKey]
+      : isProviderAppKey(key) ? (providerDetail.status === "ready" ? (providerDetail.data[key] ? "Connected" : "NotConnected") : undefined)
       : SHOPPING_KEYS.includes(key) ? shoppingStatus(key) : undefined;
   const configureFor = (key: string): (() => void) | undefined =>
     key === "whatsapp" ? () => setWhatsAppOpen(true) : key === "telegram" ? () => setTelegramOpen(true) : key === "gmail" ? () => setGmailOpen(true) : key === "google-calendar" ? () => router.push("/calendar")
       : ["microsoft-outlook", "microsoft-outlook-calendar", "onedrive", "azure-devops"].includes(key) ? () => setMicrosoftOpen(true)
       : GOOGLE_WORKSPACE_KEYS.includes(key) ? () => setGoogleOpen(true) : key === "slack" ? () => setSlackOpen(true)
       : key in ONE_APPS ? () => setOneAppOpen(key as OneAppKey)
+      : isProviderAppKey(key) ? () => setProviderOpen(key)
       : SHOPPING_KEYS.includes(key) ? () => setShoppingKey(key) : undefined;
   // Every app that works today (enabled), gathered at the top of the page: connected ones first, then the rest of the live apps.
   const showEnabledTop = category === "All" && !query;
@@ -666,6 +672,10 @@ function AppsPageContent({ apps }: { apps: AppCatalogEntry[] }) {
 
       <Modal wide fixedHeight open={oneAppOpen !== null} onClose={() => { const k = oneAppOpen; setOneAppOpen(null); if (k) reloadOneApp(k); }}>
         {oneAppOpen && <OneAppManagePanel key={oneAppOpen} config={ONE_APPS[oneAppOpen]} onChanged={() => reloadOneApp(oneAppOpen)} />}
+      </Modal>
+
+      <Modal wide fixedHeight open={providerOpen !== null} onClose={() => { setProviderOpen(null); reloadProvider(); }}>
+        {providerOpen && <ProviderManagePanel key={providerOpen} appKey={providerOpen} onChanged={reloadProvider} />}
       </Modal>
 
       <Modal wide fixedHeight open={slackOpen} onClose={() => { setSlackOpen(false); reloadSlack(); }}>

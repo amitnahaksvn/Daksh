@@ -1,0 +1,196 @@
+# Amit.md — keys, secrets and setup for the 20 new apps
+
+Everything in Daksha for these 20 apps is built and tested with mock servers. **None of it has been run against the real services**, because that needs
+your developer accounts and keys. Until a key below is set, the app shows "not set up on the server yet" and nothing breaks. Add the keys, restart the
+API, open **Apps**, and use the Manage popup.
+
+How the apps work (same as Gmail / Telegram / Spotify):
+
+- **Apps page** → click the app → **Manage** popup: **General** (account, full-access switch, "show on dashboard", Disconnect), **Dashboard** (what the tile
+  shows and how many items) and, where the app has them, **Preferences**. The page `/apps/<app>` has a tab per list plus a **Do something** tab.
+- **Read-only by default.** Writing (post, create, send, switch on) needs the full-access switch. Where the provider has a separate permission, turning the
+  switch on asks the person to approve it in a popup. Amazon Selling Partner, DigiLocker, IRCTC, Booking.com and Google Maps are read-only by design.
+- Credentials are stored encrypted (same envelope as the other apps). Disconnect deletes them.
+
+Where to put the values: the API's environment (or `.env`, see `.env.example`). Section names use `__` in env vars (`Shopify__OAuth__ClientId` is
+`Shopify:OAuth:ClientId` in `appsettings`). For OAuth apps the **redirect URI** you register with the provider must be exactly
+`<API address>/api/integrations/<app-key>/callback`, for example `http://localhost:5080/api/integrations/x/callback`. Several providers refuse
+`http://localhost`; use your real HTTPS address (for example `https://api.daksha.example.com/...`) and set `<Section>__OAuth__RedirectUri` and
+`<Section>__OAuth__FrontendUrl` (the page the person returns to, `https://app.../apps/<app-key>`) to match.
+
+## At a glance
+
+| App | Key | Sign-in | Server settings to add | Needs approval from the provider? |
+|---|---|---|---|---|
+| YouTube | `youtube` | Google | reuses `Gmail__OAuth__*` (or `YouTube__OAuth__*`) | No (sensitive scope warning until verified) |
+| Google Maps Platform | `google-maps-platform` | none (server key) | `GoogleMaps__ApiKey` | No |
+| Uber | `uber` | OAuth | `Uber__OAuth__ClientId/ClientSecret` | **Yes** for ride requests |
+| Yahoo Mail | `yahoo-mail` | person's app password | none | No |
+| Proton Mail | `proton-mail` | person's Bridge password | none | No (paid Proton plan + Bridge) |
+| Apple Calendar | `apple-calendar` | person's app-specific password | none | No |
+| Instagram | `instagram` | OAuth | `Instagram__OAuth__ClientId/ClientSecret` | **Yes** (Meta app review) |
+| Facebook Pages | `facebook-pages` | OAuth | `Facebook__OAuth__ClientId/ClientSecret` | **Yes** (Meta app review) |
+| X | `x` | OAuth 2.0 PKCE | `X__OAuth__ClientId/ClientSecret` | Paid plan for most reads |
+| LinkedIn | `linkedin` | OAuth | `LinkedIn__OAuth__ClientId/ClientSecret` | Products must be added |
+| TikTok | `tiktok` | OAuth | `TikTok__OAuth__ClientId/ClientSecret` | **Yes** (app review) |
+| Reddit | `reddit` | OAuth | `Reddit__OAuth__ClientId/ClientSecret` | No |
+| Pinterest | `pinterest` | OAuth | `Pinterest__OAuth__ClientId/ClientSecret` | Trial access first |
+| Amazon Selling Partner API | `amazon-selling-partner` | OAuth (Seller Central) | `AmazonSellingPartner__*` | **Yes** (developer registration) |
+| Shopify | `shopify` | OAuth per store | `Shopify__OAuth__ClientId/ClientSecret` | No (custom/partner app) |
+| Booking.com | `booking-com` | person's partner token | none | **Yes** (Demand API partner) |
+| QuickBooks Online | `quickbooks-online` | OAuth | `QuickBooks__OAuth__ClientId/ClientSecret` | Production keys need Intuit review |
+| Home Assistant | `home-assistant` | person's URL + token | none | No |
+| IRCTC | `irctc` | person's RapidAPI key | none | No (RapidAPI subscription) |
+| DigiLocker | `digilocker` | OAuth | `DigiLocker__OAuth__ClientId/ClientSecret` | **Yes** (government partner registration) |
+
+---
+
+## YouTube
+**Server settings:** nothing new if Gmail already works. Daksha reuses `Gmail__OAuth__ClientId` and `Gmail__OAuth__ClientSecret`. To use a separate Google client, set
+`YouTube__OAuth__ClientId` and `YouTube__OAuth__ClientSecret`.
+1. Google Cloud Console → your project → **APIs & Services → Library** → enable **YouTube Data API v3**.
+2. **OAuth consent screen** → add scopes `.../auth/youtube.readonly` and `.../auth/youtube`.
+3. **Credentials** → your OAuth client → add the redirect URI `…/api/integrations/youtube/callback`.
+4. Optional: `YouTube__OAuth__RedirectUri`, `YouTube__OAuth__FrontendUrl`.
+Notes: the YouTube API has a daily quota (10,000 units; a search costs 100). Full access lets Daksha create playlists, add videos and like videos. "Watch later" is not exposed by YouTube's API, so it is not listed.
+
+## Google Maps Platform
+**Server settings:** `GoogleMaps__ApiKey`
+1. Google Cloud Console → enable **Places API (New)** and **Routes API**, and turn billing on.
+2. **Credentials → Create credentials → API key.** Restrict it to those two APIs and to your server's IP address.
+Notes: nothing to sign in to; any person can "Turn on Maps". In **Manage → Preferences** each person sets a home and work address, which powers the commute tile ("leave now") and the assistant's travel-time answers.
+
+## Uber
+**Server settings:** `Uber__OAuth__ClientId`, `Uber__OAuth__ClientSecret` (plus optional `Uber__OAuth__RedirectUri`, `Uber__OAuth__FrontendUrl`)
+1. developer.uber.com → **Dashboard → Create app** (Rides API). Copy the Client ID and Client Secret.
+2. Add the redirect URI `…/api/integrations/uber/callback`.
+3. Scopes: `profile history` are available to new apps; **`request` (booking rides) needs Uber's approval**. Until then full access will be refused by Uber.
+Notes: Uber has reduced access to its Rides API; if your account cannot create an app, the history and estimate lists will not work. Price estimates take two "latitude, longitude" pairs.
+
+## Yahoo Mail
+**Server settings:** none. Each person connects their own mailbox.
+1. Yahoo → **Account Info → Account Security → Generate app password** (turn on two-step verification first).
+2. In Daksha paste the Yahoo address and that app password. Daksha uses `imap.mail.yahoo.com:993` and `smtp.mail.yahoo.com:465`.
+Notes: reads the inbox read-only; sending needs the full-access switch.
+
+## Proton Mail
+**Server settings:** none.
+1. Proton has no public API. Install **Proton Mail Bridge** (needs a paid Proton plan) on a machine the Daksha server can reach.
+2. In Bridge copy the address, the **Bridge password** (not your Proton password), and the IMAP/SMTP ports (defaults `1143` / `1025`).
+3. In Daksha paste them. If Daksha runs in the cloud and Bridge runs on your PC, you must expose Bridge through a private tunnel (VPN/Tailscale); Daksha refuses link-local addresses but allows LAN and loopback addresses.
+Notes: Bridge uses a self-signed certificate, so the certificate is only skipped when the address is loopback or on a private network.
+
+## Apple Calendar
+**Server settings:** none.
+1. appleid.apple.com → **Sign-In and Security → App-Specific Passwords** → generate one.
+2. In Daksha enter the Apple ID and that password. Daksha talks CalDAV to `caldav.icloud.com` only.
+Notes: events show in UTC; Preferences has "My time zone" (for example `Asia/Kolkata`) used when Daksha adds an event.
+
+## Instagram
+**Server settings:** `Instagram__OAuth__ClientId` (Instagram app ID), `Instagram__OAuth__ClientSecret` (Instagram app secret), `Instagram__OAuth__RedirectUri`, `Instagram__OAuth__FrontendUrl`
+1. developers.facebook.com → **Create app** (type Business) → add the product **Instagram** → **API setup with Instagram login**.
+2. Copy **Instagram app ID** and **Instagram app secret**. Add the redirect URI `…/api/integrations/instagram/callback` (Meta requires **HTTPS**).
+3. Permissions used: `instagram_business_basic`, `instagram_business_manage_insights` (read) and `instagram_business_content_publish`, `instagram_business_manage_comments`, `instagram_business_manage_messages` (full access).
+4. While the app is in development only accounts added as **Instagram testers** can sign in; for everyone else submit **App Review**.
+Notes: only Instagram **business or creator** accounts work. Publishing needs a public JPEG link. Replies to DMs are allowed within 24 hours of the person's last message.
+
+## Facebook Pages
+**Server settings:** `Facebook__OAuth__ClientId` (App ID), `Facebook__OAuth__ClientSecret`, `Facebook__OAuth__RedirectUri`, `Facebook__OAuth__FrontendUrl`
+1. developers.facebook.com → **Create app** (Business) → add **Facebook Login for Business** (or Facebook Login).
+2. Add the redirect URI `…/api/integrations/facebook-pages/callback` (HTTPS).
+3. Permissions: `pages_show_list`, `pages_read_engagement`, `pages_read_user_content`, `read_insights` (read); `pages_manage_posts`, `pages_manage_engagement`, `pages_messaging` (full access). Submit them for **App Review** and complete **Business Verification** to use them for anyone but app roles.
+Notes: in **Manage → Preferences → Which Page** each person can choose the Page by name; the first Page is used otherwise.
+
+## X (Twitter)
+**Server settings:** `X__OAuth__ClientId`, `X__OAuth__ClientSecret`, `X__OAuth__RedirectUri`, `X__OAuth__FrontendUrl`
+1. developer.x.com → your project/app → **User authentication settings** → enable **OAuth 2.0**, type **Web App (confidential client)**, set the callback URL `…/api/integrations/x/callback`.
+2. Copy the OAuth 2.0 **Client ID** and **Client Secret** (not the API key/secret).
+3. Scopes used: `tweet.read users.read offline.access bookmark.read` (read), `tweet.write like.write` (full access).
+Notes: X's plans limit what works: the free tier allows only posting; timeline, mentions and search need a paid plan. Daksha shows X's own error when a call is not on the plan.
+
+## LinkedIn
+**Server settings:** `LinkedIn__OAuth__ClientId`, `LinkedIn__OAuth__ClientSecret` (optional `LinkedIn__ApiVersion`, default `202510`)
+1. linkedin.com/developers → **Create app** (needs a LinkedIn Page).
+2. **Products** tab → add **Sign In with LinkedIn using OpenID Connect** and **Share on LinkedIn**.
+3. **Auth** tab → add the redirect URL `…/api/integrations/linkedin/callback`.
+Notes: LinkedIn does not let ordinary apps read the feed or messages, so Daksha shows the profile and can publish posts (full access). The "My posts" list works only for approved apps and says so otherwise. LinkedIn access tokens last 60 days; after that the person reconnects.
+
+## TikTok
+**Server settings:** `TikTok__OAuth__ClientId` (the **client key**), `TikTok__OAuth__ClientSecret`, `TikTok__OAuth__RedirectUri`, `TikTok__OAuth__FrontendUrl`
+1. developers.tiktok.com → **Manage apps → Connect an app**. Add products **Login Kit** and **Content Posting API**.
+2. Add the redirect URI `…/api/integrations/tiktok/callback` (HTTPS). Scopes: `user.info.basic user.info.stats video.list`, and `video.upload` for full access.
+3. Submit the app for review. Sending a video to drafts by link also needs your video domain verified in the TikTok developer portal.
+Notes: until the app is approved only the developer's own account (a "target user") can sign in.
+
+## Reddit
+**Server settings:** `Reddit__OAuth__ClientId`, `Reddit__OAuth__ClientSecret` (optional `Reddit__UserAgent`, for example `web:daksha:1.0 (by /u/yourname)`)
+1. reddit.com/prefs/apps → **create another app** → type **web app**, redirect uri `…/api/integrations/reddit/callback`.
+2. The Client ID is the string under the app name; the secret is "secret".
+Notes: Reddit requires a descriptive User-Agent; set `Reddit__UserAgent` with your Reddit username. Full access adds `submit edit vote privatemessages` (also needed to read the inbox).
+
+## Pinterest
+**Server settings:** `Pinterest__OAuth__ClientId` (App ID), `Pinterest__OAuth__ClientSecret`; for trial access also `Pinterest__ApiBase=https://api-sandbox.pinterest.com/v5`
+1. developers.pinterest.com → **My apps → Connect app**. Redirect URI `…/api/integrations/pinterest/callback`.
+2. New apps start with **trial access** (sandbox: data is separate from the real account). Apply for **standard access** to use real data, then remove `Pinterest__ApiBase`.
+Notes: scopes `user_accounts:read boards:read pins:read` (read), `boards:write pins:write` (full access).
+
+## Amazon Selling Partner API
+**Server settings:** `AmazonSellingPartner__OAuth__ClientId`, `AmazonSellingPartner__OAuth__ClientSecret` (Login with Amazon credentials), `AmazonSellingPartner__ApplicationId` (`amzn1.sp.solution....`), and optionally
+`AmazonSellingPartner__Region` (`eu` default, `na` or `fe`), `AmazonSellingPartner__MarketplaceId` (default `A21TJRUUN4KXV` = Amazon.in), `AmazonSellingPartner__SellerCentralUrl` (default `https://sellercentral.amazon.in`), `AmazonSellingPartner__Draft=false` once the app is published.
+1. Register as an SP-API developer in Seller Central (Apps and Services → Develop Apps) and create the app. Choose the roles Orders, Listings and Inventory.
+2. Create **Login with Amazon** security profile credentials and set the redirect URI `…/api/integrations/amazon-selling-partner/callback`.
+3. While the app is a **draft**, only your own seller account can authorize it (Daksha adds `version=beta`).
+Notes: read-only (orders from the last 30 days, listings, FBA inventory). The seller then clicks "Continue to Seller Central" and authorizes.
+
+## Shopify
+**Server settings:** `Shopify__OAuth__ClientId` (API key), `Shopify__OAuth__ClientSecret`, `Shopify__OAuth__RedirectUri`, `Shopify__OAuth__FrontendUrl`
+1. partners.shopify.com → **Apps → Create app → Create app manually** (a "custom distribution" app works for your own stores).
+2. **App setup → Allowed redirection URL(s)** → `…/api/integrations/shopify/callback`.
+3. Each person types their shop address (`my-store.myshopify.com`) on connect. Scopes: `read_orders read_products read_customers` (read), `write_products write_orders` (full access).
+Notes: Daksha verifies Shopify's signature (HMAC) on the callback. New products are created as **drafts**. API version `2025-01`.
+
+## Booking.com
+**Server settings:** none. Each person enters partner credentials.
+1. Booking.com **Demand API** is only for approved partners (apply through the Booking.com Affiliate/Connectivity partner programme).
+2. Paste the **Demand API token** and your **Affiliate ID** in Daksha.
+Notes: search by numeric city id (use "Find a city id") and dates. Written against Demand API 3.1; if your account is on a different version the response mapping may need a tweak.
+
+## QuickBooks Online
+**Server settings:** `QuickBooks__OAuth__ClientId`, `QuickBooks__OAuth__ClientSecret`, `QuickBooks__Environment` (`sandbox` or `production`), `QuickBooks__OAuth__RedirectUri`, `QuickBooks__OAuth__FrontendUrl`
+1. developer.intuit.com → **Dashboard → Create an app** (QuickBooks Online and Payments), scope **Accounting**.
+2. **Keys & credentials** → use the Development keys first with `QuickBooks__Environment=sandbox`; add the redirect URI `…/api/integrations/quickbooks-online/callback`.
+3. For real company data switch to the **Production** keys (needs Intuit's app assessment) and `QuickBooks__Environment=production`.
+Notes: QuickBooks has one permission for reading and changing books, so full access is Daksha's own switch. Creating invoices uses item id `1` ("Services"); create it first if your books lack it.
+
+## Home Assistant
+**Server settings:** none.
+1. Home Assistant → your **Profile → Security → Long-lived access tokens → Create token**.
+2. In Daksha enter the address (`http://homeassistant.local:8123`) and the token.
+3. The Daksha **server** must be able to reach that address. For a cloud server use Nabu Casa's remote URL or a private tunnel. Daksha refuses link-local / cloud-metadata addresses.
+Notes: full access lets Daksha switch devices, set brightness and activate scenes, scripts and automations.
+
+## IRCTC
+**Server settings:** none. Each person enters a RapidAPI key.
+1. IRCTC has **no public API**, so Daksha uses the third-party "IRCTC" service on rapidapi.com (host `irctc1.p.rapidapi.com`). Subscribe to it and copy your **X-RapidAPI-Key**.
+2. Paste the key in Daksha. In **Manage → Preferences → My PNR numbers** add up to 5 PNRs to show on the dashboard.
+Notes: PNR status, trains between stations, live running status, station-code search. **Booking tickets is not possible through this**; do that on irctc.co.in.
+
+## DigiLocker
+**Server settings:** `DigiLocker__OAuth__ClientId`, `DigiLocker__OAuth__ClientSecret`, `DigiLocker__OAuth__RedirectUri`, `DigiLocker__OAuth__FrontendUrl`, optional `DigiLocker__BaseUrl` (default `https://digilocker.meripehchaan.gov.in`)
+1. Register as a DigiLocker **requester/partner** (API Setu → DigiLocker, or the DigiLocker partner portal) and request OAuth credentials. Register the redirect URI `…/api/integrations/digilocker/callback`.
+2. Government onboarding takes time; until then the app shows "not set up".
+Notes: read-only. Daksha lists the documents issued to the person (name, issuer, date) and never downloads them.
+
+---
+
+## Checking each app after you add keys (a 2-minute smoke test)
+
+1. Restart the API. Open **Apps** → the app → it should no longer say "not set up".
+2. Connect. For OAuth apps a popup opens, you approve, and the popup closes by itself.
+3. Open `/apps/<app-key>` → each tab should list something; **Manage → General** shows the account.
+4. Turn on **Show on dashboard** and confirm the tile appears.
+5. In **Ask**, try a question that names the app ("what's on my YouTube playlists?").
+6. Turn on full access and try one action (a draft/test item is safest).
+
+If something fails, the message shown is the provider's own reason where available (for example a plan limit or a missing permission). The API logs
+carry the same detail without secrets.

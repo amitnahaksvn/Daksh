@@ -117,6 +117,7 @@ export function OneAppManagePanel({ config, onChanged }: { config: OneAppConfig;
 
             {tab === "general" && (
               <>
+                {config.hideWrite ? <p className="rounded-[1.25rem] border border-line bg-surface-2 p-3 text-sm text-muted">{config.name} is read-only: Daksha looks things up and never changes anything.</p> : (
                 <Section title="Access level" hint={`${config.name} starts read-only. ${config.writeHint}`}>
                   <Row label={config.writeLabel} hint={config.writeNeedsSignIn ? `${config.name} asks you to approve this when you turn it on.` : undefined} search="">
                     <Toggle label={config.writeLabel} checked={status.write} disabled={busy} onChange={(v) => void toggleWrite(v)} />
@@ -126,7 +127,7 @@ export function OneAppManagePanel({ config, onChanged }: { config: OneAppConfig;
                       <Toggle label={o.label} checked={o.granted(status)} disabled={busy || o.granted(status)} onChange={(v) => { if (v) void signIn({ [o.id]: true }); }} />
                     </Row>
                   ))}
-                </Section>
+                </Section>)}
                 <Section title="Dashboard" hint={`Show a ${config.name} tile on your Daksha dashboard. What it shows is set in the other tabs.`}>
                   <Row label={`Show ${config.name} on dashboard`} search="">
                     <Toggle label={`Show ${config.name} on dashboard`} checked={onDashboard !== null} disabled={busy}
