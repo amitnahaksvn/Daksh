@@ -32,7 +32,16 @@ public static class GmailScopes
         ["labels"] = Labels,
         ["settings"] = SettingsBasic,
         ["full"] = Full,
+        // Google Drive, Docs, Sheets and Slides ride on the same Google sign-in (see GoogleWorkspaceModule). Read-only unless "workspace_write" is also asked for.
+        ["drive"] = "https://www.googleapis.com/auth/drive.readonly",
+        ["docs"] = "https://www.googleapis.com/auth/documents.readonly",
+        ["sheets"] = "https://www.googleapis.com/auth/spreadsheets.readonly",
+        ["slides"] = "https://www.googleapis.com/auth/presentations.readonly",
     };
+
+    /// <summary>Extra permissions that let Daksha create files and add to Docs and Sheets (instead of only reading them).</summary>
+    public static readonly string[] WorkspaceWrite =
+        ["https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/documents", "https://www.googleapis.com/auth/spreadsheets"];
 
     /// <summary>Space-delimited scope string for the base scopes plus the requested feature groups. Unknown names are ignored.</summary>
     public static string ForFeatures(string? features)
@@ -40,6 +49,8 @@ public static class GmailScopes
         var scopes = new List<string>(Base) { Calendar }; // every new sign-in also asks for Calendar; Google lets the user untick it
         foreach (var name in (features ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             if (Features.TryGetValue(name, out var scope) && !scopes.Contains(scope)) scopes.Add(scope);
+            else if (name.Equals("workspace_write", StringComparison.OrdinalIgnoreCase))
+                foreach (var w in WorkspaceWrite) if (!scopes.Contains(w)) scopes.Add(w);
         return string.Join(' ', scopes);
     }
 
@@ -50,7 +61,17 @@ public static class GmailScopes
     public static bool Satisfies(IEnumerable<string> granted, string required)
     {
         var set = new HashSet<string>(granted, StringComparer.Ordinal);
-        if (set.Contains(required) || set.Contains(Full)) return true;
+        if (set.Contains(required) || (set.Contains(Full) && required.StartsWith("https://www.googleapis.com/auth/gmail.", StringComparison.Ordinal))) return true; // full Gmail access covers Gmail scopes only
+        // A write permission includes reading the same kind of file (Drive's full scope, or Docs/Sheets edit rights).
+        var implied = required switch
+        {
+            "https://www.googleapis.com/auth/documents.readonly" => "https://www.googleapis.com/auth/documents",
+            "https://www.googleapis.com/auth/spreadsheets.readonly" => "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/presentations.readonly" => "https://www.googleapis.com/auth/presentations",
+            "https://www.googleapis.com/auth/drive.readonly" => "https://www.googleapis.com/auth/drive",
+            _ => null,
+        };
+        if (implied is not null && set.Contains(implied)) return true;
         return set.Contains(Modify) && required is ReadOnly or Send or Compose or Labels;
     }
 
@@ -63,6 +84,10 @@ public static class GmailScopes
         Modify => "Archive, trash, star, mark read/unread and label messages.",
         Labels => "Create, rename and delete Gmail labels.",
         SettingsBasic => "Read and change Gmail filters, vacation responder and forwarding.",
+        "https://www.googleapis.com/auth/drive.readonly" => "See and search your Google Drive files.",
+        "https://www.googleapis.com/auth/documents.readonly" => "Read your Google Docs.",
+        "https://www.googleapis.com/auth/spreadsheets.readonly" => "Read your Google Sheets.",
+        "https://www.googleapis.com/auth/presentations.readonly" => "Read your Google Slides.",
         Full => "Permanently delete messages. Restricted scope — only request if you need permanent deletion.",
         _ => scope,
     };

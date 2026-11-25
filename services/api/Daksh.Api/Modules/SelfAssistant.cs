@@ -290,7 +290,8 @@ public static class SelfAssistant
                 context = await AssistantContextBuilder.BuildAsync(db, userId, question,
                     accountId => GmailIntegrationModule.RecentForAssistantAsync(userId, accountId, "in:inbox newer_than:7d", 10, db, protector, config, clients, ct), ct,
                     (accountId, messageId) => GmailIntegrationModule.ReadBodyForAssistantAsync(userId, accountId, messageId, db, protector, config, clients, ct),
-                    q => MicrosoftAssistant.BuildAsync(db, protector, config, clients, userId, q, ct));
+                    q => MicrosoftAssistant.BuildAsync(db, protector, config, clients, userId, q, ct),
+            workspace: q => WorkspaceAssistant.BuildAsync(db, protector, config, clients, userId, q, ct));
             }
             catch (Exception ex) { log.LogWarning(ex, "Could not gather app data for a chat question; answering without it"); context = new AssistantContextResult("", []); }
 

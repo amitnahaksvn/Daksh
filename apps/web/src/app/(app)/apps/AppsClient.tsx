@@ -8,9 +8,13 @@ import { GmailManagePanel } from "@/components/GmailManagePanel";
 import { WhatsAppConnectPanel } from "@/components/WhatsAppConnectPanel";
 import { TelegramConnectPanel } from "@/components/TelegramConnectPanel";
 import { MicrosoftManagePanel } from "@/components/MicrosoftManagePanel";
+import { GoogleWorkspaceManagePanel } from "@/components/GoogleWorkspaceManagePanel";
+import { SlackManagePanel } from "@/components/SlackManagePanel";
+import { OneAppManagePanel } from "@/components/OneAppManagePanel";
+import { ONE_APPS } from "@/components/oneAppConfigs";
 import { ShoppingPanel } from "@/components/ShoppingPanel";
 import { microsoftCallbackError } from "@/components/MicrosoftParts";
-import { api, type AppCatalogEntry, type ConnectionStatusValue } from "@/lib/api";
+import { api, type AppCatalogEntry, type ConnectionStatusValue, type OneAppKey } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 
 
@@ -135,6 +139,58 @@ const APP_META: Record<string, { priority: Priority; description: string }> = {
   "mcp-servers": { priority: "Low", description: "Connect Daksh to tools exposed by external MCP servers." },
 
   "openclaw-plugins": { priority: "Low", description: "Extend Daksh with community OpenClaw plugins." },
+
+  "a2a": { priority: "Low", description: "Talk to other agents over the Agent-to-Agent protocol." },
+  "buzz": { priority: "Low", description: "Chat with Daksh through Buzz." },
+  "clickclack": { priority: "Low", description: "Chat with Daksh through ClickClack." },
+  "irc": { priority: "Low", description: "Chat with Daksh from IRC channels and direct messages." },
+  "nextcloud-talk": { priority: "Low", description: "Chat with Daksh from Nextcloud Talk rooms." },
+  "nostr": { priority: "Low", description: "Chat with Daksh over Nostr direct messages." },
+  "raft": { priority: "Low", description: "Chat with Daksh through Raft." },
+  "reef": { priority: "Low", description: "Chat with Daksh through Reef." },
+  "synology-chat": { priority: "Low", description: "Chat with Daksh from Synology Chat." },
+  "tlon": { priority: "Low", description: "Chat with Daksh through Tlon." },
+  "webchat": { priority: "Low", description: "Embed a web chat widget for Daksh." },
+  "apple-notes": { priority: "Low", description: "Search and add notes in Apple Notes." },
+  "obsidian": { priority: "Low", description: "Search and add notes in an Obsidian vault." },
+  "spotify": { priority: "Low", description: "Control Spotify playback and playlists." },
+  "sonos": { priority: "Low", description: "Control Sonos speakers and rooms." },
+  "1password": { priority: "Low", description: "Look up items in 1Password without exposing secrets to the chat." },
+  "weather": { priority: "Low", description: "Get forecasts and weather alerts for your places." },
+  "anthropic": { priority: "Low", description: "Use Claude models." },
+  "openai": { priority: "Low", description: "Use OpenAI models." },
+  "google-gemini": { priority: "Low", description: "Use Google Gemini models." },
+  "mistral": { priority: "Low", description: "Use Mistral models." },
+  "deepseek": { priority: "Low", description: "Use DeepSeek models." },
+  "qwen": { priority: "Low", description: "Use Qwen models." },
+  "moonshot-kimi": { priority: "Low", description: "Use Moonshot Kimi models." },
+  "minimax": { priority: "Low", description: "Use MiniMax models." },
+  "zai": { priority: "Low", description: "Use Z.AI GLM models." },
+  "cohere": { priority: "Low", description: "Use Cohere models." },
+  "groq": { priority: "Low", description: "Run models on Groq." },
+  "cerebras": { priority: "Low", description: "Run models on Cerebras." },
+  "together-ai": { priority: "Low", description: "Run open models on Together AI." },
+  "fireworks": { priority: "Low", description: "Run open models on Fireworks." },
+  "nvidia": { priority: "Low", description: "Use NVIDIA-hosted models." },
+  "hugging-face": { priority: "Low", description: "Use Hugging Face inference models." },
+  "openrouter": { priority: "Low", description: "Route to many models through OpenRouter." },
+  "litellm": { priority: "Low", description: "Route models through a LiteLLM proxy." },
+  "amazon-bedrock": { priority: "Low", description: "Use models on Amazon Bedrock." },
+  "anthropic-vertex": { priority: "Low", description: "Use Claude on Google Vertex AI." },
+  "github-copilot": { priority: "Low", description: "Use models through GitHub Copilot." },
+  "cloudflare-ai-gateway": { priority: "Low", description: "Route models through Cloudflare AI Gateway." },
+  "vercel-ai-gateway": { priority: "Low", description: "Route models through Vercel AI Gateway." },
+  "ollama": { priority: "Low", description: "Use local models served by Ollama." },
+  "lm-studio": { priority: "Low", description: "Use local models served by LM Studio." },
+  "vllm": { priority: "Low", description: "Use models served by vLLM." },
+  "custom-openai-api": { priority: "Low", description: "Use any OpenAI-compatible endpoint." },
+  "elevenlabs": { priority: "Low", description: "Speech synthesis with ElevenLabs." },
+  "deepgram": { priority: "Low", description: "Speech-to-text with Deepgram." },
+  "azure-speech": { priority: "Low", description: "Speech services on Azure." },
+  "perplexity-search": { priority: "Low", description: "Web search through Perplexity." },
+  "runway": { priority: "Low", description: "Generate video with Runway." },
+  "fal": { priority: "Low", description: "Generate images and media with fal." },
+  "comfyui": { priority: "Low", description: "Run image workflows on ComfyUI." },
 };
 
 const CATEGORY_META: Record<string, { title: string; description: string; glyph: React.ReactNode }> = {
@@ -272,6 +328,31 @@ const CATEGORY_META: Record<string, { title: string; description: string; glyph:
     description: "Plugins that extend Daksh's own agent — not built yet.",
     glyph: <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4"><rect x="3" y="3" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.3" /><path d="M6 6h.01M10 6h.01M5.5 10c.7.7 1.6 1 2.5 1s1.8-.3 2.5-1" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /></svg>,
   },
+  "Media": {
+    title: "Media",
+    description: "Music and speakers — not built yet.",
+    glyph: <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4"><circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.3" /></svg>,
+  },
+  "Security": {
+    title: "Security",
+    description: "Password and secret managers — not built yet.",
+    glyph: <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4"><circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.3" /></svg>,
+  },
+  "Utilities": {
+    title: "Utilities",
+    description: "Everyday information — not built yet.",
+    glyph: <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4"><circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.3" /></svg>,
+  },
+  "AI models": {
+    title: "AI models",
+    description: "Model providers and gateways — not built yet.",
+    glyph: <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4"><circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.3" /></svg>,
+  },
+  "Voice & search": {
+    title: "Voice & search",
+    description: "Speech, search and media generation — not built yet.",
+    glyph: <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4"><circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.3" /></svg>,
+  },
 };
 const CATEGORY_ORDER = [
   "Messaging",
@@ -297,11 +378,17 @@ const CATEGORY_ORDER = [
   "India AI",
   "India commerce",
   "Smart home",
+  "Media",
+  "Security",
+  "Utilities",
+  "AI models",
+  "Voice & search",
   "Automation",
   "Integration protocol",
   "Agent runtime",
 ];
 
+const GOOGLE_WORKSPACE_KEYS = ["google-drive", "google-docs", "google-sheets", "google-slides"];
 const DECORATIVE_PREVIEW = ["whatsapp", "gmail", "slack", "telegram", "microsoft-teams"];
 
 function CategoryPills({ apps, active, onChange }: { apps: AppCatalogEntry[]; active: string; onChange: (c: string) => void }) {
@@ -340,6 +427,9 @@ function AppsPageContent({ apps }: { apps: AppCatalogEntry[] }) {
   const [telegramOpen, setTelegramOpen] = useState(false);
   const [gmailOpen, setGmailOpen] = useState(false);
   const [microsoftOpen, setMicrosoftOpen] = useState(false);
+  const [googleOpen, setGoogleOpen] = useState(false);
+  const [slackOpen, setSlackOpen] = useState(false);
+  const [oneAppOpen, setOneAppOpen] = useState<OneAppKey | null>(null);
   // The shopping apps: each is "connected" once the user turns it on. Its panel keeps their shopping list and opens items on the store.
   const [shoppingKey, setShoppingKey] = useState<string | null>(null);
   const { state: shopping, reload: reloadShopping } = useApi(() => api.shoppingStores());
@@ -355,6 +445,24 @@ function AppsPageContent({ apps }: { apps: AppCatalogEntry[] }) {
   });
   // One Microsoft sign-in powers Outlook mail, Outlook calendar, OneDrive and Azure DevOps: each tile is "connected" when its service is on.
   const { state: microsoftDetail, reload: reloadMicrosoft } = useApi(() => api.microsoftStatus());
+  // One Google sign-in powers Drive, Docs, Sheets and Slides (alongside Gmail and Calendar); Slack signs in on its own.
+  const { state: googleDetail, reload: reloadGoogle } = useApi(() => api.googleStatus());
+  const googleStatusFor = (service: "drive" | "docs" | "sheets" | "slides"): ConnectionStatusValue | undefined =>
+    googleDetail.status !== "ready" ? undefined : googleDetail.data.services.find((x) => x.id === service)?.enabled ? "Connected" : "NotConnected";
+  const { state: slackDetail, reload: reloadSlack } = useApi(() => api.slackStatus());
+  const slackStatus: ConnectionStatusValue | undefined = slackDetail.status !== "ready" ? undefined : slackDetail.data.connected ? "Connected" : "NotConnected";
+  // GitHub, Notion, Discord and Spotify each connect one account.
+  const { state: githubDetail, reload: reloadGithub } = useApi(() => api.oneAppStatus("github"));
+  const { state: notionDetail, reload: reloadNotion } = useApi(() => api.oneAppStatus("notion"));
+  const { state: discordDetail, reload: reloadDiscord } = useApi(() => api.oneAppStatus("discord"));
+  const { state: spotifyDetail, reload: reloadSpotify } = useApi(() => api.oneAppStatus("spotify"));
+  const oneAppStatuses: Record<OneAppKey, ConnectionStatusValue | undefined> = {
+    github: githubDetail.status === "ready" ? (githubDetail.data.connected ? "Connected" : "NotConnected") : undefined,
+    notion: notionDetail.status === "ready" ? (notionDetail.data.connected ? "Connected" : "NotConnected") : undefined,
+    discord: discordDetail.status === "ready" ? (discordDetail.data.connected ? "Connected" : "NotConnected") : undefined,
+    spotify: spotifyDetail.status === "ready" ? (spotifyDetail.data.connected ? "Connected" : "NotConnected") : undefined,
+  };
+  const reloadOneApp = (key: OneAppKey) => ({ github: reloadGithub, notion: reloadNotion, discord: reloadDiscord, spotify: reloadSpotify })[key]();
   const microsoftStatusFor = (feature: "mail" | "calendar" | "onedrive" | "devops"): ConnectionStatusValue | undefined =>
     microsoftDetail.status !== "ready" ? undefined : microsoftDetail.data.connected && microsoftDetail.data.features.includes(feature) ? "Connected" : "NotConnected";
   // The catalogue list has no per-user connection data (it's not personalized) — fetch WhatsApp's real
@@ -380,10 +488,15 @@ function AppsPageContent({ apps }: { apps: AppCatalogEntry[] }) {
     key === "whatsapp" ? whatsAppStatus : key === "gmail" ? gmailStatus : key === "telegram" ? telegramStatus : key === "google-calendar" ? calendarStatus
       : key === "microsoft-outlook" ? microsoftStatusFor("mail") : key === "microsoft-outlook-calendar" ? microsoftStatusFor("calendar")
       : key === "onedrive" ? microsoftStatusFor("onedrive") : key === "azure-devops" ? microsoftStatusFor("devops")
+      : key === "google-drive" ? googleStatusFor("drive") : key === "google-docs" ? googleStatusFor("docs") : key === "google-sheets" ? googleStatusFor("sheets") : key === "google-slides" ? googleStatusFor("slides")
+      : key === "slack" ? slackStatus
+      : key in ONE_APPS ? oneAppStatuses[key as OneAppKey]
       : SHOPPING_KEYS.includes(key) ? shoppingStatus(key) : undefined;
   const configureFor = (key: string): (() => void) | undefined =>
     key === "whatsapp" ? () => setWhatsAppOpen(true) : key === "telegram" ? () => setTelegramOpen(true) : key === "gmail" ? () => setGmailOpen(true) : key === "google-calendar" ? () => router.push("/calendar")
       : ["microsoft-outlook", "microsoft-outlook-calendar", "onedrive", "azure-devops"].includes(key) ? () => setMicrosoftOpen(true)
+      : GOOGLE_WORKSPACE_KEYS.includes(key) ? () => setGoogleOpen(true) : key === "slack" ? () => setSlackOpen(true)
+      : key in ONE_APPS ? () => setOneAppOpen(key as OneAppKey)
       : SHOPPING_KEYS.includes(key) ? () => setShoppingKey(key) : undefined;
   // Every app that works today (enabled), gathered at the top of the page: connected ones first, then the rest of the live apps.
   const showEnabledTop = category === "All" && !query;
@@ -545,6 +658,18 @@ function AppsPageContent({ apps }: { apps: AppCatalogEntry[] }) {
 
       <Modal wide open={shoppingKey !== null} onClose={() => { setShoppingKey(null); reloadShopping(); }}>
         {shoppingKey && (() => { const app = apps.find((a) => a.integrationKey === shoppingKey); return app ? <ShoppingPanel storeKey={shoppingKey} icon={app.icon} color={app.color} onChanged={reloadShopping} /> : null; })()}
+      </Modal>
+
+      <Modal wide fixedHeight open={googleOpen} onClose={() => { setGoogleOpen(false); reloadGoogle(); }}>
+        <GoogleWorkspaceManagePanel onChanged={reloadGoogle} />
+      </Modal>
+
+      <Modal wide fixedHeight open={oneAppOpen !== null} onClose={() => { const k = oneAppOpen; setOneAppOpen(null); if (k) reloadOneApp(k); }}>
+        {oneAppOpen && <OneAppManagePanel key={oneAppOpen} config={ONE_APPS[oneAppOpen]} onChanged={() => reloadOneApp(oneAppOpen)} />}
+      </Modal>
+
+      <Modal wide fixedHeight open={slackOpen} onClose={() => { setSlackOpen(false); reloadSlack(); }}>
+        <SlackManagePanel onChanged={reloadSlack} />
       </Modal>
 
       <Modal wide fixedHeight open={microsoftOpen} onClose={() => { setMicrosoftOpen(false); reloadMicrosoft(); }}>

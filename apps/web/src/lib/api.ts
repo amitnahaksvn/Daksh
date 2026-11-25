@@ -249,6 +249,58 @@ export type DevOpsWorkItem = { id: number; title: string; state: string; type: s
 export type DevOpsSummary = { organizations: string[]; organization: string | null; projects: string[]; workItems: DevOpsWorkItem[] };
 export type MicrosoftDashboard = { connected: boolean; email: string | null; features: MicrosoftFeature[]; unread: number | null; messages: OutlookMessageSummary[]; events: CalendarEvent[]; files: DriveItem[]; workItems: DevOpsWorkItem[]; errors: string[] };
 
+export type GoogleService = "drive" | "docs" | "sheets" | "slides";
+export type GoogleServiceState = { id: GoogleService; granted: boolean; enabled: boolean };
+export type GoogleWorkspaceStatus = { configured: boolean; googleConnected: boolean; connected: boolean; connectionId: string | null; email: string | null; services: GoogleServiceState[]; write: boolean; writeGranted: boolean; error: string | null };
+export type GoogleWorkspaceSettings = { fileCount: number; fileSource: "recent" | "shared" | "starred" | "mine"; sortBy: "modified" | "name"; openIn: "google" | "daksha"; sheetRows: 10 | 25 | 50 | 100; showOnDashboard: boolean };
+export type GoogleWorkspaceSettingsUpdate = Partial<Omit<GoogleWorkspaceSettings, "showOnDashboard">>;
+export type GoogleFile = { id: string; name: string; mimeType: string; kind: "folder" | "doc" | "sheet" | "slides" | "pdf" | "image" | "file"; isFolder: boolean; modified: string | null; size: number | null; webUrl: string | null; starred: boolean; owner: string | null };
+export type GoogleFileListing = { folderId: string | null; items: GoogleFile[]; nextPageToken: string | null };
+export type GoogleDoc = { id: string; title: string; text: string; webUrl: string | null };
+export type GoogleSheet = { id: string; title: string; webUrl: string | null; tabs: { title: string; rows: number; columns: number }[]; range: string; values: string[][]; truncated: boolean };
+export type GooglePresentation = { id: string; title: string; webUrl: string | null; slides: { number: number; text: string }[] };
+export type GoogleWorkspaceDashboard = { connected: boolean; email: string | null; services: GoogleService[]; files: GoogleFile[]; errors: string[] };
+
+export type SlackWorkspace = { connectionId: string; teamId: string; teamName: string; slackUserId: string; write: boolean; unread: number };
+export type SlackStatus = { configured: boolean; eventsConfigured: boolean; connected: boolean; workspaces: SlackWorkspace[]; error: string | null };
+export type SlackSettings = { dashboardCount: number; dashboardSource: "all" | "dms" | "mentions"; markReadOnOpen: boolean; notifyDms: boolean; notifyMentions: boolean; hideBots: boolean; defaultConnectionId: string | null; showOnDashboard: boolean };
+export type SlackSettingsUpdate = Partial<Omit<SlackSettings, "showOnDashboard">>;
+export type SlackChannel = { id: string; name: string; kind: "channel" | "group" | "dm"; isPrivate: boolean; topic: string | null; members: number | null; userId: string | null };
+export type SlackMessage = { ts: string; userId: string; userName: string; text: string; threadTs: string | null; replyCount: number; time: string | null; isBot: boolean; files: number };
+export type SlackMessagePage = { messages: SlackMessage[]; nextCursor: string | null };
+export type SlackSearchHit = { channelId: string; channel: string; userName: string; text: string; ts: string; permalink: string | null };
+export type SlackActivity = { id: string; channelId: string; channel: string; kind: "dm" | "mention"; userName: string; text: string; time: string; read: boolean };
+export type SlackDashboard = { connected: boolean; teamName: string | null; unread: number; activity: SlackActivity[]; conversations: SlackChannel[]; eventsConfigured: boolean; errors: string[] };
+
+// Apps that connect one account each: GitHub, Notion, Discord and Spotify (they share these generic shapes).
+export type OneAppKey = "github" | "notion" | "discord" | "spotify";
+export type OneAppStatus = { configured: boolean; connected: boolean; connectionId: string | null; accountId: string | null; accountName: string | null; write: boolean; scopes: string | null; extra: Record<string, string>; error: string | null };
+export type OneAppSettings = Record<string, string | number | boolean>;
+export type DashItem = { id: string; title: string; subtitle: string | null; url: string | null; badge: string | null };
+export type DashSection = { title: string; href: string | null; items: DashItem[] };
+export type OneAppDashboard = { connected: boolean; account: string | null; sections: DashSection[]; errors: string[] };
+
+export type GhItem = { key: string; repo: string; number: number; title: string; state: string; isPr: boolean; draft: boolean; author: string; url: string; comments: number; updated: string | null; labels: string[] };
+export type GhNotification = { id: string; repo: string; title: string; reason: string; type: string; unread: boolean; url: string | null; updated: string | null };
+export type GhRepo = { fullName: string; description: string | null; private: boolean; language: string | null; stars: number; openIssues: number; pushed: string | null; url: string };
+export type GhComment = { author: string; body: string; created: string | null; url: string | null };
+export type GhItemDetail = { item: GhItem; body: string; comments: GhComment[] };
+
+export type NotionObject = { id: string; title: string; kind: "page" | "database"; url: string | null; icon: string | null; edited: string | null };
+export type NotionPage = { id: string; title: string; url: string | null; text: string; edited: string | null };
+export type NotionRow = { id: string; title: string; url: string | null; properties: Record<string, string> };
+export type NotionDatabase = { id: string; title: string; rows: NotionRow[] };
+
+export type DiscordGuild = { id: string; name: string; icon: string | null };
+export type DiscordChannel = { id: string; name: string; kind: "text" | "announcement"; position: number; topic: string | null };
+export type DiscordMessage = { id: string; author: string; isBot: boolean; content: string; time: string | null; attachments: number; embeds: number };
+export type DiscordMessagePage = { messages: DiscordMessage[]; older: string | null };
+
+export type SpotifyTrack = { id: string; uri: string; name: string; artists: string; album: string; image: string | null; durationMs: number; playedAt: string | null };
+export type SpotifyNow = { active: boolean; isPlaying: boolean; track: SpotifyTrack | null; progressMs: number; device: string | null; volume: number | null; shuffle: boolean; repeat: "off" | "track" | "context" };
+export type SpotifyPlaylist = { id: string; uri: string; name: string; owner: string | null; tracks: number; image: string | null; url: string | null };
+export type SpotifySearch = { tracks: SpotifyTrack[]; playlists: SpotifyPlaylist[] };
+
 export type GmailAuthorizationResponse = { authorizationUrl: string };
 export type GmailMessageSummary = {
   id: string;
@@ -497,9 +549,102 @@ export const api = {
     return apiFetch<DriveListing>(`/api/integrations/microsoft/onedrive/files?${params.toString()}`);
   },
   devOpsSummary: (org?: string) => apiFetch<DevOpsSummary>(`/api/integrations/microsoft/devops/summary${org ? `?org=${encodeURIComponent(org)}` : ""}`),
+
+  // Google Drive, Docs, Sheets and Slides (one Google sign-in with Gmail and Calendar)
+  googleStatus: () => apiFetch<GoogleWorkspaceStatus>("/api/integrations/google-workspace/status"),
+  enableGoogleServices: (services: GoogleService[], write?: boolean) => apiFetch<void>("/api/integrations/google-workspace/enable", json({ services, write })),
+  disableGoogleService: (service: GoogleService) => apiFetch<void>("/api/integrations/google-workspace/services/disable", json({ service })),
+  setGoogleWrite: (enabled: boolean) => apiFetch<void>("/api/integrations/google-workspace/write", json({ enabled })),
+  disconnectGoogleWorkspace: () => apiFetch<void>("/api/integrations/google-workspace/disconnect", { method: "POST" }),
+  googleSettings: () => apiFetch<GoogleWorkspaceSettings>("/api/integrations/google-workspace/settings"),
+  updateGoogleSettings: (update: GoogleWorkspaceSettingsUpdate) => apiFetch<GoogleWorkspaceSettings>("/api/integrations/google-workspace/settings", { method: "PUT", body: JSON.stringify(update) }),
+  googleFiles: (opts: { folderId?: string | null; q?: string; view?: string; kind?: string; pageToken?: string | null }) => {
+    const params = new URLSearchParams();
+    if (opts.folderId) params.set("folderId", opts.folderId);
+    if (opts.q) params.set("q", opts.q);
+    if (opts.view) params.set("view", opts.view);
+    if (opts.kind && opts.kind !== "all") params.set("kind", opts.kind);
+    if (opts.pageToken) params.set("pageToken", opts.pageToken);
+    return apiFetch<GoogleFileListing>(`/api/integrations/google-workspace/drive/files?${params.toString()}`);
+  },
+  googleDoc: (id: string) => apiFetch<GoogleDoc>(`/api/integrations/google-workspace/docs/${encodeURIComponent(id)}`),
+  createGoogleDoc: (title: string, text: string) => apiFetch<GoogleDoc>("/api/integrations/google-workspace/docs", json({ title, text })),
+  appendGoogleDoc: (id: string, text: string) => apiFetch<void>(`/api/integrations/google-workspace/docs/${encodeURIComponent(id)}/append`, json({ text })),
+  googleSheet: (id: string, range?: string) => apiFetch<GoogleSheet>(`/api/integrations/google-workspace/sheets/${encodeURIComponent(id)}${range ? `?range=${encodeURIComponent(range)}` : ""}`),
+  createGoogleSheet: (title: string, rows?: string[][]) => apiFetch<{ id: string; title: string; webUrl: string }>("/api/integrations/google-workspace/sheets", json({ title, rows })),
+  appendGoogleSheet: (id: string, rows: string[][], range?: string) => apiFetch<void>(`/api/integrations/google-workspace/sheets/${encodeURIComponent(id)}/append`, json({ rows, range })),
+  googleSlides: (id: string) => apiFetch<GooglePresentation>(`/api/integrations/google-workspace/slides/${encodeURIComponent(id)}`),
+  googleWorkspaceDashboard: () => apiFetch<GoogleWorkspaceDashboard>("/api/integrations/google-workspace/dashboard"),
+
+  // Slack
+  // GitHub, Notion, Discord and Spotify: the common calls take the app key.
+  oneAppStatus: (key: OneAppKey) => apiFetch<OneAppStatus>(`/api/integrations/${key}/status`),
+  connectOneApp: (key: OneAppKey, params: Record<string, string | boolean> = {}) => {
+    const query = new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString();
+    return apiFetch<{ authorizationUrl: string }>(`/api/integrations/${key}/connect${query ? `?${query}` : ""}`, { method: "POST" });
+  },
+  disconnectOneApp: (key: OneAppKey) => apiFetch<void>(`/api/integrations/${key}/disconnect`, { method: "POST" }),
+  setOneAppWrite: (key: OneAppKey, enabled: boolean) => apiFetch<void>(`/api/integrations/${key}/write`, json({ enabled })),
+  oneAppSettings: (key: OneAppKey) => apiFetch<OneAppSettings>(`/api/integrations/${key}/settings`),
+  updateOneAppSettings: (key: OneAppKey, values: OneAppSettings) => apiFetch<OneAppSettings>(`/api/integrations/${key}/settings`, { method: "PUT", body: JSON.stringify(values) }),
+  oneAppDashboard: (key: OneAppKey) => apiFetch<OneAppDashboard>(`/api/integrations/${key}/dashboard`),
+
+  githubItems: (kind: string, type: string, state: string) => apiFetch<GhItem[]>(`/api/integrations/github/items?kind=${kind}&type=${type}&state=${state}`),
+  githubItem: (repo: string, number: number) => apiFetch<GhItemDetail>(`/api/integrations/github/items/${repo}/${number}`),
+  commentOnGithub: (repo: string, number: number, body: string) => apiFetch<GhComment>(`/api/integrations/github/items/${repo}/${number}/comments`, json({ body })),
+  githubNotifications: (all = false) => apiFetch<GhNotification[]>(`/api/integrations/github/notifications?all=${all}`),
+  markGithubRead: () => apiFetch<void>("/api/integrations/github/notifications/read", { method: "POST" }),
+  githubRepos: (q = "") => apiFetch<GhRepo[]>(`/api/integrations/github/repos?q=${encodeURIComponent(q)}`),
+
+  notionSearch: (q: string, kind: string) => apiFetch<NotionObject[]>(`/api/integrations/notion/search?q=${encodeURIComponent(q)}&kind=${kind}`),
+  notionPage: (id: string) => apiFetch<NotionPage>(`/api/integrations/notion/pages/${encodeURIComponent(id)}`),
+  createNotionPage: (parentId: string, title: string, text: string) => apiFetch<NotionPage>("/api/integrations/notion/pages", json({ parentId, title, text })),
+  appendNotionPage: (id: string, text: string) => apiFetch<void>(`/api/integrations/notion/pages/${encodeURIComponent(id)}/append`, json({ text })),
+  notionDatabase: (id: string) => apiFetch<NotionDatabase>(`/api/integrations/notion/databases/${encodeURIComponent(id)}`),
+
+  connectDiscord: (token: string) => apiFetch<void>("/api/integrations/discord/connect", json({ token })),
+  discordInvite: () => apiFetch<{ url: string | null; applicationId: string | null }>("/api/integrations/discord/invite"),
+  discordGuilds: () => apiFetch<DiscordGuild[]>("/api/integrations/discord/guilds"),
+  discordChannels: (guildId: string) => apiFetch<DiscordChannel[]>(`/api/integrations/discord/guilds/${guildId}/channels`),
+  discordMessages: (channelId: string, before?: string | null) => apiFetch<DiscordMessagePage>(`/api/integrations/discord/channels/${channelId}/messages${before ? `?before=${before}` : ""}`),
+  sendDiscordMessage: (channelId: string, content: string) => apiFetch<{ id: string | null }>(`/api/integrations/discord/channels/${channelId}/messages`, json({ content })),
+
+  spotifyNow: () => apiFetch<SpotifyNow>("/api/integrations/spotify/now"),
+  spotifyControl: (action: string, extra: { value?: number; mode?: string } = {}) => apiFetch<void>("/api/integrations/spotify/control", json({ action, ...extra })),
+  spotifyPlay: (target: { uri?: string; contextUri?: string }) => apiFetch<void>("/api/integrations/spotify/play", json(target)),
+  spotifyQueue: (uri: string) => apiFetch<void>("/api/integrations/spotify/queue", json({ uri })),
+  spotifyRecent: () => apiFetch<SpotifyTrack[]>("/api/integrations/spotify/recent"),
+  spotifyTop: (range?: string) => apiFetch<SpotifyTrack[]>(`/api/integrations/spotify/top${range ? `?range=${range}` : ""}`),
+  spotifyPlaylists: () => apiFetch<SpotifyPlaylist[]>("/api/integrations/spotify/playlists"),
+  spotifyPlaylistTracks: (id: string) => apiFetch<SpotifyTrack[]>(`/api/integrations/spotify/playlists/${id}/tracks`),
+  spotifySearch: (q: string) => apiFetch<SpotifySearch>(`/api/integrations/spotify/search?q=${encodeURIComponent(q)}`),
+
+  slackStatus: () => apiFetch<SlackStatus>("/api/integrations/slack/status"),
+  connectSlack: (write = false) => apiFetch<{ authorizationUrl: string }>(`/api/integrations/slack/connect?write=${write}`, { method: "POST" }),
+  disconnectSlack: (connectionId?: string) => apiFetch<void>(`/api/integrations/slack/disconnect${connectionId ? `?connectionId=${encodeURIComponent(connectionId)}` : ""}`, { method: "POST" }),
+  disableSlackWrite: (connectionId?: string) => apiFetch<void>("/api/integrations/slack/write", json({ connectionId, enabled: false })),
+  slackSettings: () => apiFetch<SlackSettings>("/api/integrations/slack/settings"),
+  updateSlackSettings: (update: SlackSettingsUpdate) => apiFetch<SlackSettings>("/api/integrations/slack/settings", { method: "PUT", body: JSON.stringify(update) }),
+  slackChannels: (connectionId?: string | null) => apiFetch<SlackChannel[]>(`/api/integrations/slack/channels${connectionId ? `?connectionId=${encodeURIComponent(connectionId)}` : ""}`),
+  slackMessages: (channelId: string, connectionId?: string | null, cursor?: string | null) => {
+    const params = new URLSearchParams();
+    if (connectionId) params.set("connectionId", connectionId);
+    if (cursor) params.set("cursor", cursor);
+    return apiFetch<SlackMessagePage>(`/api/integrations/slack/channels/${encodeURIComponent(channelId)}/messages?${params.toString()}`);
+  },
+  slackReplies: (channelId: string, ts: string, connectionId?: string | null) =>
+    apiFetch<SlackMessagePage>(`/api/integrations/slack/channels/${encodeURIComponent(channelId)}/replies?ts=${encodeURIComponent(ts)}${connectionId ? `&connectionId=${encodeURIComponent(connectionId)}` : ""}`),
+  sendSlackMessage: (channelId: string, text: string, connectionId?: string | null, threadTs?: string | null) =>
+    apiFetch<{ ts: string | null }>(`/api/integrations/slack/channels/${encodeURIComponent(channelId)}/messages${connectionId ? `?connectionId=${encodeURIComponent(connectionId)}` : ""}`, json({ text, threadTs })),
+  markSlackRead: (channelId: string, connectionId?: string | null) =>
+    apiFetch<void>(`/api/integrations/slack/channels/${encodeURIComponent(channelId)}/read${connectionId ? `?connectionId=${encodeURIComponent(connectionId)}` : ""}`, { method: "POST" }),
+  slackSearch: (q: string, connectionId?: string | null) =>
+    apiFetch<SlackSearchHit[]>(`/api/integrations/slack/search?q=${encodeURIComponent(q)}${connectionId ? `&connectionId=${encodeURIComponent(connectionId)}` : ""}`),
+  slackDashboard: (connectionId?: string | null) => apiFetch<SlackDashboard>(`/api/integrations/slack/dashboard${connectionId ? `?connectionId=${encodeURIComponent(connectionId)}` : ""}`),
+  markSlackActivityRead: (connectionId?: string) => apiFetch<void>(`/api/integrations/slack/activity/read${connectionId ? `?connectionId=${encodeURIComponent(connectionId)}` : ""}`, { method: "POST" }),
   gmailSettings: () => apiFetch<GmailSettings>("/api/integrations/gmail/settings"),
   updateGmailSettings: (update: GmailSettingsUpdate) => apiFetch<GmailSettings>("/api/integrations/gmail/settings", { method: "PUT", body: JSON.stringify(update) }),
-  connectGmail: () => apiFetch<GmailAuthorizationResponse>("/api/integrations/gmail/connect", { method: "POST" }),
+  connectGmail: (features?: string) => apiFetch<GmailAuthorizationResponse>(`/api/integrations/gmail/connect${features ? `?features=${encodeURIComponent(features)}` : ""}`, { method: "POST" }),
   gmailMessages: (query: string, pageToken?: string | null) => {
     const params = new URLSearchParams({ q: query });
     if (pageToken) params.set("pageToken", pageToken);

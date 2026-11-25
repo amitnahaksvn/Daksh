@@ -73,7 +73,7 @@ public static class AssistantContextBuilder
         $"Chat with {name}:\n" + string.Join("\n", messages.OrderBy(m => m.At).Select(m => $"[{m.At.ToLocalTime():d MMM HH:mm}] {(m.FromMe ? "Me" : m.Who)}: {Clip(m.Text, 300)}"));
 
     public static async Task<AssistantContextResult> BuildAsync(IMongoDatabase db, string userId, string question,
-        Func<string?, Task<IReadOnlyList<GmailMessageSummary>?>> recentMail, CancellationToken ct, Func<string, string, Task<string?>>? readMail = null, Func<string, Task<AssistantContextResult>>? microsoft = null)
+        Func<string?, Task<IReadOnlyList<GmailMessageSummary>?>> recentMail, CancellationToken ct, Func<string, string, Task<string?>>? readMail = null, Func<string, Task<AssistantContextResult>>? microsoft = null, Func<string, Task<AssistantContextResult>>? workspace = null)
     {
         var sources = new List<string>();
         var sb = new StringBuilder();
@@ -240,6 +240,13 @@ public static class AssistantContextBuilder
         {
             var ms = await microsoft(question);
             if (!string.IsNullOrWhiteSpace(ms.Text)) { sb.AppendLine().AppendLine(ms.Text); foreach (var s in ms.Sources) if (!sources.Contains(s)) sources.Add(s); }
+        }
+
+        // Google Drive and Slack, looked at only when the question mentions them (the callback checks they are connected).
+        if (workspace is not null)
+        {
+            var ws = await workspace(question);
+            if (!string.IsNullOrWhiteSpace(ws.Text)) { sb.AppendLine(ws.Text); foreach (var s in ws.Sources) if (!sources.Contains(s)) sources.Add(s); }
         }
 
         if (intent.Lists || intent.Tasks || overview)

@@ -423,6 +423,58 @@ public static class IntegrationsModule
             ("mcp-servers", "MCP servers", "mono:MCP", "#64748B", "Integration protocol", false),
 
             ("openclaw-plugins", "OpenClaw Plugins", "mono:OC", "#64748B", "Agent runtime", false),
+
+            ("a2a", "A2A", "mono:A2A", "#64748B", "Messaging", false),
+            ("buzz", "Buzz", "mono:BZ", "#F59E0B", "Messaging", false),
+            ("clickclack", "ClickClack", "mono:CC", "#64748B", "Messaging", false),
+            ("irc", "IRC", "mono:IRC", "#64748B", "Messaging", false),
+            ("nextcloud-talk", "Nextcloud Talk", "mono:NT", "#0082C9", "Messaging", false),
+            ("nostr", "Nostr", "mono:NO", "#8B5CF6", "Messaging", false),
+            ("raft", "Raft", "mono:RF", "#64748B", "Messaging", false),
+            ("reef", "Reef", "mono:RE", "#0EA5E9", "Messaging", false),
+            ("synology-chat", "Synology Chat", "mono:SC", "#B5B5B6", "Messaging", false),
+            ("tlon", "Tlon", "mono:TL", "#000000", "Messaging", false),
+            ("webchat", "WebChat", "mono:WC", "#64748B", "Messaging", false),
+            ("apple-notes", "Apple Notes", "mono:AN", "#FFCC00", "Knowledge", false),
+            ("obsidian", "Obsidian", "mono:OB", "#7C3AED", "Knowledge", false),
+            ("spotify", "Spotify", "mono:SP", "#1DB954", "Media", false),
+            ("sonos", "Sonos", "mono:SO", "#000000", "Media", false),
+            ("1password", "1Password", "mono:1P", "#0572EC", "Security", false),
+            ("weather", "Weather", "mono:WE", "#38BDF8", "Utilities", false),
+            ("anthropic", "Anthropic", "mono:AN", "#D97757", "AI models", false),
+            ("openai", "OpenAI", "mono:AI", "#10A37F", "AI models", false),
+            ("google-gemini", "Google Gemini", "mono:GG", "#4285F4", "AI models", false),
+            ("mistral", "Mistral", "mono:MI", "#FA520F", "AI models", false),
+            ("deepseek", "DeepSeek", "mono:DS", "#4D6BFE", "AI models", false),
+            ("qwen", "Qwen", "mono:QW", "#615CED", "AI models", false),
+            ("moonshot-kimi", "Moonshot / Kimi", "mono:KM", "#000000", "AI models", false),
+            ("minimax", "MiniMax", "mono:MM", "#F23F5D", "AI models", false),
+            ("zai", "Z.AI", "mono:ZA", "#2D2D2D", "AI models", false),
+            ("cohere", "Cohere", "mono:CO", "#39594D", "AI models", false),
+            ("groq", "Groq", "mono:GQ", "#F55036", "AI models", false),
+            ("cerebras", "Cerebras", "mono:CB", "#F15A29", "AI models", false),
+            ("together-ai", "Together AI", "mono:TA", "#0F6FFF", "AI models", false),
+            ("fireworks", "Fireworks", "mono:FW", "#6720FF", "AI models", false),
+            ("nvidia", "NVIDIA", "mono:NV", "#76B900", "AI models", false),
+            ("hugging-face", "Hugging Face", "mono:HF", "#FFD21E", "AI models", false),
+            ("openrouter", "OpenRouter", "mono:OR", "#6467F2", "AI models", false),
+            ("litellm", "LiteLLM", "mono:LL", "#64748B", "AI models", false),
+            ("amazon-bedrock", "Amazon Bedrock", "mono:BR", "#FF9900", "AI models", false),
+            ("anthropic-vertex", "Anthropic on Vertex", "mono:AV", "#4285F4", "AI models", false),
+            ("github-copilot", "GitHub Copilot", "mono:GC", "#000000", "AI models", false),
+            ("cloudflare-ai-gateway", "Cloudflare AI Gateway", "mono:CF", "#F38020", "AI models", false),
+            ("vercel-ai-gateway", "Vercel AI Gateway", "mono:VG", "#000000", "AI models", false),
+            ("ollama", "Ollama", "mono:OL", "#000000", "AI models", false),
+            ("lm-studio", "LM Studio", "mono:LM", "#5B5BD6", "AI models", false),
+            ("vllm", "vLLM", "mono:VL", "#30A2FF", "AI models", false),
+            ("custom-openai-api", "Custom compatible API", "mono:API", "#64748B", "AI models", false),
+            ("elevenlabs", "ElevenLabs", "mono:EL", "#000000", "Voice & search", false),
+            ("deepgram", "Deepgram", "mono:DG", "#13EF93", "Voice & search", false),
+            ("azure-speech", "Azure Speech", "mono:AZ", "#0078D4", "Voice & search", false),
+            ("perplexity-search", "Perplexity Search", "mono:PX", "#20808D", "Voice & search", false),
+            ("runway", "Runway", "mono:RW", "#000000", "Voice & search", false),
+            ("fal", "fal", "mono:FL", "#7C3AED", "Voice & search", false),
+            ("comfyui", "ComfyUI", "mono:CU", "#64748B", "Voice & search", false),
         ];
 
         foreach (var s in seed)
@@ -449,9 +501,21 @@ public static class IntegrationsModule
         var removedShopping = new[] { "bigbasket", "zepto", "swiggy-instamart", "zomato", "swiggy" };
         await catalog.DeleteManyAsync(c => removedShopping.Contains(c.IntegrationKey), ct);
 
+        // Chinese and Vietnamese chat apps that need a local business account or regional approval to connect: not offered.
+        var removedRegional = new[] { "wechat", "wecom", "qq-bot", "yuanbao", "zalo" };
+        await catalog.DeleteManyAsync(c => removedRegional.Contains(c.IntegrationKey), ct);
+
         // The shopping apps are live: each can be turned on, and opens the user's shopping list on the store (no store login is stored).
         var shoppingKeys = ShoppingModule.Stores.Keys.ToList();
         await catalog.UpdateManyAsync(c => shoppingKeys.Contains(c.IntegrationKey),
+            Builders<IntegrationCatalogEntry>.Update.Set(c => c.IsEnabled, true), cancellationToken: ct);
+
+        // Google Drive, Docs, Sheets and Slides share the Google sign-in with Gmail and Calendar, so all four are live together.
+        await catalog.UpdateManyAsync(c => c.IntegrationKey == "google-drive" || c.IntegrationKey == "google-docs" || c.IntegrationKey == "google-sheets" || c.IntegrationKey == "google-slides",
+            Builders<IntegrationCatalogEntry>.Update.Set(c => c.IsEnabled, true), cancellationToken: ct);
+
+        // Slack, GitHub, Notion, Discord and Spotify each connect on their own (see their modules).
+        await catalog.UpdateManyAsync(c => c.IntegrationKey == "slack" || c.IntegrationKey == "github" || c.IntegrationKey == "notion" || c.IntegrationKey == "discord" || c.IntegrationKey == "spotify",
             Builders<IntegrationCatalogEntry>.Update.Set(c => c.IsEnabled, true), cancellationToken: ct);
 
         // One Microsoft sign-in powers Outlook mail, Outlook calendar, OneDrive and Azure DevOps, so all four are live together.

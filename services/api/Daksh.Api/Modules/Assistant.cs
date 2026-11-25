@@ -84,7 +84,8 @@ public static class AssistantModule
         try { context = await AssistantContextBuilder.BuildAsync(db, who.UserId, question,
             accountId => GmailIntegrationModule.RecentForAssistantAsync(who.UserId, accountId, "in:inbox newer_than:7d", 10, db, protector, config, clients, ct), ct,
             (accountId, messageId) => GmailIntegrationModule.ReadBodyForAssistantAsync(who.UserId, accountId, messageId, db, protector, config, clients, ct),
-            q => MicrosoftAssistant.BuildAsync(db, protector, config, clients, who.UserId, q, ct)); }
+            q => MicrosoftAssistant.BuildAsync(db, protector, config, clients, who.UserId, q, ct),
+            workspace: q => WorkspaceAssistant.BuildAsync(db, protector, config, clients, who.UserId, q, ct)); }
         catch (Exception ex) { logger.LogWarning(ex, "Could not gather app data for the assistant; answering without it"); context = new AssistantContextResult("", []); }
 
         AssistantResult result;
