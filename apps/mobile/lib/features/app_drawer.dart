@@ -28,37 +28,46 @@ class AppDrawer extends ConsumerWidget {
               onTap: () { ref.read(assistantProvider.notifier).newChat(); Navigator.pop(context); },
             ),
           ),
-          for (final (label, icon, path) in const [
-            ('Dashboard', Icons.dashboard_outlined, '/dashboard'),
-            ('Chats', Icons.forum_outlined, '/chats'),
-            ('Calendar', Icons.calendar_month_outlined, '/calendar'),
-            ('Tasks', Icons.checklist, '/tasks'),
-          ])
-            ListTile(leading: Icon(icon, size: 22), title: Text(label), onTap: () => go(path)),
-          const Divider(height: 24),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
-            child: Align(alignment: Alignment.centerLeft, child: Text('Chats', style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13, fontWeight: FontWeight.w600))),
-          ),
+          // Pages and chat history scroll together; New chat stays on top and the account links stay at the bottom.
           Expanded(
-            child: history.when(
-              loading: () => const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-              error: (e, _) => Padding(padding: const EdgeInsets.all(20), child: Text(e.toString(), style: TextStyle(color: scheme.error, fontSize: 13))),
-              data: (list) => list.isEmpty
-                  ? Padding(padding: const EdgeInsets.all(20), child: Text('No chats yet.', style: TextStyle(color: scheme.onSurfaceVariant)))
-                  : ListView(children: [
-                      for (final c in list)
-                        ListTile(
-                          dense: true,
-                          selected: c.id == current,
-                          selectedTileColor: scheme.surfaceContainer,
-                          title: Text(c.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                          onTap: () { ref.read(assistantProvider.notifier).open(c.id); Navigator.pop(context); },
-                        ),
-                    ]),
-            ),
+            child: ListView(children: [
+              for (final (label, icon, path) in const [
+                ('Dashboard', Icons.dashboard_outlined, '/dashboard'),
+                ('Apps', Icons.apps_outlined, '/apps'),
+                ('Chats', Icons.forum_outlined, '/chats'),
+                ('Email', Icons.mail_outline, '/email'),
+                ('Calendar', Icons.calendar_month_outlined, '/calendar'),
+                ('Tasks', Icons.checklist, '/tasks'),
+                ('Lists', Icons.list_alt_outlined, '/lists'),
+                ('Reminders', Icons.alarm_outlined, '/reminders'),
+                ('Notifications', Icons.notifications_none, '/activity'),
+              ])
+                ListTile(leading: Icon(icon, size: 22), title: Text(label), onTap: () => go(path)),
+              const Divider(height: 24),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
+                child: Align(alignment: Alignment.centerLeft, child: Text('Chats', style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13, fontWeight: FontWeight.w600))),
+              ),
+              history.when(
+                loading: () => const Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
+                error: (e, _) => Padding(padding: const EdgeInsets.all(20), child: Text(e.toString(), style: TextStyle(color: scheme.error, fontSize: 13))),
+                data: (list) => list.isEmpty
+                    ? Padding(padding: const EdgeInsets.all(20), child: Text('No chats yet.', style: TextStyle(color: scheme.onSurfaceVariant)))
+                    : Column(children: [
+                        for (final c in list)
+                          ListTile(
+                            dense: true,
+                            selected: c.id == current,
+                            selectedTileColor: scheme.surfaceContainer,
+                            title: Text(c.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            onTap: () { ref.read(assistantProvider.notifier).open(c.id); Navigator.pop(context); },
+                          ),
+                      ]),
+              ),
+            ]),
           ),
           const Divider(height: 1),
+          ListTile(leading: const Icon(Icons.person_outline), title: const Text('Profile'), onTap: () => go('/profile')),
           ListTile(leading: const Icon(Icons.extension_outlined), title: const Text('Integrations'), onTap: () => go('/more/integrations')),
           ListTile(leading: const Icon(Icons.lock_outline), title: const Text('Privacy'), onTap: () => go('/more/privacy')),
           ListTile(leading: const Icon(Icons.logout), title: const Text('Sign out'), onTap: () => ref.read(sessionProvider.notifier).signOut()),
