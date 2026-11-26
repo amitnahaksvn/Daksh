@@ -28,6 +28,8 @@ public static partial class ProviderApps
         // Batch 3: cloud, commerce, accounting, smart home, automation
         Aws(), Azure(), GoogleCloud(), Kubernetes(), OnePassword(), Obsidian(), McpServers(),
         WooCommerce(), Ebay(), Xero(), ZohoBooks(), Mapbox(), Amadeus(), Mastodon(), Bluesky(), Zapier(), Make(), Ifttt(), Hue(), SmartThings(), Tuya(), Sonos(), Weather(), Bhashini(),
+        // Batch 4: AI model providers, voice and search tools, SharePoint
+        .. ModelApps(), ElevenLabs(), Deepgram(), AzureSpeech(), PerplexitySearch(), Runway(), Fal(), ComfyUi(), SharePoint(),
     ];
     private static IReadOnlyList<ProviderApp>? _all;
 

@@ -25,10 +25,17 @@ public static partial class ProviderApps
     private static Func<Dictionary<string, string>, CancellationToken, Task> PrepareUrl(string key, bool allowHttp = true, bool addScheme = true) => async (v, ct) =>
     {
         var raw = v[key].Trim();
-        if (addScheme && !raw.Contains("://", StringComparison.Ordinal)) raw = "https://" + raw;
+        // A bare address gets https://, except machines on the person's own network (localhost, 192.168.x.x, .local) which speak plain http.
+        if (addScheme && !raw.Contains("://", StringComparison.Ordinal)) raw = (IsLocalName(raw) ? "http://" : "https://") + raw;
         var uri = await HostGuard.CheckAsync(raw, allowHttp, ct);
         v[key] = (uri.GetLeftPart(UriPartial.Authority) + uri.AbsolutePath).TrimEnd('/');
     };
+
+    private static bool IsLocalName(string address)
+    {
+        var host = Regex.Match(address, @"^\[?([^\]/:]+)").Groups[1].Value.ToLowerInvariant();
+        return host is "localhost" or "host.docker.internal" || host.EndsWith(".local", StringComparison.Ordinal) || (System.Net.IPAddress.TryParse(host, out var ip) && (System.Net.IPAddress.IsLoopback(ip) || ip.GetAddressBytes() is [10, ..] or [192, 168, ..] or [172, >= 16 and <= 31, ..]));
+    }
 
     private static object Adf(string text) => new { type = "doc", version = 1, content = new[] { new { type = "paragraph", content = text.Length == 0 ? Array.Empty<object>() : new object[] { new { type = "text", text } } } } };
 

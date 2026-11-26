@@ -232,6 +232,36 @@ App key `amadeus`. Each person enters their own details. Read-only.
 
 Notes: The Test environment returns cached sample data.
 
+### Amazon Bedrock
+
+App key `amazon-bedrock`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Access key id, Secret access key, Region.
+
+1. Nothing to set on the server. Each person creates an **IAM user** with `AmazonBedrockReadOnly` (add `bedrock:InvokeModel` to send prompts), an access key for it, and enables model access in the Bedrock console.
+
+Notes: Requests are signed with AWS Signature Version 4.
+
+### Anthropic
+
+App key `anthropic`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: API key.
+
+1. Nothing to set on the server. Each person creates an **API key** at console.anthropic.com/settings/keys.
+
+### Anthropic on Vertex
+
+App key `anthropic-vertex`. Sign-in: OAuth. Read-only until full access is turned on.
+
+**Server settings:** `Vertex__OAuth__ClientId`, `Vertex__OAuth__ClientSecret` (or reuse `GoogleCloud__OAuth__ClientId` / `ClientSecret`); optional `Vertex__OAuth__RedirectUri` and `Vertex__OAuth__FrontendUrl`.
+
+1. Reuses the Google client (`Gmail__OAuth__*`). Add the scope `.../auth/cloud-platform` to the consent screen, enable the **Vertex AI API** and enable the Claude models in Vertex AI Model Garden for your project.
+2. After connecting, set the project and region in Manage → Preferences.
+3. Register the redirect URI `<API address>/api/integrations/anthropic-vertex/callback` with the provider (many providers require HTTPS).
+
+Notes: Vertex has no list of Anthropic models, so you type the model id when sending a prompt.
+
 ### AWS
 
 App key `aws`. Each person enters their own details. Read-only.
@@ -242,6 +272,14 @@ App key `aws`. Each person enters their own details. Read-only.
 2. In Daksha they enter the access key id, the secret access key and a default region (for example `ap-south-1`).
 
 Notes: Requests are signed with AWS Signature Version 4. Use a dedicated read-only user, never your root account.
+
+### Azure Speech
+
+App key `azure-speech`. Each person enters their own details. Read-only.
+
+**Server settings:** none. Each person enters: Speech key, Region.
+
+1. Nothing to set on the server. In the Azure portal create a **Speech** resource and copy one of its **keys** and its **region** (for example `centralindia`).
 
 ### Bhashini
 
@@ -288,6 +326,14 @@ App key `calendly`. Each person enters their own details. Read-only until full a
 
 1. Nothing to set on the server. Each person creates a **personal access token** in Calendly (Integrations → API & Webhooks) and pastes it into Daksha.
 
+### Cerebras
+
+App key `cerebras`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: API key.
+
+1. Nothing to set on the server. Each person creates an **API key** at cloud.cerebras.ai.
+
 ### Cloudflare
 
 App key `cloudflare`. Each person enters their own details. Read-only until full access is turned on.
@@ -295,6 +341,31 @@ App key `cloudflare`. Each person enters their own details. Read-only until full
 **Server settings:** none. Each person enters: API token.
 
 1. Nothing to set on the server. Each person creates an **API token** (My Profile → API Tokens) scoped to Zone:Read and DNS:Read (plus DNS:Edit and Cache Purge for full access).
+
+### Cloudflare AI Gateway
+
+App key `cloudflare-ai-gateway`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Cloudflare account id, Gateway name, API key, Gateway token (if authenticated).
+
+1. Nothing to set on the server. In Cloudflare create an **AI Gateway** (AI → AI Gateway) and note the account id and gateway name.
+2. Enter them with the OpenAI-compatible provider key, and a gateway token if the gateway is authenticated.
+
+### Cohere
+
+App key `cohere`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: API key.
+
+1. Nothing to set on the server. Each person creates an **API key** at dashboard.cohere.com/api-keys.
+
+### ComfyUI
+
+App key `comfyui`. Each person enters their own details. Read-only.
+
+**Server settings:** none. Each person enters: ComfyUI address.
+
+1. Nothing to set on the server. Run ComfyUI where the Daksha server can reach it (default `http://127.0.0.1:8188`; use a private tunnel for a cloud server).
 
 ### Confluence
 
@@ -305,6 +376,30 @@ App key `confluence`. Each person enters their own details. Read-only until full
 1. Nothing to set on the server. Each person creates an **API token** at id.atlassian.com → Security → API tokens and enters it with their site and email.
 
 Notes: Confluence Cloud only (not Data Center).
+
+### Custom compatible API
+
+App key `custom-openai-api`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Server address, API key (if the server needs one).
+
+1. Nothing to set on the server. Each person enters the **base address** of an OpenAI-compatible service (for example `https://api.example.com/v1`) and its key.
+
+### Deepgram
+
+App key `deepgram`. Each person enters their own details. Read-only.
+
+**Server settings:** none. Each person enters: API key.
+
+1. Nothing to set on the server. Each person creates an **API key** in the Deepgram console (API Keys) with the Member role.
+
+### DeepSeek
+
+App key `deepseek`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: API key.
+
+1. Nothing to set on the server. Each person creates an **API key** at platform.deepseek.com/api_keys.
 
 ### Docker Hub
 
@@ -338,6 +433,24 @@ App key `ebay`. Sign-in: OAuth. Read-only.
 
 Notes: eBay's redirect value is the RuName, not a URL. Production keys need eBay's application growth check for some APIs.
 
+### ElevenLabs
+
+App key `elevenlabs`. Each person enters their own details. Read-only.
+
+**Server settings:** none. Each person enters: API key.
+
+1. Nothing to set on the server. Each person creates an **API key** at elevenlabs.io (Profile → API keys).
+
+### fal
+
+App key `fal`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: API key.
+
+1. Nothing to set on the server. Each person creates an **API key** at fal.ai/dashboard/keys.
+
+Notes: fal cannot check a key without spending credits, so the key is only checked the first time an image is generated.
+
 ### Firebase
 
 App key `firebase`. Sign-in: OAuth. Read-only.
@@ -346,6 +459,24 @@ App key `firebase`. Sign-in: OAuth. Read-only.
 
 1. Reuses the Google client (`Gmail__OAuth__*`). In Google Cloud Console enable the **Firebase Management API** and add the scope `.../auth/firebase.readonly` to the consent screen.
 2. Register the redirect URI `<API address>/api/integrations/firebase/callback` with the provider (many providers require HTTPS).
+
+### Fireworks
+
+App key `fireworks`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: API key.
+
+1. Nothing to set on the server. Each person creates an **API key** at fireworks.ai/account/api-keys.
+
+### GitHub Copilot
+
+App key `github-copilot`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: API key.
+
+1. Nothing to set on the server. Each person creates a **fine-grained personal access token** at github.com/settings/tokens with the `models:read` permission.
+
+Notes: This uses GitHub Models (models.github.ai). GitHub does not offer a public API to the Copilot chat service itself.
 
 ### GitLab
 
@@ -366,6 +497,30 @@ App key `google-cloud`. Sign-in: OAuth. Read-only.
 
 1. Reuses the Google client (`Gmail__OAuth__*`). In Google Cloud Console enable the **Cloud Resource Manager**, **Compute Engine** and **Cloud Run Admin** APIs and add the scope `.../auth/cloud-platform.read-only` to the consent screen.
 2. Register the redirect URI `<API address>/api/integrations/google-cloud/callback` with the provider (many providers require HTTPS).
+
+### Google Gemini
+
+App key `google-gemini`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: API key.
+
+1. Nothing to set on the server. Each person creates an **API key** at aistudio.google.com/apikey.
+
+### Groq
+
+App key `groq`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: API key.
+
+1. Nothing to set on the server. Each person creates an **API key** at console.groq.com/keys.
+
+### Hugging Face
+
+App key `hugging-face`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: API key.
+
+1. Nothing to set on the server. Each person creates a **fine-grained token** at huggingface.co/settings/tokens with “Make calls to Inference Providers”.
 
 ### IFTTT
 
@@ -399,6 +554,22 @@ App key `kubernetes`. Each person enters their own details. Read-only until full
 3. The Daksha server must be able to reach the API server.
 
 Notes: A private CA is trusted only for that cluster's connection. Public cloud clusters with a public certificate need no CA.
+
+### LiteLLM
+
+App key `litellm`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Server address, API key.
+
+1. Nothing to set on the server. Each person enters the address of their own **LiteLLM proxy** and a virtual key. The Daksha server must be able to reach the proxy.
+
+### LM Studio
+
+App key `lm-studio`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Server address, API key (if the server needs one).
+
+1. Nothing to set on the server. In LM Studio start the **local server** (default `http://localhost:1234`). The Daksha server must be able to reach it.
 
 ### Make
 
@@ -453,6 +624,32 @@ App key `microsoft-azure`. Sign-in: OAuth. Read-only.
 
 Notes: Daksha only calls read endpoints. The Azure permission itself is broad (user_impersonation), so use a dedicated app registration if that matters to you.
 
+### MiniMax
+
+App key `minimax`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: API key.
+
+1. Nothing to set on the server. Each person creates an **API key** at platform.minimax.io.
+
+Notes: MiniMax does not always list its models; type the model name when sending a prompt.
+
+### Mistral
+
+App key `mistral`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: API key.
+
+1. Nothing to set on the server. Each person creates an **API key** at console.mistral.ai/api-keys.
+
+### Moonshot / Kimi
+
+App key `moonshot-kimi`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: API key.
+
+1. Nothing to set on the server. Each person creates an **API key** at platform.moonshot.ai.
+
 ### n8n
 
 App key `n8n`. Each person enters their own details. Read-only until full access is turned on.
@@ -461,6 +658,14 @@ App key `n8n`. Each person enters their own details. Read-only until full access
 
 1. Nothing to set on the server. Each person creates an **API key** in their n8n (Settings → n8n API) and enters it with the address of their n8n.
 2. The Daksha server must be able to reach that address.
+
+### NVIDIA
+
+App key `nvidia`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: API key.
+
+1. Nothing to set on the server. Each person generates an **API key** at build.nvidia.com.
 
 ### Obsidian
 
@@ -473,6 +678,30 @@ App key `obsidian`. Each person enters their own details. Read-only until full a
 
 Notes: The plugin uses a self-signed certificate; use the plain-HTTP port on a trusted network or a tunnel with a proper certificate.
 
+### Ollama
+
+App key `ollama`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Ollama address, API key (if the server needs one).
+
+1. Nothing to set on the server. Run Ollama where the Daksha server can reach it (default `http://localhost:11434`; for a cloud server use a private tunnel).
+
+### OpenAI
+
+App key `openai`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: API key.
+
+1. Nothing to set on the server. Each person creates an **API key** at platform.openai.com/api-keys.
+
+### OpenRouter
+
+App key `openrouter`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: API key.
+
+1. Nothing to set on the server. Each person creates an **API key** at openrouter.ai/keys.
+
 ### PayPal
 
 App key `paypal`. Each person enters their own details. Read-only.
@@ -482,6 +711,16 @@ App key `paypal`. Each person enters their own details. Read-only.
 1. Nothing to set on the server. Each person creates a **REST app** at developer.paypal.com → Apps & Credentials, enables the **Transaction search** feature, and enters the client id and secret (choose Sandbox to try it).
 
 Notes: PayPal only returns transactions from the last 31 days per request, and they can take a few hours to appear.
+
+### Perplexity Search
+
+App key `perplexity-search`. Each person enters their own details. Read-only.
+
+**Server settings:** none. Each person enters: API key.
+
+1. Nothing to set on the server. Each person creates an **API key** at perplexity.ai/account/api (Perplexity API).
+
+Notes: Each search is billed to the person's Perplexity account.
 
 ### Philips Hue
 
@@ -494,6 +733,16 @@ App key `philips-hue`. Each person enters their own details. Read-only until ful
 
 Notes: Uses the bridge's local API over plain HTTP, so it must run on a trusted network.
 
+### Qwen
+
+App key `qwen`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: API key.
+
+1. Nothing to set on the server. Each person creates an **API key** in Alibaba Cloud Model Studio (bailian.console.alibabacloud.com → API key). The international endpoint is used.
+
+Notes: Mainland China accounts use dashscope.aliyuncs.com instead; use the Custom compatible API app for that.
+
 ### Razorpay
 
 App key `razorpay`. Each person enters their own details. Read-only until full access is turned on.
@@ -504,6 +753,14 @@ App key `razorpay`. Each person enters their own details. Read-only until full a
 
 Notes: Amounts are shown in rupees. Daksha never stores the secret in plain text.
 
+### Runway
+
+App key `runway`. Each person enters their own details. Read-only.
+
+**Server settings:** none. Each person enters: API key.
+
+1. Nothing to set on the server. Each person creates an **API key** in the Runway developer portal (dev.runwayml.com).
+
 ### Sentry
 
 App key `sentry`. Each person enters their own details. Read-only until full access is turned on.
@@ -512,6 +769,15 @@ App key `sentry`. Each person enters their own details. Read-only until full acc
 
 1. Nothing to set on the server. Each person creates a **personal auth token** in Sentry with `org:read`, `project:read` and `event:read` (add `event:write` to resolve issues).
 2. In Daksha they paste the token (and the address of a self-hosted Sentry, if they use one).
+
+### SharePoint
+
+App key `sharepoint`. Sign-in: OAuth. Read-only.
+
+**Server settings:** `SharePoint__OAuth__ClientId`, `SharePoint__OAuth__ClientSecret` (or reuse `Microsoft__OAuth__ClientId` / `ClientSecret`); optional `SharePoint__OAuth__RedirectUri` and `SharePoint__OAuth__FrontendUrl`.
+
+1. Reuses the Microsoft app registration (`Microsoft__OAuth__ClientId` / `ClientSecret`), or set `SharePoint__OAuth__*`. Add the delegated Graph permissions **Sites.Read.All** and **Files.Read.All** (an administrator may need to consent).
+2. Register the redirect URI `<API address>/api/integrations/sharepoint/callback` with the provider (many providers require HTTPS).
 
 ### SmartThings
 
@@ -547,6 +813,14 @@ App key `supabase`. Each person enters their own details. Read-only.
 
 1. Nothing to set on the server. Each person creates a **personal access token** (Supabase dashboard → Account → Access Tokens).
 
+### Together AI
+
+App key `together-ai`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: API key.
+
+1. Nothing to set on the server. Each person creates an **API key** at api.together.ai/settings/api-keys.
+
 ### Tuya
 
 App key `tuya`. Each person enters their own details. Read-only until full access is turned on.
@@ -565,6 +839,22 @@ App key `vercel`. Each person enters their own details. Read-only.
 **Server settings:** none. Each person enters: Access token.
 
 1. Nothing to set on the server. Each person creates an **access token** (Vercel → Account Settings → Tokens) and pastes it into Daksha.
+
+### Vercel AI Gateway
+
+App key `vercel-ai-gateway`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: API key.
+
+1. Nothing to set on the server. Each person creates an **AI Gateway API key** in the Vercel dashboard (AI Gateway → API Keys).
+
+### vLLM
+
+App key `vllm`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Server address, API key (if the server needs one).
+
+1. Nothing to set on the server. Run `vllm serve <model>` (OpenAI-compatible, default port 8000) where the Daksha server can reach it. Pass `--api-key` if you protect it.
 
 ### Weather
 
@@ -594,6 +884,14 @@ App key `xero`. Sign-in: OAuth. Read-only until full access is turned on.
 1. developer.xero.com → My Apps → **New app** (Web app). Copy the client id and secret.
 2. Scopes used: `accounting.transactions.read`, `accounting.contacts.read`, `accounting.settings.read` (read) and `accounting.contacts` (full access). Each person chooses one organisation when signing in.
 3. Register the redirect URI `<API address>/api/integrations/xero/callback` with the provider (many providers require HTTPS).
+
+### Z.AI
+
+App key `zai`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: API key.
+
+1. Nothing to set on the server. Each person creates an **API key** at z.ai (API keys page).
 
 ### Zapier
 

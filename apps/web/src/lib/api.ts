@@ -286,6 +286,11 @@ export const PROVIDER_APP_KEYS = [
   "aws", "microsoft-azure", "google-cloud", "kubernetes", "1password", "obsidian", "mcp-servers",
   "woocommerce", "ebay", "xero", "zoho-books", "mapbox", "amadeus", "mastodon", "bluesky", "zapier", "make", "ifttt",
   "philips-hue", "smartthings", "tuya", "sonos", "weather", "bhashini",
+  // Batch 4: AI model providers, voice and search tools, SharePoint
+  "openai", "anthropic", "google-gemini", "mistral", "deepseek", "qwen", "moonshot-kimi", "minimax", "zai", "cohere", "groq", "cerebras",
+  "together-ai", "fireworks", "nvidia", "hugging-face", "openrouter", "litellm", "amazon-bedrock", "anthropic-vertex", "github-copilot",
+  "cloudflare-ai-gateway", "vercel-ai-gateway", "ollama", "lm-studio", "vllm", "custom-openai-api",
+  "elevenlabs", "deepgram", "azure-speech", "perplexity-search", "runway", "fal", "comfyui", "sharepoint",
 ] as const;
 export type ProviderAppKey = (typeof PROVIDER_APP_KEYS)[number];
 export type AnyOneAppKey = OneAppKey | ProviderAppKey;
