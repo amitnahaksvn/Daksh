@@ -1,6 +1,6 @@
-# Amit.md — keys, secrets and setup for the 20 new apps
+# Amit.md — keys, secrets and setup for the new apps
 
-Everything in Daksha for these 20 apps is built and tested with mock servers. **None of it has been run against the real services**, because that needs
+Everything in Daksha for these apps is built and tested with mock servers. **None of it has been run against the real services**, because that needs
 your developer accounts and keys. Until a key below is set, the app shows "not set up on the server yet" and nothing breaks. Add the keys, restart the
 API, open **Apps**, and use the Manage popup.
 
@@ -199,7 +199,7 @@ carry the same detail without secrets.
 
 ## More apps (generated)
 
-The apps below were added in later batches. This section is written from the app definitions (`ProviderDocs`), so it always matches the code.
+The apps below (96 of them) were added in later batches. This section is written from the app definitions (`ProviderDocs`), so it always matches the code: when an app changes, a test fails until this section is regenerated.
 Where you see `<API address>`, use the address of your API (for example `https://api.example.com`).
 
 <!-- BEGIN GENERATED APPS -->
