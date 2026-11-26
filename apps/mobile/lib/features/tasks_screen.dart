@@ -28,6 +28,7 @@ class TasksScreen extends ConsumerWidget {
                           leading: Icon(tasks[i].completed ? Icons.check_circle : Icons.radio_button_unchecked,
                               color: tasks[i].completed ? Theme.of(context).colorScheme.primary : null),
                           title: Text(tasks[i].title, style: TextStyle(decoration: tasks[i].completed ? TextDecoration.lineThrough : null)),
+                          onTap: tasks[i].completed ? null : () => _complete(context, ref, tasks[i].id),
                         ),
                       ],
                     ]),
@@ -35,6 +36,15 @@ class TasksScreen extends ConsumerWidget {
                 ]),
         ),
       );
+
+  Future<void> _complete(BuildContext context, WidgetRef ref, String id) async {
+    try {
+      await ref.read(apiProvider).completeTask(id);
+      ref.invalidate(tasksProvider);
+    } catch (e) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+  }
 
   Future<void> _add(BuildContext context, WidgetRef ref) async {
     final controller = TextEditingController();

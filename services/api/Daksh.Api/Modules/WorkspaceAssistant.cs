@@ -63,6 +63,8 @@ public static class WorkspaceAssistant
         await Add(NotionModule.Key, "Notion", NotionRx, () => NotionModule.AssistantTextAsync(userId, query, db, protector, clients, ct));
         await Add(SpotifyModule.Key, "Spotify", SpotifyRx, () => SpotifyModule.AssistantTextAsync(userId, db, protector, config, clients, ct));
         await Add(DiscordModule.Key, "Discord", DiscordRx, () => DiscordModule.AssistantTextAsync(userId, db, protector, clients, ct));
+        var more = await ProviderEngine.AssistantAsync(question, userId, db, protector, config, clients, ct);
+        if (more.Text.Length > 0) { sb.Append(more.Text); sources.AddRange(more.Sources); }
         return new AssistantContextResult(sb.ToString(), sources);
     }
 }

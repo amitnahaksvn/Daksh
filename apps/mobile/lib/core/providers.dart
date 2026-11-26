@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'api_client.dart';
+import 'app_models.dart';
+import 'links.dart';
 
 final apiProvider = Provider<DakshApi>((ref) => DakshApi());
 
@@ -64,3 +66,45 @@ class AssistantNotifier extends Notifier<AssistantState> {
     }
   }
 }
+
+// ── Apps ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+final appCatalogProvider = FutureProvider.autoDispose<List<AppCatalogEntry>>(
+  (ref) => ref.watch(apiProvider).appCatalog(),
+);
+final providerStatusesProvider = FutureProvider.autoDispose<Map<String, bool>>(
+  (ref) => ref.watch(apiProvider).providerStatuses(),
+);
+final providerSpecProvider = FutureProvider.autoDispose
+    .family<ProviderSpec, String>(
+      (ref, key) => ref.watch(apiProvider).providerSpec(key),
+    );
+final appStatusProvider = FutureProvider.autoDispose.family<AppStatus, String>(
+  (ref, key) => ref.watch(apiProvider).appStatus(key),
+);
+final appDashboardProvider = FutureProvider.autoDispose
+    .family<AppDashboard, String>(
+      (ref, key) => ref.watch(apiProvider).appDashboard(key),
+    );
+
+// ── Everyday pages ─────────────────────────────────────────────────────────────────────────────────────────────────────
+final listsProvider = FutureProvider.autoDispose<List<ListEntry>>(
+  (ref) => ref.watch(apiProvider).lists(),
+);
+final remindersProvider = FutureProvider.autoDispose<List<ReminderItem>>(
+  (ref) => ref.watch(apiProvider).reminders(),
+);
+final auditProvider = FutureProvider.autoDispose<List<AuditEvent>>(
+  (ref) => ref.watch(apiProvider).auditEvents(),
+);
+final activityProvider = FutureProvider.autoDispose<List<ActivityEntry>>(
+  (ref) => ref.watch(apiProvider).activity(),
+);
+final meProvider = FutureProvider.autoDispose<UserDetails>(
+  (ref) => ref.watch(apiProvider).me(),
+);
+final mailProvider = FutureProvider.autoDispose.family<MailPage, String>(
+  (ref, query) => ref.watch(apiProvider).mail(query),
+);
+
+/// Opens web addresses (sign-in pages, links in a list). Replaced in tests.
+final linkOpenerProvider = Provider<LinkOpener>((ref) => openLink);

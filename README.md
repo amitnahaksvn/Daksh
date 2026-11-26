@@ -7,6 +7,7 @@ under the user's control. This monorepo holds every component.
 |-----------|------|------|
 | Web | `apps/web` | Next.js, TypeScript |
 | Mobile (iOS/Android) | `apps/mobile` | Flutter |
+| Desktop (Windows/macOS) | `apps/desktop` | Electron (the web app in a native window) |
 | API | `services/api` | ASP.NET Core, .NET 10 (LTS) |
 | Worker | `services/worker` | .NET Worker Service |
 | AI core (LLM/RAG/ML orchestration) | `services/ai` | .NET, Microsoft.Extensions.AI |

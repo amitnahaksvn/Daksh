@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../core/api_client.dart';
 import '../core/providers.dart';
 import '../core/widgets.dart';
+import 'apps_screen.dart' show oneAppKeys;
+import 'provider_widgets.dart';
 
 /// Apps whose chats live in the Chats tab, so they are not tiles.
 const _messaging = {'whatsapp', 'telegram'};
@@ -115,12 +118,13 @@ class _AppTiles extends ConsumerWidget {
           onRetry: () => ref.invalidate(dashboardAppsProvider),
           builder: (list) {
             final tiles = list.where((a) => !_messaging.contains(a.key)).toList();
+            final providerKeys = ref.watch(providerStatusesProvider).value?.keys.toSet() ?? const <String>{};
             return RefreshIndicator(
               onRefresh: () async => ref.invalidate(dashboardAppsProvider),
               child: ListView(padding: const EdgeInsets.all(12), children: [
                 if (tiles.isEmpty)
                   const Padding(padding: EdgeInsets.all(24), child: Text('No app tiles yet. Use Choose apps to add a connected app.', textAlign: TextAlign.center)),
-                for (final a in tiles) Padding(padding: const EdgeInsets.only(bottom: 10), child: a.key == 'gmail' ? _GmailTile(app: a) : _AppTile(app: a)),
+                for (final a in tiles) Padding(padding: const EdgeInsets.only(bottom: 10), child: a.key == 'gmail' ? _GmailTile(app: a) : (providerKeys.contains(a.key) || oneAppKeys.contains(a.key)) ? _SectionsTile(app: a) : _AppTile(app: a)),
               ]),
             );
           },
@@ -153,6 +157,35 @@ class _AppTile extends StatelessWidget {
           if (app.lastPreview != null) Padding(padding: const EdgeInsets.only(top: 4), child: Text(app.lastPreview!, maxLines: 2, overflow: TextOverflow.ellipsis)),
         ]),
       );
+}
+
+/// A connected provider-engine app (or GitHub, Notion, Discord, Spotify): the sections the server prepared from the person's settings.
+class _SectionsTile extends ConsumerWidget {
+  const _SectionsTile({required this.app});
+  final DashboardApp app;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final dash = ref.watch(appDashboardProvider(app.key));
+    return Tile(
+      padding: const EdgeInsets.all(16),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(app.name, style: Theme.of(context).textTheme.titleMedium),
+            if (app.account != null) Text(app.account!, style: Theme.of(context).textTheme.bodySmall, overflow: TextOverflow.ellipsis),
+          ])),
+          IconButton(tooltip: 'Refresh ${app.name}', icon: const Icon(Icons.refresh), onPressed: () => ref.invalidate(appDashboardProvider(app.key))),
+          IconButton(tooltip: 'Open ${app.name}', icon: const Icon(Icons.chevron_right), onPressed: () => context.push(oneAppKeys.contains(app.key) ? '/apps/one/${app.key}' : '/apps/provider/${app.key}')),
+        ]),
+        dash.when(
+          loading: () => const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: LinearProgressIndicator()),
+          error: (e, _) => Text(errorText(e), style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          data: (d) => SectionsView(dashboard: d, onOpenLink: ref.read(linkOpenerProvider)),
+        ),
+      ]),
+    );
+  }
 }
 
 /// One Gmail account: its own numbers and priority emails.

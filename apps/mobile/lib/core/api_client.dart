@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 
+import 'app_models.dart';
+
 /// Base URL of the Daksh API. Override with --dart-define=API_URL=...
 /// (Android emulators reach the host machine at 10.0.2.2). Defaults to the hosted API.
 const apiUrl = String.fromEnvironment('API_URL', defaultValue: 'https://daksh-api.salmonmushroom-0ed2f93e.centralindia.azurecontainerapps.io');
@@ -345,4 +347,165 @@ class DakshApi {
       ];
 
   Future<void> deleteConversation(String id) => _send('DELETE', '/api/v1/assistant/conversations/$id');
+
+  // ── Apps (catalogue, and every app that signs in once) ───────────────────────────────────────────────────────────────
+  Future<List<AppCatalogEntry>> appCatalog() async => [
+    for (final e in (await _send('GET', '/api/integrations')) as List)
+      AppCatalogEntry.fromJson(e as Map<String, dynamic>),
+  ];
+
+  Future<AppStatus> appStatus(String key) async => AppStatus.fromJson(
+    await _send('GET', '/api/integrations/$key/status') as Map<String, dynamic>,
+  );
+
+  /// Which provider-engine apps are connected, in one call.
+  Future<Map<String, bool>> providerStatuses() async =>
+      (await _send('GET', '/api/integrations/provider-apps/statuses')
+              as Map<String, dynamic>)
+          .map((k, v) => MapEntry(k, v == true));
+
+  /// The address to open in the browser to sign in to an OAuth app. [params] carry choices such as `write` or a Shopify shop.
+  Future<String> oauthUrl(String key, Map<String, String> params) async {
+    final query = params.isEmpty
+        ? ''
+        : '?${Uri(queryParameters: params).query}';
+    return (await _send('POST', '/api/integrations/$key/connect$query')
+            as Map<String, dynamic>)['authorizationUrl']
+        as String;
+  }
+
+  /// Credential and server-key apps connect by posting what they ask for.
+  Future<void> connectWithDetails(String key, Map<String, String> values) =>
+      _send('POST', '/api/integrations/$key/connect', values);
+
+  Future<void> disconnectApp(String key) =>
+      _send('POST', '/api/integrations/$key/disconnect');
+  Future<void> setAppWrite(String key, bool enabled) =>
+      _send('POST', '/api/integrations/$key/write', {'enabled': enabled});
+  Future<Map<String, dynamic>> appSettings(String key) async =>
+      (await _send('GET', '/api/integrations/$key/settings'))
+          as Map<String, dynamic>;
+  Future<Map<String, dynamic>> updateAppSettings(
+    String key,
+    Map<String, Object?> values,
+  ) async =>
+      (await _send('PUT', '/api/integrations/$key/settings', values))
+          as Map<String, dynamic>;
+  Future<AppDashboard> appDashboard(String key) async => AppDashboard.fromJson(
+    await _send('GET', '/api/integrations/$key/dashboard')
+        as Map<String, dynamic>,
+  );
+
+  Future<ProviderSpec> providerSpec(String key) async => ProviderSpec.fromJson(
+    await _send('GET', '/api/integrations/$key/spec') as Map<String, dynamic>,
+  );
+
+  Future<List<ProviderItem>> providerView(
+    String key,
+    String view, [
+    Map<String, String> params = const {},
+  ]) async {
+    final query = params.isEmpty
+        ? ''
+        : '?${Uri(queryParameters: params).query}';
+    return [
+      for (final e
+          in (await _send('GET', '/api/integrations/$key/views/$view$query'))
+              as List)
+        ProviderItem.fromJson(e as Map<String, dynamic>),
+    ];
+  }
+
+  Future<ProviderActionResult> providerAction(
+    String key,
+    String action,
+    Map<String, String> inputs,
+  ) async => ProviderActionResult.fromJson(
+    await _send('POST', '/api/integrations/$key/actions/$action', {
+          'inputs': inputs,
+        })
+        as Map<String, dynamic>,
+  );
+
+  // ── Lists, reminders, tasks, activity ───────────────────────────────────────────────────────────────────────────────
+  Future<List<ListEntry>> lists() async => [
+    for (final e in (await _send('GET', '/api/v1/lists')) as List)
+      ListEntry.fromJson(e as Map<String, dynamic>),
+  ];
+  Future<void> addListItem(String list, String text) =>
+      _send('POST', '/api/v1/lists', {'list': list, 'text': text});
+  Future<void> toggleListItem(String id) =>
+      _send('POST', '/api/v1/lists/$id/toggle');
+  Future<void> deleteListItem(String id) =>
+      _send('DELETE', '/api/v1/lists/$id');
+
+  Future<List<ReminderItem>> reminders() async => [
+    for (final e in (await _send('GET', '/api/v1/reminders')) as List)
+      ReminderItem.fromJson(e as Map<String, dynamic>),
+  ];
+  Future<void> completeTask(String id) =>
+      _send('POST', '/api/v1/tasks/$id/complete');
+
+  Future<List<AuditEvent>> auditEvents() async => [
+    for (final e in (await _send('GET', '/api/v1/audit-events')) as List)
+      AuditEvent.fromJson(e as Map<String, dynamic>),
+  ];
+  Future<List<ActivityEntry>> activity() async => [
+    for (final e in (await _send('GET', '/api/dashboard/activity')) as List)
+      ActivityEntry.fromJson(e as Map<String, dynamic>),
+  ];
+
+  // ── Profile ──────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Future<UserDetails> me() async => UserDetails.fromJson(
+    await _send('GET', '/api/v1/account/me') as Map<String, dynamic>,
+  );
+  Future<UserDetails> updateMe(
+    String firstName,
+    String lastName,
+    String gender,
+    String dateOfBirth,
+  ) async => UserDetails.fromJson(
+    await _send('PUT', '/api/v1/account/me', {
+          'firstName': firstName,
+          'lastName': lastName,
+          'gender': gender,
+          'dateOfBirth': dateOfBirth,
+        })
+        as Map<String, dynamic>,
+  );
+  Future<void> changePassword(String current, String next) => _send(
+    'POST',
+    '/api/v1/account/me/password',
+    {'currentPassword': current, 'newPassword': next},
+  );
+  Future<Map<String, dynamic>> busy() async =>
+      (await _send('GET', '/api/v1/account/me/busy')) as Map<String, dynamic>;
+  Future<Map<String, dynamic>> updateBusy(Map<String, dynamic> profile) async =>
+      (await _send('PUT', '/api/v1/account/me/busy', profile))
+          as Map<String, dynamic>;
+
+  // ── Email (Gmail) ────────────────────────────────────────────────────────────────────────────────────────────────────
+  Future<MailPage> mail(String query, {String? pageToken}) async {
+    final params = {'q': query, if (pageToken != null) 'pageToken': pageToken};
+    return MailPage.fromJson(
+      await _send(
+            'GET',
+            '/api/integrations/gmail/messages?${Uri(queryParameters: params).query}',
+          )
+          as Map<String, dynamic>,
+    );
+  }
+
+  Future<MailMessage> mailMessage(String id) async => MailMessage.fromJson(
+    await _send(
+          'GET',
+          '/api/integrations/gmail/messages/${Uri.encodeComponent(id)}',
+        )
+        as Map<String, dynamic>,
+  );
+  Future<void> sendMail(String to, String subject, String body) => _send(
+    'POST',
+    '/api/integrations/gmail/messages',
+    {'to': to, 'subject': subject, 'body': body},
+  );
 }

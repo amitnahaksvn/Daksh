@@ -518,6 +518,10 @@ public static class IntegrationsModule
         await catalog.UpdateManyAsync(c => c.IntegrationKey == "slack" || c.IntegrationKey == "github" || c.IntegrationKey == "notion" || c.IntegrationKey == "discord" || c.IntegrationKey == "spotify",
             Builders<IntegrationCatalogEntry>.Update.Set(c => c.IsEnabled, true), cancellationToken: ct);
 
+        // The apps built on the provider engine (see MoreApps/ProviderApps): each connects on its own.
+        var providerKeys = ProviderApps.All.Select(a => a.Key).ToList();
+        await catalog.UpdateManyAsync(c => providerKeys.Contains(c.IntegrationKey), Builders<IntegrationCatalogEntry>.Update.Set(c => c.IsEnabled, true), cancellationToken: ct);
+
         // One Microsoft sign-in powers Outlook mail, Outlook calendar, OneDrive and Azure DevOps, so all four are live together.
         await catalog.UpdateManyAsync(c => c.IntegrationKey == "microsoft-outlook" || c.IntegrationKey == "microsoft-outlook-calendar" || c.IntegrationKey == "onedrive" || c.IntegrationKey == "azure-devops",
             Builders<IntegrationCatalogEntry>.Update.Set(c => c.IsEnabled, true), cancellationToken: ct);

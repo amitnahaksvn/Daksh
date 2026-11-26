@@ -11,6 +11,14 @@ import 'features/login_screen.dart';
 import 'features/privacy_screen.dart';
 import 'features/calendar_screen.dart';
 import 'features/tasks_screen.dart';
+import 'features/activity_screen.dart';
+import 'features/apps_screen.dart';
+import 'features/email_screen.dart';
+import 'features/lists_screen.dart';
+import 'features/one_app_screen.dart';
+import 'features/profile_screen.dart';
+import 'features/provider_app_screen.dart';
+import 'features/reminders_screen.dart';
 
 /// Opens on sign-in (no landing page); once signed in, straight to the chat. Other pages open over it with a back arrow.
 GoRouter buildRouter(Listenable signedInChanges,bool Function() signedIn)=>GoRouter(
@@ -28,6 +36,14 @@ GoRouter buildRouter(Listenable signedInChanges,bool Function() signedIn)=>GoRou
  GoRoute(path:'/chats',builder:(_,_)=>const _Page('Chats',ChatsScreen())),
  GoRoute(path:'/calendar',builder:(_,_)=>const _Page('Calendar',CalendarScreen())),
  GoRoute(path:'/tasks',builder:(_,_)=>const _Page('Tasks',TasksScreen())),
+ GoRoute(path:'/apps',builder:(_,_)=>const _Page('Apps',AppsScreen())),
+ GoRoute(path:'/apps/provider/:key',builder:(_,s)=>ProviderAppScreen(appKey:s.pathParameters['key']!)),
+ GoRoute(path:'/apps/one/:key',builder:(_,s)=>OneAppScreen(appKey:s.pathParameters['key']!)),
+ GoRoute(path:'/email',builder:(_,_)=>const _Page('Email',EmailScreen())),
+ GoRoute(path:'/lists',builder:(_,_)=>const _Page('Lists',ListsScreen())),
+ GoRoute(path:'/reminders',builder:(_,_)=>const _Page('Reminders',RemindersScreen())),
+ GoRoute(path:'/activity',builder:(_,_)=>const _Page('Notifications',ActivityScreen())),
+ GoRoute(path:'/profile',builder:(_,_)=>const _Page('Profile',ProfileScreen())),
  GoRoute(path:'/more/integrations',builder:(_,_)=>const _Page('Integrations',IntegrationsScreen())),
  GoRoute(path:'/more/privacy',builder:(_,_)=>const _Page('Privacy',PrivacyScreen())),
 ]);
