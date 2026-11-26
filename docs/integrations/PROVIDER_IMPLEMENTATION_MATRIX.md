@@ -98,14 +98,14 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 - **Integration surface:** Calendly API and webhooks.
 - **Required setup / access:** OAuth/personal access token, event and user scopes, webhook subscription.
 - **Missing implementation:** OAuth/token storage; event types, scheduled/cancelled events, invitees; webhook signature verification; retries/tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Code status:** Implemented on the provider engine (`services/api/Daksh.Api/Modules/MoreApps/`, app key `calendly`): sign-in or details, Manage popup, lists, actions, dashboard tile and assistant answers. Unit-tested against mock HTTP only; not yet run against the live service. Setup: `Amit.md`.
 
 ### Zoom
 
 - **Integration surface:** Zoom REST API, Server-to-Server OAuth or user OAuth; webhooks.
 - **Required setup / access:** Zoom Marketplace app, account scopes, client credentials and webhook secret.
 - **Missing implementation:** OAuth; meetings CRUD; registrants; recordings; webhook signature validation; pagination/rate limits/tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Code status:** Implemented on the provider engine (`services/api/Daksh.Api/Modules/MoreApps/`, app key `zoom`): sign-in or details, Manage popup, lists, actions, dashboard tile and assistant answers. Unit-tested against mock HTTP only; not yet run against the live service. Setup: `Amit.md`.
 
 ### Google Drive
 
@@ -171,14 +171,14 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 - **Integration surface:** Dropbox API v2.
 - **Required setup / access:** Dropbox developer app, OAuth scopes, redirect URI, team/admin consent if needed.
 - **Missing implementation:** OAuth; files/folders CRUD; upload sessions; cursor-based sync; webhooks; shared links; tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Code status:** Implemented on the provider engine (`services/api/Daksh.Api/Modules/MoreApps/`, app key `dropbox`): sign-in or details, Manage popup, lists, actions, dashboard tile and assistant answers. Unit-tested against mock HTTP only; not yet run against the live service. Setup: `Amit.md`.
 
 ### Box
 
 - **Integration surface:** Box Platform APIs.
 - **Required setup / access:** Box developer app, OAuth/JWT app auth, enterprise admin approval and scopes.
 - **Missing implementation:** Auth lifecycle; files/folders; upload sessions; events stream; collaboration/permissions; tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Code status:** Implemented on the provider engine (`services/api/Daksh.Api/Modules/MoreApps/`, app key `box`): sign-in or details, Manage popup, lists, actions, dashboard tile and assistant answers. Unit-tested against mock HTTP only; not yet run against the live service. Setup: `Amit.md`.
 
 ### Notion
 
@@ -191,7 +191,7 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 - **Integration surface:** Atlassian Confluence REST API.
 - **Required setup / access:** Atlassian OAuth 2.0 (3LO) app, scopes, site/cloud ID.
 - **Missing implementation:** OAuth; spaces/pages CRUD; CQL search; attachments; pagination; webhook strategy; tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Code status:** Implemented on the provider engine (`services/api/Daksh.Api/Modules/MoreApps/`, app key `confluence`): sign-in or details, Manage popup, lists, actions, dashboard tile and assistant answers. Unit-tested against mock HTTP only; not yet run against the live service. Setup: `Amit.md`.
 
 ### Airtable
 
@@ -260,14 +260,14 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 - **Integration surface:** Mastodon REST API.
 - **Required setup / access:** Instance URL and per-instance OAuth app/user token.
 - **Missing implementation:** Instance discovery; OAuth per instance; statuses/media/notifications; rate limits; streaming reconnect/tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Code status:** Implemented on the provider engine (`services/api/Daksh.Api/Modules/MoreApps/`, app key `mastodon`): sign-in or details, Manage popup, lists, actions, dashboard tile and assistant answers. Unit-tested against mock HTTP only; not yet run against the live service. Setup: `Amit.md`.
 
 ### Bluesky
 
 - **Integration surface:** AT Protocol / Bluesky APIs.
 - **Required setup / access:** App password or OAuth support per current protocol/client capability.
 - **Missing implementation:** Session/token lifecycle; records/feed/post operations; blob uploads; rate limits; auth migration/tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Code status:** Implemented on the provider engine (`services/api/Daksh.Api/Modules/MoreApps/`, app key `bluesky`): sign-in or details, Manage popup, lists, actions, dashboard tile and assistant answers. Unit-tested against mock HTTP only; not yet run against the live service. Setup: `Amit.md`.
 
 ### GitHub
 
@@ -333,35 +333,35 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 - **Integration surface:** Docker Hub API and webhooks.
 - **Required setup / access:** Docker Hub account/token; organization permissions.
 - **Missing implementation:** Auth; repositories/tags/manifests metadata; webhook validation; rate limits/tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Code status:** Implemented on the provider engine (`services/api/Daksh.Api/Modules/MoreApps/`, app key `docker-hub`): sign-in or details, Manage popup, lists, actions, dashboard tile and assistant answers. Unit-tested against mock HTTP only; not yet run against the live service. Setup: `Amit.md`.
 
 ### Kubernetes
 
 - **Integration surface:** Kubernetes API.
 - **Required setup / access:** Cluster endpoint, service-account token or kubeconfig, CA trust and RBAC.
 - **Missing implementation:** Secure credential provisioning; discovery; resource CRUD/watch; namespace/RBAC boundaries; reconnect and cluster tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Code status:** Implemented on the provider engine (`services/api/Daksh.Api/Modules/MoreApps/`, app key `kubernetes`): sign-in or details, Manage popup, lists, actions, dashboard tile and assistant answers. Unit-tested against mock HTTP only; not yet run against the live service. Setup: `Amit.md`.
 
 ### AWS
 
 - **Integration surface:** AWS SDK/service APIs; IAM roles preferred.
 - **Required setup / access:** IAM role/STS or access keys, region, least-privilege policies.
 - **Missing implementation:** Credential chain; service-specific adapters; pagination/retries; event integrations; audit and security tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Code status:** Implemented on the provider engine (`services/api/Daksh.Api/Modules/MoreApps/`, app key `aws`): sign-in or details, Manage popup, lists, actions, dashboard tile and assistant answers. Unit-tested against mock HTTP only; not yet run against the live service. Setup: `Amit.md`.
 
 ### Microsoft Azure
 
 - **Integration surface:** Azure SDK/ARM APIs.
 - **Required setup / access:** Entra service principal or managed identity, subscription/tenant and RBAC.
 - **Missing implementation:** Token acquisition; resource-specific clients; subscription discovery; retries; event integration; tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Code status:** Implemented on the provider engine (`services/api/Daksh.Api/Modules/MoreApps/`, app key `microsoft-azure`): sign-in or details, Manage popup, lists, actions, dashboard tile and assistant answers. Unit-tested against mock HTTP only; not yet run against the live service. Setup: `Amit.md`.
 
 ### Google Cloud
 
 - **Integration surface:** Google Cloud APIs/SDK.
 - **Required setup / access:** Workload Identity Federation or service account; project and IAM roles.
 - **Missing implementation:** Credential chain; service-specific clients; project discovery; Pub/Sub events; retries/tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Code status:** Implemented on the provider engine (`services/api/Daksh.Api/Modules/MoreApps/`, app key `google-cloud`): sign-in or details, Manage popup, lists, actions, dashboard tile and assistant answers. Unit-tested against mock HTTP only; not yet run against the live service. Setup: `Amit.md`.
 
 ### Cloudflare
 
@@ -389,7 +389,7 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 - **Integration surface:** Firebase Admin SDK and Google APIs.
 - **Required setup / access:** Service account/Workload Identity; project ID and IAM roles.
 - **Missing implementation:** Auth/Firestore/FCM/Storage adapters by scope; event triggers; credential isolation; emulator/integration tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Code status:** Implemented on the provider engine (`services/api/Daksh.Api/Modules/MoreApps/`, app key `firebase`): sign-in or details, Manage popup, lists, actions, dashboard tile and assistant answers. Unit-tested against mock HTTP only; not yet run against the live service. Setup: `Amit.md`.
 
 ### Shopify
 
@@ -403,14 +403,14 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 - **Integration surface:** WooCommerce REST API and webhooks.
 - **Required setup / access:** Store URL, consumer key/secret, HTTPS and API permissions.
 - **Missing implementation:** Credential validation; products/orders/customers; webhook signature; pagination/version compatibility/tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Code status:** Implemented on the provider engine (`services/api/Daksh.Api/Modules/MoreApps/`, app key `woocommerce`): sign-in or details, Manage popup, lists, actions, dashboard tile and assistant answers. Unit-tested against mock HTTP only; not yet run against the live service. Setup: `Amit.md`.
 
 ### eBay
 
 - **Integration surface:** eBay Sell/Buy APIs.
 - **Required setup / access:** Developer account, application keys, OAuth user consent and marketplace scopes.
 - **Missing implementation:** OAuth; inventory/orders/listings; marketplace-specific requirements; notifications; sandbox and production tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Code status:** Implemented on the provider engine (`services/api/Daksh.Api/Modules/MoreApps/`, app key `ebay`): sign-in or details, Manage popup, lists, actions, dashboard tile and assistant answers. Unit-tested against mock HTTP only; not yet run against the live service. Setup: `Amit.md`.
 
 ### Amazon Selling Partner API
 
@@ -451,14 +451,14 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 - **Integration surface:** Xero Accounting API.
 - **Required setup / access:** Xero developer app, OAuth 2.0, tenant connection and scopes.
 - **Missing implementation:** OAuth refresh; tenant discovery; contacts/invoices/payments; webhooks; rate limits/tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Code status:** Implemented on the provider engine (`services/api/Daksh.Api/Modules/MoreApps/`, app key `xero`): sign-in or details, Manage popup, lists, actions, dashboard tile and assistant answers. Unit-tested against mock HTTP only; not yet run against the live service. Setup: `Amit.md`.
 
 ### Zoho Books
 
 - **Integration surface:** Zoho Books API.
 - **Required setup / access:** Zoho OAuth client, data-center region, organization ID and scopes.
 - **Missing implementation:** Region-aware OAuth; organizations; invoices/expenses/contacts; webhooks/polling; tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Code status:** Implemented on the provider engine (`services/api/Daksh.Api/Modules/MoreApps/`, app key `zoho-books`): sign-in or details, Manage popup, lists, actions, dashboard tile and assistant answers. Unit-tested against mock HTTP only; not yet run against the live service. Setup: `Amit.md`.
 
 ### Google Maps Platform
 
@@ -472,14 +472,14 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 - **Integration surface:** Mapbox APIs.
 - **Required setup / access:** Mapbox access token with scopes and allowed URL restrictions.
 - **Missing implementation:** Geocoding/search/directions/tiles adapters; token scopes; quota and attribution handling; tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Code status:** Implemented on the provider engine (`services/api/Daksh.Api/Modules/MoreApps/`, app key `mapbox`): sign-in or details, Manage popup, lists, actions, dashboard tile and assistant answers. Unit-tested against mock HTTP only; not yet run against the live service. Setup: `Amit.md`.
 
 ### Amadeus
 
 - **Integration surface:** Amadeus Self-Service APIs.
 - **Required setup / access:** Amadeus developer account, API key/secret, test/production environment.
 - **Missing implementation:** OAuth client credentials; flight/hotel APIs by product; booking eligibility constraints; quotas and tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Code status:** Implemented on the provider engine (`services/api/Daksh.Api/Modules/MoreApps/`, app key `amadeus`): sign-in or details, Manage popup, lists, actions, dashboard tile and assistant answers. Unit-tested against mock HTTP only; not yet run against the live service. Setup: `Amit.md`.
 
 ### Booking.com
 
@@ -514,7 +514,7 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 - **Integration surface:** BHASHINI APIs.
 - **Required setup / access:** Platform onboarding/API key and approved service/domain configuration.
 - **Missing implementation:** Auth; language detection/translation/ASR/TTS adapters; payload limits; language-quality and latency tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Code status:** Implemented on the provider engine (`services/api/Daksh.Api/Modules/MoreApps/`, app key `bhashini`): sign-in or details, Manage popup, lists, actions, dashboard tile and assistant answers. Unit-tested against mock HTTP only; not yet run against the live service. Setup: `Amit.md`.
 
 ### ONDC
 
@@ -535,28 +535,28 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 - **Integration surface:** Hue Bridge API / supported cloud APIs.
 - **Required setup / access:** Bridge pairing/application key or supported account API access.
 - **Missing implementation:** Bridge discovery/pairing; local API auth; lights/scenes/groups; event stream/reconnect; hardware tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Code status:** Implemented on the provider engine (`services/api/Daksh.Api/Modules/MoreApps/`, app key `philips-hue`): sign-in or details, Manage popup, lists, actions, dashboard tile and assistant answers. Unit-tested against mock HTTP only; not yet run against the live service. Setup: `Amit.md`.
 
 ### SmartThings
 
 - **Integration surface:** SmartThings API and webhooks.
 - **Required setup / access:** Samsung developer account, OAuth/API token, app registration and subscriptions.
 - **Missing implementation:** OAuth; devices/capabilities/commands; lifecycle events; webhook validation; device simulation/tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Code status:** Implemented on the provider engine (`services/api/Daksh.Api/Modules/MoreApps/`, app key `smartthings`): sign-in or details, Manage popup, lists, actions, dashboard tile and assistant answers. Unit-tested against mock HTTP only; not yet run against the live service. Setup: `Amit.md`.
 
 ### Tuya
 
 - **Integration surface:** Tuya IoT Cloud APIs.
 - **Required setup / access:** Tuya developer project, data-center region, access ID/secret and device authorization.
 - **Missing implementation:** Region-aware auth; devices/scenes; token refresh; webhook/polling; signing and hardware tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Code status:** Implemented on the provider engine (`services/api/Daksh.Api/Modules/MoreApps/`, app key `tuya`): sign-in or details, Manage popup, lists, actions, dashboard tile and assistant answers. Unit-tested against mock HTTP only; not yet run against the live service. Setup: `Amit.md`.
 
 ### IFTTT
 
 - **Integration surface:** IFTTT platform/Webhooks integrations.
 - **Required setup / access:** IFTTT service/platform access and webhook key; partner access may be required.
 - **Missing implementation:** Confirm current platform access; trigger/action definitions; authentication; rate limits and end-to-end tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Code status:** Implemented on the provider engine (`services/api/Daksh.Api/Modules/MoreApps/`, app key `ifttt`): sign-in or details, Manage popup, lists, actions, dashboard tile and assistant answers. Unit-tested against mock HTTP only; not yet run against the live service. Setup: `Amit.md`.
 
 ### Zapier
 
@@ -584,7 +584,7 @@ For each provider, a connector is complete only when it has: (1) provider-specif
 - **Integration surface:** Model Context Protocol client transport.
 - **Required setup / access:** Server URL/stdio command, transport type, auth configuration and trust policy.
 - **Missing implementation:** MCP handshake; tool/resource/prompt discovery; stdio/HTTP transports; OAuth; permission approval; sandboxing and conformance tests.
-- **Code status:** Not implemented; this section is a gap register, not a working connector.
+- **Code status:** Implemented on the provider engine (`services/api/Daksh.Api/Modules/MoreApps/`, app key `mcp-servers`): sign-in or details, Manage popup, lists, actions, dashboard tile and assistant answers. Unit-tested against mock HTTP only; not yet run against the live service. Setup: `Amit.md`.
 
 ### OpenClaw Plugins
 

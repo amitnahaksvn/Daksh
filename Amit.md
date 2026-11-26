@@ -214,6 +214,16 @@ App key `1password`. Each person enters their own details. Read-only.
 
 Notes: By design Daksha asks only for the item list, which contains titles, categories and dates, never field values.
 
+### A2A
+
+App key `a2a`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Agent address, Bearer token.
+
+1. Nothing to set on the server. Each person enters the base address of an A2A agent (it serves `/.well-known/agent-card.json`) and a bearer token if the agent requires one.
+
+Notes: Uses the JSON-RPC `message/send` method over HTTP.
+
 ### Airtable
 
 App key `airtable`. Each person enters their own details. Read-only until full access is turned on.
@@ -441,6 +451,18 @@ App key `elevenlabs`. Each person enters their own details. Read-only.
 
 1. Nothing to set on the server. Each person creates an **API key** at elevenlabs.io (Profile → API keys).
 
+### Facebook Messenger
+
+App key `facebook-messenger`. Sign-in: OAuth. Read-only until full access is turned on.
+
+**Server settings:** `Facebook__OAuth__ClientId`, `Facebook__OAuth__ClientSecret`; optional `Facebook__OAuth__RedirectUri` and `Facebook__OAuth__FrontendUrl`.
+
+1. Uses the same Meta app as Facebook Pages (`Facebook__OAuth__ClientId` / `ClientSecret`). Add the **Messenger** product and the permission `pages_messaging`, then submit it for App Review.
+2. Register the extra redirect URI for this app (see below).
+3. Register the redirect URI `<API address>/api/integrations/facebook-messenger/callback` with the provider (many providers require HTTPS).
+
+Notes: This is the Page's Messenger inbox. Personal Messenger chats have no public API.
+
 ### fal
 
 App key `fal`. Each person enters their own details. Read-only until full access is turned on.
@@ -450,6 +472,15 @@ App key `fal`. Each person enters their own details. Read-only until full access
 1. Nothing to set on the server. Each person creates an **API key** at fal.ai/dashboard/keys.
 
 Notes: fal cannot check a key without spending credits, so the key is only checked the first time an image is generated.
+
+### Feishu / Lark
+
+App key `feishu-lark`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: App ID, App Secret, Service.
+
+1. Nothing to set on the server. In open.feishu.cn (or open.larksuite.com) create a **custom app**, enable the **Bot** capability, add the permissions `im:chat:readonly`, `im:message:readonly` and `im:message:send_as_bot`, publish it, and add the bot to the chats you want.
+2. In Daksha enter the App ID, the App Secret and choose Feishu or Lark.
 
 ### Firebase
 
@@ -488,6 +519,17 @@ App key `gitlab`. Each person enters their own details. Read-only until full acc
 2. In Daksha they enter their GitLab address (`https://gitlab.com` or their own server) and the token.
 
 Notes: Self-hosted servers must be reachable from the Daksha server.
+
+### Google Chat
+
+App key `google-chat`. Sign-in: OAuth. Read-only until full access is turned on.
+
+**Server settings:** `GoogleChat__OAuth__ClientId`, `GoogleChat__OAuth__ClientSecret` (or reuse `Gmail__OAuth__ClientId` / `ClientSecret`); optional `GoogleChat__OAuth__RedirectUri` and `GoogleChat__OAuth__FrontendUrl`.
+
+1. Reuses the Google client (`Gmail__OAuth__*`). In Google Cloud Console enable the **Google Chat API**, configure it (Configuration tab), and add the scopes `chat.spaces.readonly`, `chat.messages.readonly` and `chat.messages.create` to the consent screen.
+2. Register the redirect URI `<API address>/api/integrations/google-chat/callback` with the provider (many providers require HTTPS).
+
+Notes: Google Workspace accounts only. Messages are sent as you, not as a bot.
 
 ### Google Cloud
 
@@ -532,6 +574,39 @@ App key `ifttt`. Each person enters their own details. Read-only until full acce
 
 Notes: IFTTT cannot be read back from; Daksha only fires events. Connecting fires one harmless test event named `daksha_connected`.
 
+### iMessage
+
+App key `imessage`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: BlueBubbles address, Server password.
+
+1. Nothing to set on the server. Install **BlueBubbles Server** on a Mac that stays on and signed in to Messages (bluebubbles.app), then note its address and password.
+2. The Daksha server must be able to reach the Mac (use a private tunnel for a cloud server).
+
+Notes: The BlueBubbles API takes the password as part of the address, so keep the connection on a trusted network.
+
+### Instagram Messaging
+
+App key `instagram-messaging`. Sign-in: OAuth. Read-only until full access is turned on.
+
+**Server settings:** `Instagram__OAuth__ClientId`, `Instagram__OAuth__ClientSecret`; optional `Instagram__OAuth__RedirectUri` and `Instagram__OAuth__FrontendUrl`.
+
+1. Uses the same Meta app as the Instagram app (`Instagram__OAuth__ClientId` / `ClientSecret`). Request the permission `instagram_business_manage_messages` in App Review.
+2. Register this app's redirect URI as well (see below).
+3. Register the redirect URI `<API address>/api/integrations/instagram-messaging/callback` with the provider (many providers require HTTPS).
+
+Notes: Needs Meta App Review for the messaging permission before anyone but app testers can use it.
+
+### IRC
+
+App key `irc`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Server, Port, Nickname, Server password, Default channel.
+
+1. Nothing to set on the server. Each person enters an IRC server (for example `irc.libera.chat`), a port (`6697` is TLS), a nickname and a server password if the network uses one.
+
+Notes: IRC keeps no history, so Daksha can only send. Networks may require a registered nickname to message channels.
+
 ### Jira
 
 App key `jira`. Each person enters their own details. Read-only until full access is turned on.
@@ -554,6 +629,16 @@ App key `kubernetes`. Each person enters their own details. Read-only until full
 3. The Daksha server must be able to reach the API server.
 
 Notes: A private CA is trusted only for that cluster's connection. Public cloud clusters with a public certificate need no CA.
+
+### LINE
+
+App key `line`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Channel access token.
+
+1. Nothing to set on the server. In the LINE Developers console create a **Messaging API channel**, issue a **long-lived channel access token**, and paste it into Daksha.
+
+Notes: LINE only delivers incoming messages by webhook, so Daksha can send but cannot list received chats.
 
 ### LiteLLM
 
@@ -601,6 +686,25 @@ App key `mastodon`. Each person enters their own details. Read-only until full a
 1. Nothing to set on the server. Each person opens their instance → Preferences → **Development → New application**, grants `read` (and `write:statuses` for posting), and copies **your access token**.
 2. In Daksha they enter the instance address and the token.
 
+### Matrix
+
+App key `matrix`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Homeserver, Access token.
+
+1. Nothing to set on the server. Each person copies their **access token** from their Matrix client (Element: Settings → Help & About → Advanced → Access Token), or creates a separate bot account and logs it in.
+2. In Daksha they enter the homeserver address (`https://matrix.org`) and the token.
+
+Notes: Rooms with end-to-end encryption show as encrypted: Daksha cannot read them.
+
+### Mattermost
+
+App key `mattermost`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Mattermost address, Personal access token.
+
+1. Nothing to set on the server. Personal access tokens must be enabled in the System Console; then each person creates one under Profile → Security → Personal Access Tokens.
+
 ### MCP servers
 
 App key `mcp-servers`. Each person enters their own details. Read-only until full access is turned on.
@@ -623,6 +727,17 @@ App key `microsoft-azure`. Sign-in: OAuth. Read-only.
 3. Register the redirect URI `<API address>/api/integrations/microsoft-azure/callback` with the provider (many providers require HTTPS).
 
 Notes: Daksha only calls read endpoints. The Azure permission itself is broad (user_impersonation), so use a dedicated app registration if that matters to you.
+
+### Microsoft Teams
+
+App key `microsoft-teams`. Sign-in: OAuth. Read-only until full access is turned on.
+
+**Server settings:** `Teams__OAuth__ClientId`, `Teams__OAuth__ClientSecret` (or reuse `Microsoft__OAuth__ClientId` / `ClientSecret`); optional `Teams__OAuth__RedirectUri` and `Teams__OAuth__FrontendUrl`.
+
+1. Reuses the Microsoft app registration (`Microsoft__OAuth__ClientId` / `ClientSecret`), or set `Teams__OAuth__*`. Add the delegated Graph permissions **Chat.Read**, **User.Read** and **ChatMessage.Send** (an administrator may need to consent).
+2. Register the redirect URI `<API address>/api/integrations/microsoft-teams/callback` with the provider (many providers require HTTPS).
+
+Notes: This is for reading and sending in your own chats. Making Daksha answer other people's Teams messages automatically needs a Teams bot, which is not part of this app.
 
 ### MiniMax
 
@@ -658,6 +773,24 @@ App key `n8n`. Each person enters their own details. Read-only until full access
 
 1. Nothing to set on the server. Each person creates an **API key** in their n8n (Settings → n8n API) and enters it with the address of their n8n.
 2. The Daksha server must be able to reach that address.
+
+### Nextcloud Talk
+
+App key `nextcloud-talk`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Nextcloud address, Username, App password.
+
+1. Nothing to set on the server. Each person creates an **app password** in Nextcloud (Settings → Security → Devices & sessions) and enters it with their address and username.
+
+### Nostr
+
+App key `nostr`. Each person enters their own details. Read-only.
+
+**Server settings:** none. Each person enters: Relay, Public key.
+
+1. Nothing to set on the server. Each person enters a **relay** address (`wss://relay.damus.io`) and a **public key** (`npub1…`).
+
+Notes: Read-only by design: publishing and direct messages require signing with a private key, which Daksha does not store.
 
 ### NVIDIA
 
@@ -779,6 +912,17 @@ App key `sharepoint`. Sign-in: OAuth. Read-only.
 1. Reuses the Microsoft app registration (`Microsoft__OAuth__ClientId` / `ClientSecret`), or set `SharePoint__OAuth__*`. Add the delegated Graph permissions **Sites.Read.All** and **Files.Read.All** (an administrator may need to consent).
 2. Register the redirect URI `<API address>/api/integrations/sharepoint/callback` with the provider (many providers require HTTPS).
 
+### Signal
+
+App key `signal`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: signal-cli REST API address, Your Signal number.
+
+1. Nothing to set on the server. Run **signal-cli-rest-api** (the `bbernhard/signal-cli-rest-api` container) and link or register your number following its README.
+2. In Daksha enter the bridge address and your number in international format (`+9198…`). The Daksha server must be able to reach the bridge.
+
+Notes: Reading fetches the messages waiting on the bridge: once read they are removed from its queue.
+
 ### SmartThings
 
 App key `smartthings`. Each person enters their own details. Read-only until full access is turned on.
@@ -786,6 +930,16 @@ App key `smartthings`. Each person enters their own details. Read-only until ful
 **Server settings:** none. Each person enters: Personal access token.
 
 1. Nothing to set on the server. Each person creates a **personal access token** at account.smartthings.com/tokens with the Devices (list, read, execute) and Scenes (list, execute) permissions.
+
+### SMS (Twilio)
+
+App key `sms-twilio`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Account SID, Auth token, Send from.
+
+1. Nothing to set on the server. Each person copies the **Account SID** and **Auth Token** from console.twilio.com and the phone number (in E.164 form) that messages should be sent from.
+
+Notes: Trial accounts can only text verified numbers. Every text sent is billed to the Twilio account.
 
 ### Sonos
 
@@ -813,6 +967,16 @@ App key `supabase`. Each person enters their own details. Read-only.
 
 1. Nothing to set on the server. Each person creates a **personal access token** (Supabase dashboard → Account → Access Tokens).
 
+### Synology Chat
+
+App key `synology-chat`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Webhook address.
+
+1. Nothing to set on the server. In Synology Chat open **Integration → Incoming Webhooks**, create one for a channel and copy its URL. The Daksha server must be able to reach your NAS.
+
+Notes: Incoming webhooks can only send, so Daksha posts but cannot read the channel.
+
 ### Together AI
 
 App key `together-ai`. Each person enters their own details. Read-only until full access is turned on.
@@ -831,6 +995,17 @@ App key `tuya`. Each person enters their own details. Read-only until full acces
 2. Devices → **Link App Account** and scan the QR code with the Smart Life / Tuya app so the project can see your devices. Subscribe the project to the *Smart Home Basic Service* API group.
 
 Notes: Signed requests follow Tuya's documented HMAC-SHA256 scheme. The list-devices call needs the Smart Home Basic Service subscription.
+
+### Twitch Chat
+
+App key `twitch-chat`. Sign-in: OAuth. Read-only until full access is turned on.
+
+**Server settings:** `Twitch__OAuth__ClientId`, `Twitch__OAuth__ClientSecret`; optional `Twitch__OAuth__RedirectUri` and `Twitch__OAuth__FrontendUrl`.
+
+1. dev.twitch.tv → Console → **Register Your Application** (Category: Website Integration, Client Type: Confidential). Copy the client id and generate a secret.
+2. Register the redirect URI `<API address>/api/integrations/twitch-chat/callback` with the provider (many providers require HTTPS).
+
+Notes: Reading a chat as it happens needs a live connection, so Daksha lists live followed channels and sends messages but does not stream chat.
 
 ### Vercel
 

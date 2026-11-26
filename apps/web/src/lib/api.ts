@@ -291,6 +291,9 @@ export const PROVIDER_APP_KEYS = [
   "together-ai", "fireworks", "nvidia", "hugging-face", "openrouter", "litellm", "amazon-bedrock", "anthropic-vertex", "github-copilot",
   "cloudflare-ai-gateway", "vercel-ai-gateway", "ollama", "lm-studio", "vllm", "custom-openai-api",
   "elevenlabs", "deepgram", "azure-speech", "perplexity-search", "runway", "fal", "comfyui", "sharepoint",
+  // Batch 5: messaging
+  "microsoft-teams", "google-chat", "signal", "line", "facebook-messenger", "instagram-messaging", "imessage", "matrix", "mattermost",
+  "feishu-lark", "twitch-chat", "sms-twilio", "a2a", "irc", "nextcloud-talk", "nostr", "synology-chat",
 ] as const;
 export type ProviderAppKey = (typeof PROVIDER_APP_KEYS)[number];
 export type AnyOneAppKey = OneAppKey | ProviderAppKey;

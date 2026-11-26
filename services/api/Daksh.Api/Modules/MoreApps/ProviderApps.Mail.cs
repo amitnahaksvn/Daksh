@@ -30,6 +30,8 @@ public static partial class ProviderApps
         WooCommerce(), Ebay(), Xero(), ZohoBooks(), Mapbox(), Amadeus(), Mastodon(), Bluesky(), Zapier(), Make(), Ifttt(), Hue(), SmartThings(), Tuya(), Sonos(), Weather(), Bhashini(),
         // Batch 4: AI model providers, voice and search tools, SharePoint
         .. ModelApps(), ElevenLabs(), Deepgram(), AzureSpeech(), PerplexitySearch(), Runway(), Fal(), ComfyUi(), SharePoint(),
+        // Batch 5: messaging
+        Teams(), GoogleChat(), Signal(), Line(), Messenger(), InstagramMessaging(), IMessage(), Matrix(), Mattermost(), Feishu(), Twitch(), TwilioSms(), A2a(), Irc(), NextcloudTalk(), Nostr(), SynologyChat(),
     ];
     private static IReadOnlyList<ProviderApp>? _all;
 
