@@ -16,7 +16,7 @@ public class ProviderAppsTests
 {
     private static readonly string[] Expected =
     [
-        "youtube", "google-maps-platform", "uber", "yahoo-mail", "proton-mail", "apple-calendar", "instagram", "facebook-pages", "x", "linkedin",
+        "youtube", "google-maps-platform", "uber", "yahoo-mail", "proton-mail", "apple-calendar", "instagram-social", "facebook-pages", "x", "linkedin",
         "tiktok", "reddit", "pinterest", "amazon-selling-partner", "shopify", "booking-com", "quickbooks-online", "home-assistant", "irctc", "digilocker",
     ];
 
@@ -30,10 +30,20 @@ public class ProviderAppsTests
     // ---- the definitions themselves ------------------------------------------------------------
 
     [Fact]
-    public void All_twenty_apps_are_defined_once_with_catalog_keys()
+    public void Every_app_is_defined_once_and_has_a_catalogue_entry()
     {
-        Assert.Equal(Expected.OrderBy(k => k), ProviderApps.All.Select(a => a.Key).OrderBy(k => k));
-        Assert.Equal(20, ProviderApps.All.Select(a => a.Key).Distinct().Count());
+        var keys = ProviderApps.All.Select(a => a.Key).ToList();
+        Assert.Equal(keys.Count, keys.Distinct().Count());
+        Assert.Subset(keys.ToHashSet(), Expected.ToHashSet()); // the first twenty are all still there
+        var catalogue = File.ReadAllText(Path.Combine(FindRoot(), "services", "api", "Daksh.Api", "Modules", "IntegrationsModule.cs"));
+        foreach (var k in keys) Assert.Contains($"(\"{k}\", ", catalogue);
+    }
+
+    private static string FindRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Amit.md"))) dir = dir.Parent;
+        return dir?.FullName ?? throw new InvalidOperationException("repository root not found");
     }
 
     [Fact]
@@ -85,7 +95,7 @@ public class ProviderAppsTests
     public void Read_only_apps_do_not_offer_full_access()
     {
         foreach (var key in new[] { "amazon-selling-partner", "digilocker", "irctc", "booking-com", "google-maps-platform" }) Assert.False(ProviderApps.Get(key).HasWrite, key);
-        foreach (var key in new[] { "youtube", "instagram", "x", "shopify", "home-assistant" }) Assert.True(ProviderApps.Get(key).HasWrite, key);
+        foreach (var key in new[] { "youtube", "instagram-social", "x", "shopify", "home-assistant" }) Assert.True(ProviderApps.Get(key).HasWrite, key);
     }
 
     // ---- sign-in urls --------------------------------------------------------------------------
@@ -487,5 +497,49 @@ public class ProviderAppsRoutesTests
     {
         await using var app = await StartAsync();
         Assert.Equal(System.Net.HttpStatusCode.Unauthorized, (await app.GetTestClient().GetAsync("/api/integrations/provider-apps/statuses")).StatusCode);
+    }
+}
+
+public class ProviderAppsSyncTests
+{
+    private static string RepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Amit.md"))) dir = dir.Parent;
+        return dir?.FullName ?? throw new InvalidOperationException("Could not find the repository root (Amit.md).");
+    }
+
+    [Fact]
+    public void The_web_app_lists_exactly_the_apps_the_server_defines()
+    {
+        var api = File.ReadAllText(Path.Combine(RepoRoot(), "apps", "web", "src", "lib", "api.ts"));
+        var block = System.Text.RegularExpressions.Regex.Match(api, @"PROVIDER_APP_KEYS = \[(.*?)\] as const", System.Text.RegularExpressions.RegexOptions.Singleline).Groups[1].Value;
+        var webKeys = System.Text.RegularExpressions.Regex.Matches(block, "\"([a-z0-9\\-]+)\"").Select(m => m.Groups[1].Value).OrderBy(k => k).ToList();
+        Assert.Equal(ProviderApps.All.Select(a => a.Key).OrderBy(k => k), webKeys);
+    }
+
+    [Fact]
+    public void Amit_md_matches_the_app_definitions()
+    {
+        var path = Path.Combine(RepoRoot(), "Amit.md");
+        var text = File.ReadAllText(path);
+        var begin = text.IndexOf(ProviderDocs.Begin, StringComparison.Ordinal);
+        var end = text.IndexOf(ProviderDocs.End, StringComparison.Ordinal);
+        Assert.True(begin >= 0 && end > begin, "Amit.md lost its generated-apps markers.");
+        var expected = ProviderDocs.Render(ProviderApps.All);
+        var current = text[(begin + ProviderDocs.Begin.Length)..end].Trim('\r', '\n');
+        if (Environment.GetEnvironmentVariable("UPDATE_DOCS") == "1")
+        {
+            File.WriteAllText(path, text[..(begin + ProviderDocs.Begin.Length)] + "\n" + expected + text[end..]);
+            return;
+        }
+        Assert.True(current == expected.Trim('\r', '\n'), "Amit.md is out of date with the app definitions. Run the tests with UPDATE_DOCS=1 to rewrite it.");
+    }
+
+    [Fact]
+    public void Apps_added_after_the_first_twenty_explain_their_setup()
+    {
+        var first = new HashSet<string> { "youtube", "google-maps-platform", "uber", "yahoo-mail", "proton-mail", "apple-calendar", "instagram-social", "facebook-pages", "x", "linkedin", "tiktok", "reddit", "pinterest", "amazon-selling-partner", "shopify", "booking-com", "quickbooks-online", "home-assistant", "irctc", "digilocker" };
+        foreach (var app in ProviderApps.All.Where(a => !first.Contains(a.Key))) Assert.True(app.Setup.Length > 0, $"{app.Key} needs Setup steps for Amit.md");
     }
 }

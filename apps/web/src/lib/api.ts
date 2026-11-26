@@ -277,8 +277,11 @@ export type OneAppKey = "github" | "notion" | "discord" | "spotify";
 
 // Apps built on the provider engine (services/api .../MoreApps): each describes itself through GET /api/integrations/{key}/spec.
 export const PROVIDER_APP_KEYS = [
-  "youtube", "google-maps-platform", "uber", "yahoo-mail", "proton-mail", "apple-calendar", "instagram", "facebook-pages", "x", "linkedin",
+  "youtube", "google-maps-platform", "uber", "yahoo-mail", "proton-mail", "apple-calendar", "instagram-social", "facebook-pages", "x", "linkedin",
   "tiktok", "reddit", "pinterest", "amazon-selling-partner", "shopify", "booking-com", "quickbooks-online", "home-assistant", "irctc", "digilocker",
+  // Batch 2: developer, cloud, work, payments and files
+  "gitlab", "bitbucket", "jira", "sentry", "docker-hub", "cloudflare", "vercel", "supabase", "firebase", "n8n", "airtable", "confluence",
+  "razorpay", "stripe", "paypal", "zoho-mail", "calendly", "zoom", "dropbox", "box",
 ] as const;
 export type ProviderAppKey = (typeof PROVIDER_APP_KEYS)[number];
 export type AnyOneAppKey = OneAppKey | ProviderAppKey;

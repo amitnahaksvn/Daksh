@@ -67,6 +67,7 @@ public sealed class ExchangeCtx
     public required IReadOnlyDictionary<string, string> Query { get; init; }
     public required IReadOnlyDictionary<string, string> Inputs { get; init; }
     public required IHttpClientFactory Clients { get; init; }
+    public required IConfiguration Configuration { get; init; }
     public CancellationToken Ct { get; init; }
 }
 
@@ -95,6 +96,8 @@ public sealed class OAuthSpec
     /// <summary>Query parameters of the callback copied into the account (QuickBooks' realmId, Shopify's shop).</summary>
     public string[] CallbackExtras { get; init; } = [];
     public string CodeParam { get; init; } = "code";
+    /// <summary>Providers with one host per country (Zoho): "{region}" in the urls is replaced by "{Section}:Region" or this default.</summary>
+    public string DefaultRegion { get; init; } = "com";
     public Func<IConfiguration, OAuthConfig, string, string?, bool, IReadOnlyDictionary<string, string>, string>? BuildAuthUrl { get; init; }
     public Func<ExchangeCtx, Task<TokenSet?>>? Exchange { get; init; }
     public Func<ProviderCtx, TokenSet, Task<TokenSet?>>? Refresh { get; init; }
@@ -137,6 +140,10 @@ public sealed class ProviderApp
     public ActionSpec[] Actions { get; init; } = [];
     public SettingRowSpec[] ExtraSettings { get; init; } = [];
     public string SetupDoc { get; init; } = "Amit.md";
+    /// <summary>Steps for whoever sets the app up (where to get keys). Rendered into Amit.md by <see cref="ProviderDocs"/>.</summary>
+    public string[] Setup { get; init; } = [];
+    /// <summary>Limits worth knowing before relying on the app (plan needed, approvals, what is not supported).</summary>
+    public string Notes { get; init; } = "";
     /// <summary>Words in a chat question that make the assistant look at this app.</summary>
     public required Regex Ask { get; init; }
     public Func<ProviderCtx, Task<string?>>? Assistant { get; init; }
@@ -385,8 +392,11 @@ public static class ProviderEngine
         if (scopes.Length > 0) q[o.ScopeParam] = string.Join(o.ScopeSeparator, scopes);
         if (challenge is not null) { q["code_challenge"] = challenge; q["code_challenge_method"] = "S256"; }
         foreach (var (k, v) in o.AuthExtra) q[k] = v;
-        return QueryHelpers.AddQueryString(Fill(o.AuthUrl, inputs), q);
+        return QueryHelpers.AddQueryString(Fill(RegionUrl(o, o.AuthUrl, config), inputs), q);
     }
+
+    public static string RegionUrl(OAuthSpec o, string template, IConfiguration config) =>
+        template.Contains("{region}", StringComparison.Ordinal) ? template.Replace("{region}", config[$"{o.Section}:Region"] is { Length: > 0 } r && System.Text.RegularExpressions.Regex.IsMatch(r, "^[a-z.]{2,12}$") ? r : o.DefaultRegion) : template;
 
     public static string Fill(string template, IReadOnlyDictionary<string, string> values) =>
         Regex.Replace(template, @"\{(\w+)\}", m => values.TryGetValue(m.Groups[1].Value, out var v) ? v : "");
@@ -408,14 +418,14 @@ public static class ProviderEngine
         var o = x.App.OAuth!;
         var form = new Dictionary<string, string> { ["grant_type"] = "authorization_code", ["code"] = x.Code, ["redirect_uri"] = x.Config.RedirectUri };
         if (x.Verifier is not null) form["code_verifier"] = x.Verifier;
-        return await TokenCallAsync(x.App, x.Config, x.Clients, form, null, x.Ct);
+        return await TokenCallAsync(x.App, x.Config, x.Configuration, x.Clients, form, null, x.Ct);
     }
 
     /// <summary>Posts to the token endpoint and reads the standard reply. Null when the provider says no.</summary>
-    public static async Task<TokenSet?> TokenCallAsync(ProviderApp app, OAuthConfig c, IHttpClientFactory clients, Dictionary<string, string> form, string? oldRefresh, CancellationToken ct)
+    public static async Task<TokenSet?> TokenCallAsync(ProviderApp app, OAuthConfig c, IConfiguration configuration, IHttpClientFactory clients, Dictionary<string, string> form, string? oldRefresh, CancellationToken ct)
     {
         var o = app.OAuth!;
-        using var req = new HttpRequestMessage(HttpMethod.Post, o.TokenUrl);
+        using var req = new HttpRequestMessage(HttpMethod.Post, RegionUrl(o, o.TokenUrl, configuration));
         req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         if (o.BasicAuth) req.Headers.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{c.ClientId}:{c.ClientSecret}")));
         else { form[o.ClientIdParam] = c.ClientId; if (c.ClientSecret is not null) form["client_secret"] = c.ClientSecret; }
@@ -477,7 +487,7 @@ public static class ProviderEngine
             if (o.ValidateCallback?.Invoke(c, query) is { } bad) { logger.LogWarning("{App} callback rejected: {Reason}", app.Name, bad); return Back(attempt.FrontendUrl, app.Key, "token_exchange"); }
             var inputs = string.IsNullOrEmpty(attempt.Options) ? [] : JsonSerializer.Deserialize<Dictionary<string, string>>(attempt.Options) ?? [];
             var verifier = attempt.ProtectedCodeVerifier is null ? null : protector.Unprotect(attempt.ProtectedCodeVerifier);
-            var x = new ExchangeCtx { App = app, Config = c, Code = code, Verifier = verifier, Query = query, Inputs = inputs, Clients = clients, Ct = ct };
+            var x = new ExchangeCtx { App = app, Config = c, Configuration = config, Code = code, Verifier = verifier, Query = query, Inputs = inputs, Clients = clients, Ct = ct };
             var tokens = await (o.Exchange?.Invoke(x) ?? StandardExchangeAsync(x));
             if (tokens is null) { logger.LogWarning("{App} code exchange failed", app.Name); return Back(attempt.FrontendUrl, app.Key, "token_exchange"); }
             var extra = new Dictionary<string, string>(tokens.Extra ?? []);
@@ -549,7 +559,7 @@ public static class ProviderEngine
                     TokenSet? fresh = null;
                     if (app.OAuth!.Refresh is { } custom) fresh = await custom(ctx, tokens);
                     else if (tokens.Refresh is not null && TryGetOAuthConfig(app, config, out var c))
-                        fresh = await TokenCallAsync(app, c, clients, new() { ["grant_type"] = "refresh_token", ["refresh_token"] = tokens.Refresh }, tokens.Refresh, ct);
+                        fresh = await TokenCallAsync(app, c, config, clients, new() { ["grant_type"] = "refresh_token", ["refresh_token"] = tokens.Refresh }, tokens.Refresh, ct);
                     if (fresh is null)
                     {
                         await MarkReconnectAsync(db, account.ConnectionId, $"{app.Name} access expired. Reconnect {app.Name}.", ct);

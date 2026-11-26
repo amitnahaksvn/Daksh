@@ -27,7 +27,10 @@ const spec = (over: Partial<ProviderSpec> = {}): ProviderSpec => ({
 });
 
 describe("provider apps", () => {
-  it("knows all twenty apps", () => { expect(new Set(PROVIDER_APP_KEYS).size).toBe(20); });
+  it("lists every app once", () => {
+    expect(new Set(PROVIDER_APP_KEYS).size).toBe(PROVIDER_APP_KEYS.length);
+    for (const key of ["youtube", "instagram-social", "shopify", "gitlab", "stripe"]) expect(PROVIDER_APP_KEYS).toContain(key);
+  });
 
   it("builds the Manage popup tabs from the spec", () => {
     const config = configFromSpec(spec());

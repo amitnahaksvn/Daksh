@@ -28,7 +28,7 @@ Where to put the values: the API's environment (or `.env`, see `.env.example`). 
 | Yahoo Mail | `yahoo-mail` | person's app password | none | No |
 | Proton Mail | `proton-mail` | person's Bridge password | none | No (paid Proton plan + Bridge) |
 | Apple Calendar | `apple-calendar` | person's app-specific password | none | No |
-| Instagram | `instagram` | OAuth | `Instagram__OAuth__ClientId/ClientSecret` | **Yes** (Meta app review) |
+| Instagram | `instagram-social` | OAuth | `Instagram__OAuth__ClientId/ClientSecret` | **Yes** (Meta app review) |
 | Facebook Pages | `facebook-pages` | OAuth | `Facebook__OAuth__ClientId/ClientSecret` | **Yes** (Meta app review) |
 | X | `x` | OAuth 2.0 PKCE | `X__OAuth__ClientId/ClientSecret` | Paid plan for most reads |
 | LinkedIn | `linkedin` | OAuth | `LinkedIn__OAuth__ClientId/ClientSecret` | Products must be added |
@@ -89,7 +89,7 @@ Notes: events show in UTC; Preferences has "My time zone" (for example `Asia/Kol
 ## Instagram
 **Server settings:** `Instagram__OAuth__ClientId` (Instagram app ID), `Instagram__OAuth__ClientSecret` (Instagram app secret), `Instagram__OAuth__RedirectUri`, `Instagram__OAuth__FrontendUrl`
 1. developers.facebook.com → **Create app** (type Business) → add the product **Instagram** → **API setup with Instagram login**.
-2. Copy **Instagram app ID** and **Instagram app secret**. Add the redirect URI `…/api/integrations/instagram/callback` (Meta requires **HTTPS**).
+2. Copy **Instagram app ID** and **Instagram app secret**. Add the redirect URI `…/api/integrations/instagram-social/callback` (Meta requires **HTTPS**).
 3. Permissions used: `instagram_business_basic`, `instagram_business_manage_insights` (read) and `instagram_business_content_publish`, `instagram_business_manage_comments`, `instagram_business_manage_messages` (full access).
 4. While the app is in development only accounts added as **Instagram testers** can sign in; for everyone else submit **App Review**.
 Notes: only Instagram **business or creator** accounts work. Publishing needs a public JPEG link. Replies to DMs are allowed within 24 hours of the person's last message.
@@ -194,6 +194,202 @@ Notes: read-only. Daksha lists the documents issued to the person (name, issuer,
 
 If something fails, the message shown is the provider's own reason where available (for example a plan limit or a missing permission). The API logs
 carry the same detail without secrets.
+
+---
+
+## More apps (generated)
+
+The apps below were added in later batches. This section is written from the app definitions (`ProviderDocs`), so it always matches the code.
+Where you see `<API address>`, use the address of your API (for example `https://api.example.com`).
+
+<!-- BEGIN GENERATED APPS -->
+### Airtable
+
+App key `airtable`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Personal access token.
+
+1. Nothing to set on the server. Each person creates a **personal access token** at airtable.com/create/tokens with `data.records:read` and `schema.bases:read` (add `data.records:write` for adding records) and chooses the bases to share.
+
+### Bitbucket Cloud
+
+App key `bitbucket`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Bitbucket username, App password.
+
+1. Nothing to set on the server. Each person creates an **app password** (Bitbucket → Personal settings → App passwords) with Account: read, Repositories: read and Pull requests: read (add write to comment).
+2. In Daksha they enter their Bitbucket username and the app password.
+
+### Box
+
+App key `box`. Sign-in: OAuth. Read-only until full access is turned on.
+
+**Server settings:** `Box__OAuth__ClientId`, `Box__OAuth__ClientSecret`; optional `Box__OAuth__RedirectUri` and `Box__OAuth__FrontendUrl`.
+
+1. Box Developer Console → **Create New App** → Custom App → User Authentication (OAuth 2.0). Copy the client id and secret.
+2. Configuration tab: set the scopes to read and write all files and folders (Daksha only writes when full access is on).
+3. Register the redirect URI `<API address>/api/integrations/box/callback` with the provider (many providers require HTTPS).
+
+### Calendly
+
+App key `calendly`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Personal access token.
+
+1. Nothing to set on the server. Each person creates a **personal access token** in Calendly (Integrations → API & Webhooks) and pastes it into Daksha.
+
+### Cloudflare
+
+App key `cloudflare`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: API token.
+
+1. Nothing to set on the server. Each person creates an **API token** (My Profile → API Tokens) scoped to Zone:Read and DNS:Read (plus DNS:Edit and Cache Purge for full access).
+
+### Confluence
+
+App key `confluence`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Confluence site, Atlassian email, API token.
+
+1. Nothing to set on the server. Each person creates an **API token** at id.atlassian.com → Security → API tokens and enters it with their site and email.
+
+Notes: Confluence Cloud only (not Data Center).
+
+### Docker Hub
+
+App key `docker-hub`. Each person enters their own details. Read-only.
+
+**Server settings:** none. Each person enters: Docker Hub username, Access token.
+
+1. Nothing to set on the server. Each person creates a **personal access token** with Read-only permission (Docker Hub → Account settings → Personal access tokens).
+2. In Daksha they enter their Docker Hub username and the token.
+
+### Dropbox
+
+App key `dropbox`. Sign-in: OAuth. Read-only until full access is turned on.
+
+**Server settings:** `Dropbox__OAuth__ClientId`; optional `Dropbox__OAuth__RedirectUri` and `Dropbox__OAuth__FrontendUrl`.
+
+1. Dropbox App Console → **Create app** → Scoped access → Full Dropbox. Copy the app key (client id) and app secret.
+2. Permissions tab: enable `account_info.read`, `files.metadata.read` and `files.content.write`, then Submit.
+3. Register the redirect URI `<API address>/api/integrations/dropbox/callback` with the provider (many providers require HTTPS).
+
+### Firebase
+
+App key `firebase`. Sign-in: OAuth. Read-only.
+
+**Server settings:** `Firebase__OAuth__ClientId`, `Firebase__OAuth__ClientSecret` (or reuse `Gmail__OAuth__ClientId` / `ClientSecret`); optional `Firebase__OAuth__RedirectUri` and `Firebase__OAuth__FrontendUrl`.
+
+1. Reuses the Google client (`Gmail__OAuth__*`). In Google Cloud Console enable the **Firebase Management API** and add the scope `.../auth/firebase.readonly` to the consent screen.
+2. Register the redirect URI `<API address>/api/integrations/firebase/callback` with the provider (many providers require HTTPS).
+
+### GitLab
+
+App key `gitlab`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: GitLab address, Personal access token.
+
+1. Nothing to set on the server. Each person creates a **personal access token** in GitLab (Preferences → Access tokens) with the `read_api` scope (add `api` to allow commenting and creating issues).
+2. In Daksha they enter their GitLab address (`https://gitlab.com` or their own server) and the token.
+
+Notes: Self-hosted servers must be reachable from the Daksha server.
+
+### Jira
+
+App key `jira`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Jira site, Atlassian email, API token.
+
+1. Nothing to set on the server. Each person creates an **API token** at id.atlassian.com → Security → API tokens.
+2. In Daksha they enter their site (`your-team.atlassian.net`), Atlassian email and the token.
+
+Notes: Jira Server / Data Center is not covered (Jira Cloud only).
+
+### n8n
+
+App key `n8n`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: n8n address, API key.
+
+1. Nothing to set on the server. Each person creates an **API key** in their n8n (Settings → n8n API) and enters it with the address of their n8n.
+2. The Daksha server must be able to reach that address.
+
+### PayPal
+
+App key `paypal`. Each person enters their own details. Read-only.
+
+**Server settings:** none. Each person enters: Client id, Secret, Mode.
+
+1. Nothing to set on the server. Each person creates a **REST app** at developer.paypal.com → Apps & Credentials, enables the **Transaction search** feature, and enters the client id and secret (choose Sandbox to try it).
+
+Notes: PayPal only returns transactions from the last 31 days per request, and they can take a few hours to appear.
+
+### Razorpay
+
+App key `razorpay`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Key id, Key secret.
+
+1. Nothing to set on the server. Each person generates an **API key** in the Razorpay Dashboard (Account & Settings → API keys) and enters the key id and secret. Test-mode keys (`rzp_test_…`) are safe to try.
+
+Notes: Amounts are shown in rupees. Daksha never stores the secret in plain text.
+
+### Sentry
+
+App key `sentry`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Auth token, Sentry address.
+
+1. Nothing to set on the server. Each person creates a **personal auth token** in Sentry with `org:read`, `project:read` and `event:read` (add `event:write` to resolve issues).
+2. In Daksha they paste the token (and the address of a self-hosted Sentry, if they use one).
+
+### Stripe
+
+App key `stripe`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Secret or restricted key.
+
+1. Nothing to set on the server. Each person creates a **restricted API key** in Stripe (Developers → API keys) with read access to Balance, Charges, Customers, Invoices and Payouts (and write for Customers, Products, Prices and Payment Links to use full access). Test keys (`rk_test_…`) are safe to try.
+
+### Supabase
+
+App key `supabase`. Each person enters their own details. Read-only.
+
+**Server settings:** none. Each person enters: Access token.
+
+1. Nothing to set on the server. Each person creates a **personal access token** (Supabase dashboard → Account → Access Tokens).
+
+### Vercel
+
+App key `vercel`. Each person enters their own details. Read-only.
+
+**Server settings:** none. Each person enters: Access token.
+
+1. Nothing to set on the server. Each person creates an **access token** (Vercel → Account Settings → Tokens) and pastes it into Daksha.
+
+### Zoho Mail
+
+App key `zoho-mail`. Sign-in: OAuth. Read-only until full access is turned on.
+
+**Server settings:** `ZohoMail__OAuth__ClientId`, `ZohoMail__OAuth__ClientSecret`, `ZohoMail__Region` (default `com`); optional `ZohoMail__OAuth__RedirectUri` and `ZohoMail__OAuth__FrontendUrl`.
+
+1. Open the Zoho API Console for your data centre (`api-console.zoho.in` for India, `.com`, `.eu`, `.com.au`, `.jp`) and create a **Server-based Application**. Copy the client id and secret.
+2. Set `ZohoMail__Region` to your data centre suffix (`in`, `com`, `eu`, `com.au`, `jp`).
+3. Register the redirect URI `<API address>/api/integrations/zoho-mail/callback` with the provider (many providers require HTTPS).
+
+Notes: The Zoho account's data centre decides the region; mail for an India account lives on zoho.in.
+
+### Zoom
+
+App key `zoom`. Sign-in: OAuth. Read-only until full access is turned on.
+
+**Server settings:** `Zoom__OAuth__ClientId`, `Zoom__OAuth__ClientSecret`; optional `Zoom__OAuth__RedirectUri` and `Zoom__OAuth__FrontendUrl`.
+
+1. Zoom App Marketplace → Develop → **Build App** → General app (user-managed OAuth). Copy the client id and secret.
+2. Add the scopes `meeting:read`, `user:read`, `recording:read` (read) and `meeting:write` (full access).
+3. Register the redirect URI `<API address>/api/integrations/zoom/callback` with the provider (many providers require HTTPS).
+<!-- END GENERATED APPS -->
 
 ---
 

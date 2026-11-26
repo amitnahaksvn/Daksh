@@ -22,6 +22,9 @@ public static partial class ProviderApps
         YouTube(), GoogleMaps(), Uber(), YahooMail(), ProtonMail(), AppleCalendar(),
         Instagram(), FacebookPages(), X(), LinkedIn(), TikTok(), Reddit(), Pinterest(),
         AmazonSellingPartner(), Shopify(), BookingCom(), QuickBooks(), HomeAssistant(), Irctc(), DigiLocker(),
+        // Batch 2: developer, cloud and work tools
+        GitLab(), Bitbucket(), Jira(), Sentry(), DockerHub(), Cloudflare(), Vercel(), Supabase(), Firebase(), N8n(), Airtable(), Confluence(),
+        Razorpay(), Stripe(), PayPal(), ZohoMail(), Calendly(), Zoom(), Dropbox(), Box(),
     ];
     private static IReadOnlyList<ProviderApp>? _all;
 

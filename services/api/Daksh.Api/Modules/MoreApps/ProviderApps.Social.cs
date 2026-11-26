@@ -87,7 +87,7 @@ public static partial class ProviderApps
 
     private static ProviderApp Instagram() => new()
     {
-        Key = "instagram", Name = "Instagram", Icon = "SiInstagram", Color = "#E4405F", Account = "Posts, insights, comments and messages",
+        Key = "instagram-social", Name = "Instagram", Icon = "SiInstagram", Color = "#E4405F", Account = "Posts, insights, comments and messages",
         ConnectTitle = "Connect your Instagram account", ConnectLabel = "Continue with Instagram",
         ConnectBlurb = "Works with Instagram business and creator accounts. Daksha can show your posts, insights and comments. It never sees your Instagram password.",
         WriteLabel = "Allow Daksh to post and reply", WriteHint = "Full access lets Daksha publish photos, reply to comments and send direct messages, and read your messages.",
