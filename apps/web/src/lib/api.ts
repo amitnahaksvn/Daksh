@@ -294,6 +294,7 @@ export const PROVIDER_APP_KEYS = [
   // Batch 5: messaging
   "microsoft-teams", "google-chat", "signal", "line", "facebook-messenger", "instagram-messaging", "imessage", "matrix", "mattermost",
   "feishu-lark", "twitch-chat", "sms-twilio", "a2a", "irc", "nextcloud-talk", "nostr", "synology-chat",
+  "todoist", "trello", "asana", "clickup", "linear", "google-tasks", "strava", "hardcover", "readwise", "plex", "splitwise", "wise", "zerodha-kite", "etsy", "hubspot",
 ] as const;
 export type ProviderAppKey = (typeof PROVIDER_APP_KEYS)[number];
 export type AnyOneAppKey = OneAppKey | ProviderAppKey;

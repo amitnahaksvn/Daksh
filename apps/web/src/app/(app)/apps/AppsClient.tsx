@@ -150,6 +150,21 @@ const APP_META: Record<string, { priority: Priority; description: string }> = {
   "raft": { priority: "Low", description: "Chat with Daksh through Raft." },
   "reef": { priority: "Low", description: "Chat with Daksh through Reef." },
   "synology-chat": { priority: "Low", description: "Chat with Daksh from Synology Chat." },
+  "todoist": { priority: "Low", description: "Today's tasks and projects from Todoist." },
+  "trello": { priority: "Low", description: "Your Trello boards and cards." },
+  "asana": { priority: "Low", description: "Your Asana tasks and projects." },
+  "clickup": { priority: "Low", description: "Tasks assigned to you in ClickUp." },
+  "linear": { priority: "Low", description: "Linear issues assigned to you." },
+  "google-tasks": { priority: "Low", description: "Your Google Tasks lists." },
+  "strava": { priority: "Low", description: "Recent runs, rides and totals from Strava." },
+  "hardcover": { priority: "Low", description: "Your Hardcover reading list." },
+  "readwise": { priority: "Low", description: "Highlights and daily review from Readwise." },
+  "plex": { priority: "Low", description: "What is playing and recently added on your Plex server." },
+  "splitwise": { priority: "Low", description: "Shared expenses and who owes what." },
+  "wise": { priority: "Low", description: "Wise balances and transfers." },
+  "zerodha-kite": { priority: "Low", description: "Zerodha holdings, positions and funds." },
+  "etsy": { priority: "Low", description: "Etsy orders and listings." },
+  "hubspot": { priority: "Low", description: "HubSpot contacts and deals." },
   "tlon": { priority: "Low", description: "Chat with Daksh through Tlon." },
   "webchat": { priority: "Low", description: "Embed a web chat widget for Daksh." },
   "apple-notes": { priority: "Low", description: "Search and add notes in Apple Notes." },
@@ -354,6 +369,21 @@ const CATEGORY_META: Record<string, { title: string; description: string; glyph:
     description: "Speech, search and media generation — not built yet.",
     glyph: <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4"><circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.3" /></svg>,
   },
+  Productivity: {
+    title: "Productivity",
+    description: "Tasks, boards and issues Daksh can read and add to.",
+    glyph: <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4"><circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.3" /></svg>,
+  },
+  "Health & fitness": {
+    title: "Health & fitness",
+    description: "Workouts and activity.",
+    glyph: <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4"><circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.3" /></svg>,
+  },
+  CRM: {
+    title: "CRM",
+    description: "Contacts and deals.",
+    glyph: <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4"><circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.3" /></svg>,
+  },
 };
 const CATEGORY_ORDER = [
   "Messaging",
@@ -387,6 +417,9 @@ const CATEGORY_ORDER = [
   "Automation",
   "Integration protocol",
   "Agent runtime",
+  "Productivity",
+  "Health & fitness",
+  "CRM",
 ];
 
 const GOOGLE_WORKSPACE_KEYS = ["google-drive", "google-docs", "google-sheets", "google-slides"];
