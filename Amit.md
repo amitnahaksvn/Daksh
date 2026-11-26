@@ -272,6 +272,14 @@ App key `anthropic-vertex`. Sign-in: OAuth. Read-only until full access is turne
 
 Notes: Vertex has no list of Anthropic models, so you type the model id when sending a prompt.
 
+### Asana
+
+App key `asana`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Personal access token.
+
+1. Nothing to set on the server. Each person creates a **personal access token** in Asana (My settings → Apps → Developer apps → Personal access tokens).
+
 ### AWS
 
 App key `aws`. Each person enters their own details. Read-only.
@@ -343,6 +351,14 @@ App key `cerebras`. Each person enters their own details. Read-only until full a
 **Server settings:** none. Each person enters: API key.
 
 1. Nothing to set on the server. Each person creates an **API key** at cloud.cerebras.ai.
+
+### ClickUp
+
+App key `clickup`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Personal API token.
+
+1. Nothing to set on the server. Each person copies their **personal API token** from ClickUp (Settings → Apps → API Token).
 
 ### Cloudflare
 
@@ -451,6 +467,18 @@ App key `elevenlabs`. Each person enters their own details. Read-only.
 
 1. Nothing to set on the server. Each person creates an **API key** at elevenlabs.io (Profile → API keys).
 
+### Etsy
+
+App key `etsy`. Sign-in: OAuth. Read-only.
+
+**Server settings:** `Etsy__OAuth__ClientId`; optional `Etsy__OAuth__RedirectUri` and `Etsy__OAuth__FrontendUrl`.
+
+1. etsy.com/developers/your-apps → **Create a new app**. Copy the **keystring** (client id). Add the redirect URI `<API address>/api/integrations/etsy/callback`.
+2. Etsy reviews new apps before they can be used by other people; until then only your own shop works.
+3. Register the redirect URI `<API address>/api/integrations/etsy/callback` with the provider (many providers require HTTPS).
+
+Notes: Etsy's personal-use access is granted quickly; commercial access needs Etsy's approval.
+
 ### Facebook Messenger
 
 App key `facebook-messenger`. Sign-in: OAuth. Read-only until full access is turned on.
@@ -548,6 +576,17 @@ App key `google-gemini`. Each person enters their own details. Read-only until f
 
 1. Nothing to set on the server. Each person creates an **API key** at aistudio.google.com/apikey.
 
+### Google Tasks
+
+App key `google-tasks`. Sign-in: OAuth. Read-only until full access is turned on.
+
+**Server settings:** `GoogleTasks__OAuth__ClientId`, `GoogleTasks__OAuth__ClientSecret` (or reuse `Gmail__OAuth__ClientId` / `ClientSecret`); optional `GoogleTasks__OAuth__RedirectUri` and `GoogleTasks__OAuth__FrontendUrl`.
+
+1. Reuses the Google client (`Gmail__OAuth__*`). In Google Cloud Console enable the **Google Tasks API** and add the scopes `tasks.readonly` and `tasks` to the consent screen.
+2. Register the redirect URI `<API address>/api/integrations/google-tasks/callback` with the provider (many providers require HTTPS).
+
+Notes: Google Photos is not offered: since 2025 Google only lets apps read photos they created themselves, not a person's own library.
+
 ### Groq
 
 App key `groq`. Each person enters their own details. Read-only until full access is turned on.
@@ -555,6 +594,25 @@ App key `groq`. Each person enters their own details. Read-only until full acces
 **Server settings:** none. Each person enters: API key.
 
 1. Nothing to set on the server. Each person creates an **API key** at console.groq.com/keys.
+
+### Hardcover
+
+App key `hardcover`. Each person enters their own details. Read-only.
+
+**Server settings:** none. Each person enters: API token.
+
+1. Nothing to set on the server. Each person copies their **API token** from hardcover.app/account/api.
+
+Notes: Tokens expire after a year; reconnect with a new one.
+
+### HubSpot
+
+App key `hubspot`. Sign-in: OAuth. Read-only until full access is turned on.
+
+**Server settings:** `HubSpot__OAuth__ClientId`, `HubSpot__OAuth__ClientSecret`; optional `HubSpot__OAuth__RedirectUri` and `HubSpot__OAuth__FrontendUrl`.
+
+1. developers.hubspot.com → **Create app** (Public app). On the Auth tab add the redirect URL `<API address>/api/integrations/hubspot/callback` and the scopes `crm.objects.contacts.read`, `crm.objects.deals.read` and `crm.objects.contacts.write`. Copy the client id and secret.
+2. Register the redirect URI `<API address>/api/integrations/hubspot/callback` with the provider (many providers require HTTPS).
 
 ### Hugging Face
 
@@ -639,6 +697,14 @@ App key `line`. Each person enters their own details. Read-only until full acces
 1. Nothing to set on the server. In the LINE Developers console create a **Messaging API channel**, issue a **long-lived channel access token**, and paste it into Daksha.
 
 Notes: LINE only delivers incoming messages by webhook, so Daksha can send but cannot list received chats.
+
+### Linear
+
+App key `linear`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: API key.
+
+1. Nothing to set on the server. Each person creates a **personal API key** in Linear (Settings → Account → Security & access).
 
 ### LiteLLM
 
@@ -866,6 +932,14 @@ App key `philips-hue`. Each person enters their own details. Read-only until ful
 
 Notes: Uses the bridge's local API over plain HTTP, so it must run on a trusted network.
 
+### Plex
+
+App key `plex`. Each person enters their own details. Read-only.
+
+**Server settings:** none. Each person enters: Plex server address, Plex token.
+
+1. Nothing to set on the server. Each person enters their Plex server address (`http://192.168.1.10:32400`) and a **Plex token** (in Plex Web, open any item → Get Info → View XML; the token is in the address). The Daksha server must be able to reach the Plex server.
+
 ### Qwen
 
 App key `qwen`. Each person enters their own details. Read-only until full access is turned on.
@@ -885,6 +959,14 @@ App key `razorpay`. Each person enters their own details. Read-only until full a
 1. Nothing to set on the server. Each person generates an **API key** in the Razorpay Dashboard (Account & Settings → API keys) and enters the key id and secret. Test-mode keys (`rzp_test_…`) are safe to try.
 
 Notes: Amounts are shown in rupees. Daksha never stores the secret in plain text.
+
+### Readwise
+
+App key `readwise`. Each person enters their own details. Read-only.
+
+**Server settings:** none. Each person enters: Access token.
+
+1. Nothing to set on the server. Each person copies their **access token** from readwise.io/access_token.
 
 ### Runway
 
@@ -951,6 +1033,26 @@ App key `sonos`. Sign-in: OAuth. Read-only until full access is turned on.
 2. Add the redirect URI `<API address>/api/integrations/sonos/callback` (Sonos requires HTTPS).
 3. Register the redirect URI `<API address>/api/integrations/sonos/callback` with the provider (many providers require HTTPS).
 
+### Splitwise
+
+App key `splitwise`. Sign-in: OAuth. Read-only until full access is turned on.
+
+**Server settings:** `Splitwise__OAuth__ClientId`, `Splitwise__OAuth__ClientSecret`; optional `Splitwise__OAuth__RedirectUri` and `Splitwise__OAuth__FrontendUrl`.
+
+1. secure.splitwise.com/apps → **Register your application**. Set the callback URL to `<API address>/api/integrations/splitwise/callback`. Copy the consumer key (client id) and secret.
+2. Register the redirect URI `<API address>/api/integrations/splitwise/callback` with the provider (many providers require HTTPS).
+
+### Strava
+
+App key `strava`. Sign-in: OAuth. Read-only.
+
+**Server settings:** `Strava__OAuth__ClientId`, `Strava__OAuth__ClientSecret`; optional `Strava__OAuth__RedirectUri` and `Strava__OAuth__FrontendUrl`.
+
+1. strava.com/settings/api → create an app. Set **Authorization Callback Domain** to your API's domain. Copy the Client ID and Client Secret.
+2. Register the redirect URI `<API address>/api/integrations/strava/callback` with the provider (many providers require HTTPS).
+
+Notes: Strava limits each app to 100 requests per 15 minutes and 1,000 per day.
+
 ### Stripe
 
 App key `stripe`. Each person enters their own details. Read-only until full access is turned on.
@@ -977,6 +1079,14 @@ App key `synology-chat`. Each person enters their own details. Read-only until f
 
 Notes: Incoming webhooks can only send, so Daksha posts but cannot read the channel.
 
+### Todoist
+
+App key `todoist`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: API token.
+
+1. Nothing to set on the server. Each person copies their **API token** from Todoist (Settings → Integrations → Developer) and pastes it into Daksha.
+
 ### Together AI
 
 App key `together-ai`. Each person enters their own details. Read-only until full access is turned on.
@@ -984,6 +1094,14 @@ App key `together-ai`. Each person enters their own details. Read-only until ful
 **Server settings:** none. Each person enters: API key.
 
 1. Nothing to set on the server. Each person creates an **API key** at api.together.ai/settings/api-keys.
+
+### Trello
+
+App key `trello`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: API key, Token.
+
+1. Nothing to set on the server. Each person creates a Power-Up at trello.com/power-ups/admin to get an **API key**, then generates a **token** from it (read and write) and enters both in Daksha.
 
 ### Tuya
 
@@ -1041,6 +1159,16 @@ App key `weather`. Free public service: no sign-in and no key. Read-only.
 
 Notes: Open-Meteo's free service is for non-commercial use; for commercial use take one of its paid plans.
 
+### Wise
+
+App key `wise`. Each person enters their own details. Read-only.
+
+**Server settings:** none. Each person enters: API token.
+
+1. Nothing to set on the server. Each person creates a **read-only API token** in Wise (Settings → Integrations and tools → API tokens).
+
+Notes: In the UK and EEA, Wise requires strong customer authentication for some calls, so balances may be refused for personal tokens.
+
 ### WooCommerce
 
 App key `woocommerce`. Each person enters their own details. Read-only until full access is turned on.
@@ -1078,6 +1206,17 @@ App key `zapier`. Each person enters their own details. Read-only until full acc
 2. In Daksha enter a name and that address. Add more Zaps later in Manage → Preferences.
 
 Notes: Only addresses on hooks.zapier.com are accepted. Daksha cannot read results back from Zapier; it only starts the trigger.
+
+### Zerodha Kite
+
+App key `zerodha-kite`. Sign-in: OAuth. Read-only.
+
+**Server settings:** `Kite__OAuth__ClientId`, `Kite__OAuth__ClientSecret`; optional `Kite__OAuth__RedirectUri` and `Kite__OAuth__FrontendUrl`.
+
+1. Create a Kite Connect app at developers.kite.trade (a paid Zerodha developer subscription). Set its **Redirect URL** to `<API address>/api/integrations/zerodha-kite/callback`. Copy the **API key** (as the client id) and **API secret**.
+2. Register the redirect URI `<API address>/api/integrations/zerodha-kite/callback` with the provider (many providers require HTTPS).
+
+Notes: Kite access tokens expire around 6 a.m. India time every day, so the person logs in again each morning. This app only reads.
 
 ### Zoho Books
 

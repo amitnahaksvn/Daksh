@@ -32,6 +32,8 @@ public static partial class ProviderApps
         .. ModelApps(), ElevenLabs(), Deepgram(), AzureSpeech(), PerplexitySearch(), Runway(), Fal(), ComfyUi(), SharePoint(),
         // Batch 5: messaging
         Teams(), GoogleChat(), Signal(), Line(), Messenger(), InstagramMessaging(), IMessage(), Matrix(), Mattermost(), Feishu(), Twitch(), TwilioSms(), A2a(), Irc(), NextcloudTalk(), Nostr(), SynologyChat(),
+        // Batch 6: everyday tools
+        Todoist(), Trello(), Asana(), ClickUp(), Linear(), GoogleTasks(), Strava(), Hardcover(), Readwise(), Plex(), Splitwise(), Wise(), Kite(), Etsy(), HubSpot(),
     ];
     private static IReadOnlyList<ProviderApp>? _all;
 
