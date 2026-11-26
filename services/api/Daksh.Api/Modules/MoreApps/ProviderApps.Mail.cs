@@ -25,6 +25,9 @@ public static partial class ProviderApps
         // Batch 2: developer, cloud and work tools
         GitLab(), Bitbucket(), Jira(), Sentry(), DockerHub(), Cloudflare(), Vercel(), Supabase(), Firebase(), N8n(), Airtable(), Confluence(),
         Razorpay(), Stripe(), PayPal(), ZohoMail(), Calendly(), Zoom(), Dropbox(), Box(),
+        // Batch 3: cloud, commerce, accounting, smart home, automation
+        Aws(), Azure(), GoogleCloud(), Kubernetes(), OnePassword(), Obsidian(), McpServers(),
+        WooCommerce(), Ebay(), Xero(), ZohoBooks(), Mapbox(), Amadeus(), Mastodon(), Bluesky(), Zapier(), Make(), Ifttt(), Hue(), SmartThings(), Tuya(), Sonos(), Weather(), Bhashini(),
     ];
     private static IReadOnlyList<ProviderApp>? _all;
 

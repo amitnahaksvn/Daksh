@@ -19,7 +19,7 @@ namespace Daksh.Api.Modules;
 // chat-assistant text and the HTTP endpoints. The endpoints have the same shape as GitHub/Notion/Spotify, so the web app's Manage popup,
 // connect popup and dashboard tile work for these apps too.
 
-public enum AuthKind { OAuth, Credentials, ServerKey }
+public enum AuthKind { OAuth, Credentials, ServerKey, /* no sign-in and no key: a free public service */ Open }
 
 /// <summary>One row of a list: what the screen shows. <see cref="Drill"/> names a view to open with this row's <see cref="Id"/> as its argument.</summary>
 public sealed record AppItem(string Id, string Title, string? Subtitle = null, string? Url = null, string? Badge = null, string? Image = null, string? Drill = null, string? Body = null);
@@ -28,7 +28,7 @@ public sealed record AppItem(string Id, string Title, string? Subtitle = null, s
 public sealed record InputSpec(string Key, string Label, string Kind = "text", string? Placeholder = null, bool Required = true, string[]? Options = null, string? OptionsView = null, string? Default = null, string? Hint = null);
 
 /// <summary>A setting shown in Manage. Type: bool, enum, count or text.</summary>
-public sealed record SettingRowSpec(string Key, string Label, string Type, string? Hint = null, string? Placeholder = null, string[]? Options = null, string? Default = null);
+public sealed record SettingRowSpec(string Key, string Label, string Type, string? Hint = null, string? Placeholder = null, string[]? Options = null, string? Default = null, int Max = 400);
 
 public sealed record TokenSet(string Access, string? Refresh, DateTimeOffset Expires, Dictionary<string, string>? Extra = null);
 public sealed record ProfileInfo(string Id, string Name, Dictionary<string, string>? Extra = null);
@@ -150,6 +150,8 @@ public sealed class ProviderApp
     /// <summary>Adds provider-specific headers (and replaces the default bearer token when needed).</summary>
     public Action<HttpRequestMessage, ProviderCtx>? Decorate { get; init; }
     public bool NoBearer { get; init; }
+    /// <summary>Supplies the HTTP client for apps that need their own trust rules (a Kubernetes cluster's private CA). Disposed after each call.</summary>
+    public Func<ProviderCtx, HttpClient?>? Client { get; init; }
     public Func<IConfiguration, bool>? ConfiguredOverride { get; init; }
     /// <summary>Profile lookup after sign-in (OAuth apps).</summary>
     public Func<ProviderCtx, Task<ProfileInfo>>? Profile { get; init; }
@@ -175,7 +177,7 @@ public sealed class ProviderApp
         "count" => new SettingSpec(s.Key, "int", s.Default ?? "5", 3, 10),
         "bool" => new SettingSpec(s.Key, "bool", s.Default ?? "false"),
         "enum" => new SettingSpec(s.Key, "enum", s.Default ?? s.Options![0], Options: s.Options),
-        _ => new SettingSpec(s.Key, "text", s.Default ?? "", Max: 400),
+        _ => new SettingSpec(s.Key, "text", s.Default ?? "", Max: s.Max),
     }).ToArray(), IsConfigured, SoftWrite: !WriteNeedsSignIn);
 }
 
@@ -199,27 +201,34 @@ public sealed class ProviderCtx
 
     public async Task<JsonDocument> JsonAsync(HttpMethod method, string url, object? json = null, IEnumerable<KeyValuePair<string, string>>? form = null, IDictionary<string, string>? headers = null)
     {
+        var text = await SendTextAsync(method, url, () => json is not null ? JsonContent.Create(json) : form is not null ? new FormUrlEncodedContent(form) : null, headers);
+        if (string.IsNullOrWhiteSpace(text)) return JsonDocument.Parse("{}");
+        try { return JsonDocument.Parse(text); }
+        catch (JsonException) { throw new AppException(502, $"{App.Name} sent a reply Daksha could not read."); }
+    }
+
+    /// <summary>A request with a plain-text body (Markdown, XML ...), returning the reply text.</summary>
+    public Task<string> RawAsync(HttpMethod method, string url, string? body, string contentType = "text/plain", IDictionary<string, string>? headers = null) =>
+        SendTextAsync(method, url, () => body is null ? null : new StringContent(body, Encoding.UTF8, contentType), headers);
+
+    private async Task<string> SendTextAsync(HttpMethod method, string url, Func<HttpContent?> content, IDictionary<string, string>? headers)
+    {
         for (var attempt = 0; ; attempt++)
         {
             using var req = new HttpRequestMessage(method, url);
             if (Token is not null && !App.NoBearer) req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token);
             App.Decorate?.Invoke(req, this);
             if (headers is not null) foreach (var (k, v) in headers) { req.Headers.Remove(k); req.Headers.TryAddWithoutValidation(k, v); }
-            if (json is not null) req.Content = JsonContent.Create(json);
-            else if (form is not null) req.Content = new FormUrlEncodedContent(form);
-            using var res = await Clients.CreateClient("provider-apps").SendAsync(req, Ct);
+            req.Content = content();
+            using var custom = App.Client?.Invoke(this); // null means the shared client
+            using var res = await (custom ?? Clients.CreateClient("provider-apps")).SendAsync(req, Ct);
             if (res.StatusCode == HttpStatusCode.TooManyRequests)
             {
                 if (attempt < 1 && res.Headers.RetryAfter?.Delta is { } d && d <= TimeSpan.FromSeconds(8)) { await Task.Delay(d, Ct); continue; }
                 throw new AppException(429, $"{App.Name} is rate limiting requests. Please try again in a moment.", "rate_limited");
             }
             var text = await res.Content.ReadAsStringAsync(Ct);
-            if (res.IsSuccessStatusCode)
-            {
-                if (string.IsNullOrWhiteSpace(text)) return JsonDocument.Parse("{}");
-                try { return JsonDocument.Parse(text); }
-                catch (JsonException) { throw new AppException(502, $"{App.Name} sent a reply Daksha could not read."); }
-            }
+            if (res.IsSuccessStatusCode) return text;
             var detail = ProviderEngine.ErrorDetail(text);
             throw res.StatusCode switch
             {
@@ -574,6 +583,8 @@ public static class ProviderEngine
             case AuthKind.Credentials:
                 var cred = await LoadSecretAsync(db, protector, account.ConnectionId, CredentialKey, ct) ?? throw new AppException(409, $"{app.Name} details are missing. Reconnect {app.Name}.", "not_connected");
                 ctx.Cred = JsonSerializer.Deserialize<Dictionary<string, string>>(cred, JsonOptions) ?? [];
+                break;
+            case AuthKind.Open:
                 break;
             case AuthKind.ServerKey:
                 if (!app.IsConfigured(config)) throw new AppException(503, $"{app.Name} is not configured on the server.", "not_configured");

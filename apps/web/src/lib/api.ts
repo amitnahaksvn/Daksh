@@ -282,6 +282,10 @@ export const PROVIDER_APP_KEYS = [
   // Batch 2: developer, cloud, work, payments and files
   "gitlab", "bitbucket", "jira", "sentry", "docker-hub", "cloudflare", "vercel", "supabase", "firebase", "n8n", "airtable", "confluence",
   "razorpay", "stripe", "paypal", "zoho-mail", "calendly", "zoom", "dropbox", "box",
+  // Batch 3: cloud, commerce, accounting, travel, smart home, automation and utilities
+  "aws", "microsoft-azure", "google-cloud", "kubernetes", "1password", "obsidian", "mcp-servers",
+  "woocommerce", "ebay", "xero", "zoho-books", "mapbox", "amadeus", "mastodon", "bluesky", "zapier", "make", "ifttt",
+  "philips-hue", "smartthings", "tuya", "sonos", "weather", "bhashini",
 ] as const;
 export type ProviderAppKey = (typeof PROVIDER_APP_KEYS)[number];
 export type AnyOneAppKey = OneAppKey | ProviderAppKey;
@@ -292,7 +296,7 @@ export type ProviderAction = { id: string; label: string; hint: string | null; i
 export type ProviderSetting = { key: string; label: string; type: "bool" | "enum" | "count" | "text"; hint: string | null; placeholder: string | null; options: string[] | null; default: string | null };
 export type ProviderSpec = {
   key: ProviderAppKey; name: string; icon: string; color: string; account: string; connectTitle: string; connectBlurb: string; connectLabel: string; writeLabel: string; writeHint: string;
-  auth: "oauth" | "credentials" | "serverkey"; writeNeedsSignIn: boolean; hasWrite: boolean; setupDoc: string;
+  auth: "oauth" | "credentials" | "serverkey" | "open"; writeNeedsSignIn: boolean; hasWrite: boolean; setupDoc: string;
   connectFields: ProviderInput[]; views: ProviderView[]; actions: ProviderAction[]; settings: ProviderSetting[];
 };
 export type ProviderItem = { id: string; title: string; subtitle: string | null; url: string | null; badge: string | null; image: string | null; drill: string | null; body: string | null };

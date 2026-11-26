@@ -35,6 +35,7 @@ public static class ProviderDocs
     {
         (AuthKind.OAuth, true) => "Sign-in: OAuth. Read-only until full access is turned on.",
         (AuthKind.OAuth, false) => "Sign-in: OAuth. Read-only.",
+        (AuthKind.Open, _) => "Free public service: no sign-in and no key. Read-only.",
         (AuthKind.Credentials, true) => "Each person enters their own details. Read-only until full access is turned on.",
         (AuthKind.Credentials, false) => "Each person enters their own details. Read-only.",
         (_, true) => "One server key; nothing to sign in to. Read-only until full access is turned on.",
@@ -53,6 +54,8 @@ public static class ProviderDocs
                 return $"{ids}{reuse}{region}; optional `{Env(o.Section, "OAuth__RedirectUri")}` and `{Env(o.Section, "OAuth__FrontendUrl")}`.";
             case AuthKind.ServerKey:
                 return string.Join(", ", a.ServerKeys.Select(k => $"`{k.Replace(":", "__")}`")) + ".";
+            case AuthKind.Open:
+                return "none. Nothing to configure.";
             default:
                 return "none. Each person enters: " + string.Join(", ", a.Credentials!.Fields.Select(f => f.Label)) + ".";
         }

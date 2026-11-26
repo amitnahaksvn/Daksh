@@ -203,6 +203,17 @@ The apps below were added in later batches. This section is written from the app
 Where you see `<API address>`, use the address of your API (for example `https://api.example.com`).
 
 <!-- BEGIN GENERATED APPS -->
+### 1Password
+
+App key `1password`. Each person enters their own details. Read-only.
+
+**Server settings:** none. Each person enters: Connect server address, Connect token.
+
+1. Nothing to set on the server. Each person runs a **1Password Connect server** (1password.com → Developer → Secrets Automation) and creates a token with read access to the vaults to share.
+2. In Daksha they enter the Connect server address and the token.
+
+Notes: By design Daksha asks only for the item list, which contains titles, categories and dates, never field values.
+
 ### Airtable
 
 App key `airtable`. Each person enters their own details. Read-only until full access is turned on.
@@ -210,6 +221,37 @@ App key `airtable`. Each person enters their own details. Read-only until full a
 **Server settings:** none. Each person enters: Personal access token.
 
 1. Nothing to set on the server. Each person creates a **personal access token** at airtable.com/create/tokens with `data.records:read` and `schema.bases:read` (add `data.records:write` for adding records) and chooses the bases to share.
+
+### Amadeus
+
+App key `amadeus`. Each person enters their own details. Read-only.
+
+**Server settings:** none. Each person enters: API key, API secret, Environment.
+
+1. Nothing to set on the server. Each person registers at developers.amadeus.com, creates an app (Self-Service) and enters its **API key** (client id) and **secret**. Use Test to start; switch to Production once approved.
+
+Notes: The Test environment returns cached sample data.
+
+### AWS
+
+App key `aws`. Each person enters their own details. Read-only.
+
+**Server settings:** none. Each person enters: Access key id, Secret access key, Region.
+
+1. Nothing to set on the server. Each person creates an **IAM user** with the managed policy `ReadOnlyAccess` (IAM → Users → Create user), then creates an **access key** for it.
+2. In Daksha they enter the access key id, the secret access key and a default region (for example `ap-south-1`).
+
+Notes: Requests are signed with AWS Signature Version 4. Use a dedicated read-only user, never your root account.
+
+### Bhashini
+
+App key `bhashini`. Each person enters their own details. Read-only.
+
+**Server settings:** none. Each person enters: User ID, ULCA API key.
+
+1. Nothing to set on the server. Each person registers at bhashini.gov.in, opens **My Profile → API keys** and copies their **User ID** and **ULCA API key**.
+
+Notes: Uses the Bhashini pipeline service (look up the model, then run it). Languages: English, Hindi, Bengali, Tamil, Telugu, Marathi, Gujarati, Kannada, Malayalam, Punjabi, Odia, Assamese, Urdu, Sanskrit, Nepali.
 
 ### Bitbucket Cloud
 
@@ -219,6 +261,14 @@ App key `bitbucket`. Each person enters their own details. Read-only until full 
 
 1. Nothing to set on the server. Each person creates an **app password** (Bitbucket → Personal settings → App passwords) with Account: read, Repositories: read and Pull requests: read (add write to comment).
 2. In Daksha they enter their Bitbucket username and the app password.
+
+### Bluesky
+
+App key `bluesky`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Handle, App password, Server.
+
+1. Nothing to set on the server. Each person creates an **app password** in Bluesky (Settings → Privacy and security → App passwords) and enters it with their handle (for example `you.bsky.social`).
 
 ### Box
 
@@ -275,6 +325,19 @@ App key `dropbox`. Sign-in: OAuth. Read-only until full access is turned on.
 2. Permissions tab: enable `account_info.read`, `files.metadata.read` and `files.content.write`, then Submit.
 3. Register the redirect URI `<API address>/api/integrations/dropbox/callback` with the provider (many providers require HTTPS).
 
+### eBay
+
+App key `ebay`. Sign-in: OAuth. Read-only.
+
+**Server settings:** `EBay__OAuth__ClientId`, `EBay__OAuth__ClientSecret`; optional `EBay__OAuth__RedirectUri` and `EBay__OAuth__FrontendUrl`.
+
+1. developer.ebay.com → Hardware/Application keys: create a keyset (use Sandbox first). Copy the **App ID** (client id) and **Cert ID** (client secret).
+2. User Tokens → **Get a Token from eBay via Your Application**: create a **RuName** whose “Auth accepted URL” is `<API address>/api/integrations/ebay/callback`. Set it as `EBay__RuName`.
+3. Set `EBay__Environment=sandbox` while testing, and remove it for production.
+4. Register the redirect URI `<API address>/api/integrations/ebay/callback` with the provider (many providers require HTTPS).
+
+Notes: eBay's redirect value is the RuName, not a URL. Production keys need eBay's application growth check for some APIs.
+
 ### Firebase
 
 App key `firebase`. Sign-in: OAuth. Read-only.
@@ -295,6 +358,25 @@ App key `gitlab`. Each person enters their own details. Read-only until full acc
 
 Notes: Self-hosted servers must be reachable from the Daksha server.
 
+### Google Cloud
+
+App key `google-cloud`. Sign-in: OAuth. Read-only.
+
+**Server settings:** `GoogleCloud__OAuth__ClientId`, `GoogleCloud__OAuth__ClientSecret` (or reuse `Gmail__OAuth__ClientId` / `ClientSecret`); optional `GoogleCloud__OAuth__RedirectUri` and `GoogleCloud__OAuth__FrontendUrl`.
+
+1. Reuses the Google client (`Gmail__OAuth__*`). In Google Cloud Console enable the **Cloud Resource Manager**, **Compute Engine** and **Cloud Run Admin** APIs and add the scope `.../auth/cloud-platform.read-only` to the consent screen.
+2. Register the redirect URI `<API address>/api/integrations/google-cloud/callback` with the provider (many providers require HTTPS).
+
+### IFTTT
+
+App key `ifttt`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Webhooks key.
+
+1. Nothing to set on the server. Each person turns on the **Webhooks** service in IFTTT (ifttt.com/maker_webhooks) and copies their key from Documentation.
+
+Notes: IFTTT cannot be read back from; Daksha only fires events. Connecting fires one harmless test event named `daksha_connected`.
+
 ### Jira
 
 App key `jira`. Each person enters their own details. Read-only until full access is turned on.
@@ -306,6 +388,71 @@ App key `jira`. Each person enters their own details. Read-only until full acces
 
 Notes: Jira Server / Data Center is not covered (Jira Cloud only).
 
+### Kubernetes
+
+App key `kubernetes`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: API server address, Service-account token, Cluster CA certificate (PEM).
+
+1. Nothing to set on the server. Create a **service account** with the built-in `view` ClusterRole, then create a token for it: `kubectl create token <name> --duration=8760h`.
+2. In Daksha enter the API server address (`https://…:6443`), the token and, if the cluster uses a private certificate authority, its certificate (PEM).
+3. The Daksha server must be able to reach the API server.
+
+Notes: A private CA is trusted only for that cluster's connection. Public cloud clusters with a public certificate need no CA.
+
+### Make
+
+App key `make`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Name, Webhook address.
+
+1. Nothing to set on the server. In Make create a scenario that starts with **Webhooks → Custom webhook** and copy its address (`https://hook.eu1.make.com/…`).
+2. In Daksha enter a name and that address. Add more scenarios later in Manage → Preferences.
+
+Notes: Only addresses on hook.eu1.make.com, hook.us1.make.com, … are accepted. Daksha cannot read results back from Make; it only starts the trigger.
+
+### Mapbox
+
+App key `mapbox`. One server key; nothing to sign in to. Read-only.
+
+**Server settings:** `Mapbox__AccessToken`.
+
+1. account.mapbox.com → Tokens → **Create a token** with the default public scopes. Set it as `Mapbox__AccessToken`. Restrict it to your server's URL if you can.
+
+Notes: Mapbox only accepts the token in the address of each request, so avoid logging full request URLs.
+
+### Mastodon
+
+App key `mastodon`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Instance, Access token.
+
+1. Nothing to set on the server. Each person opens their instance → Preferences → **Development → New application**, grants `read` (and `write:statuses` for posting), and copies **your access token**.
+2. In Daksha they enter the instance address and the token.
+
+### MCP servers
+
+App key `mcp-servers`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: MCP server address, Bearer token.
+
+1. Nothing to set on the server. Each person enters the **address of an MCP server** (streamable HTTP, for example `https://mcp.example.com/mcp`) and, if required, a bearer token.
+2. Listing tools is read-only; calling a tool needs the full-access switch.
+
+Notes: Only the streamable-HTTP transport is supported (not stdio). Each call opens a short-lived session.
+
+### Microsoft Azure
+
+App key `microsoft-azure`. Sign-in: OAuth. Read-only.
+
+**Server settings:** `AzureCloud__OAuth__ClientId`, `AzureCloud__OAuth__ClientSecret` (or reuse `Microsoft__OAuth__ClientId` / `ClientSecret`); optional `AzureCloud__OAuth__RedirectUri` and `AzureCloud__OAuth__FrontendUrl`.
+
+1. Reuses the Microsoft app registration (`Microsoft__OAuth__ClientId` / `ClientSecret`), or set `AzureCloud__OAuth__*` for a separate one.
+2. In Entra ID → App registrations → your app → API permissions → add **Azure Service Management → user_impersonation** (delegated).
+3. Register the redirect URI `<API address>/api/integrations/microsoft-azure/callback` with the provider (many providers require HTTPS).
+
+Notes: Daksha only calls read endpoints. The Azure permission itself is broad (user_impersonation), so use a dedicated app registration if that matters to you.
+
 ### n8n
 
 App key `n8n`. Each person enters their own details. Read-only until full access is turned on.
@@ -314,6 +461,17 @@ App key `n8n`. Each person enters their own details. Read-only until full access
 
 1. Nothing to set on the server. Each person creates an **API key** in their n8n (Settings → n8n API) and enters it with the address of their n8n.
 2. The Daksha server must be able to reach that address.
+
+### Obsidian
+
+App key `obsidian`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Obsidian address, API key.
+
+1. Nothing to set on the server. In Obsidian install the **Local REST API** plugin, enable it and copy its API key.
+2. Enter its address (`https://127.0.0.1:27124`, or `http://127.0.0.1:27123` with the non-encrypted server enabled) and the key. The Daksha server must be able to reach Obsidian (use a private tunnel for a cloud server).
+
+Notes: The plugin uses a self-signed certificate; use the plain-HTTP port on a trusted network or a tunnel with a proper certificate.
 
 ### PayPal
 
@@ -324,6 +482,17 @@ App key `paypal`. Each person enters their own details. Read-only.
 1. Nothing to set on the server. Each person creates a **REST app** at developer.paypal.com → Apps & Credentials, enables the **Transaction search** feature, and enters the client id and secret (choose Sandbox to try it).
 
 Notes: PayPal only returns transactions from the last 31 days per request, and they can take a few hours to appear.
+
+### Philips Hue
+
+App key `philips-hue`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Bridge address, Application key.
+
+1. Nothing to set on the server. Find the bridge address in the Hue app (Settings → My Hue system → bridge) or at discovery.meethue.com.
+2. In Daksha press the **link button** on the bridge, then enter the address and connect. Daksha receives its own key from the bridge (you can also paste an existing key).
+
+Notes: Uses the bridge's local API over plain HTTP, so it must run on a trusted network.
 
 ### Razorpay
 
@@ -344,6 +513,24 @@ App key `sentry`. Each person enters their own details. Read-only until full acc
 1. Nothing to set on the server. Each person creates a **personal auth token** in Sentry with `org:read`, `project:read` and `event:read` (add `event:write` to resolve issues).
 2. In Daksha they paste the token (and the address of a self-hosted Sentry, if they use one).
 
+### SmartThings
+
+App key `smartthings`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Personal access token.
+
+1. Nothing to set on the server. Each person creates a **personal access token** at account.smartthings.com/tokens with the Devices (list, read, execute) and Scenes (list, execute) permissions.
+
+### Sonos
+
+App key `sonos`. Sign-in: OAuth. Read-only until full access is turned on.
+
+**Server settings:** `Sonos__OAuth__ClientId`, `Sonos__OAuth__ClientSecret`; optional `Sonos__OAuth__RedirectUri` and `Sonos__OAuth__FrontendUrl`.
+
+1. developer.sonos.com → **Create integration** (Control API). Copy the key (client id) and secret.
+2. Add the redirect URI `<API address>/api/integrations/sonos/callback` (Sonos requires HTTPS).
+3. Register the redirect URI `<API address>/api/integrations/sonos/callback` with the provider (many providers require HTTPS).
+
 ### Stripe
 
 App key `stripe`. Each person enters their own details. Read-only until full access is turned on.
@@ -360,6 +547,17 @@ App key `supabase`. Each person enters their own details. Read-only.
 
 1. Nothing to set on the server. Each person creates a **personal access token** (Supabase dashboard → Account → Access Tokens).
 
+### Tuya
+
+App key `tuya`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Access ID, Access secret, Data centre.
+
+1. platform.tuya.com → Cloud → **Create a cloud project** (Smart Home, your data centre). Copy the **Access ID** and **Access Secret**.
+2. Devices → **Link App Account** and scan the QR code with the Smart Life / Tuya app so the project can see your devices. Subscribe the project to the *Smart Home Basic Service* API group.
+
+Notes: Signed requests follow Tuya's documented HMAC-SHA256 scheme. The list-devices call needs the Smart Home Basic Service subscription.
+
 ### Vercel
 
 App key `vercel`. Each person enters their own details. Read-only.
@@ -367,6 +565,56 @@ App key `vercel`. Each person enters their own details. Read-only.
 **Server settings:** none. Each person enters: Access token.
 
 1. Nothing to set on the server. Each person creates an **access token** (Vercel → Account Settings → Tokens) and pastes it into Daksha.
+
+### Weather
+
+App key `weather`. Free public service: no sign-in and no key. Read-only.
+
+**Server settings:** none. Nothing to configure.
+
+1. Nothing to set. Weather uses the free Open-Meteo service, which needs no key (for non-commercial use).
+
+Notes: Open-Meteo's free service is for non-commercial use; for commercial use take one of its paid plans.
+
+### WooCommerce
+
+App key `woocommerce`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Store address, Consumer key, Consumer secret.
+
+1. Nothing to set on the server. Each store owner creates **REST API keys** (WooCommerce → Settings → Advanced → REST API) with Read (or Read/Write) permission.
+2. In Daksha they enter the store address (must be https), the consumer key and the consumer secret.
+
+### Xero
+
+App key `xero`. Sign-in: OAuth. Read-only until full access is turned on.
+
+**Server settings:** `Xero__OAuth__ClientId`, `Xero__OAuth__ClientSecret`; optional `Xero__OAuth__RedirectUri` and `Xero__OAuth__FrontendUrl`.
+
+1. developer.xero.com → My Apps → **New app** (Web app). Copy the client id and secret.
+2. Scopes used: `accounting.transactions.read`, `accounting.contacts.read`, `accounting.settings.read` (read) and `accounting.contacts` (full access). Each person chooses one organisation when signing in.
+3. Register the redirect URI `<API address>/api/integrations/xero/callback` with the provider (many providers require HTTPS).
+
+### Zapier
+
+App key `zapier`. Each person enters their own details. Read-only until full access is turned on.
+
+**Server settings:** none. Each person enters: Name, Webhook address.
+
+1. Nothing to set on the server. In Zapier create a Zap that starts with **Webhooks by Zapier → Catch Hook** and copy its address (`https://hooks.zapier.com/hooks/catch/…`).
+2. In Daksha enter a name and that address. Add more Zaps later in Manage → Preferences.
+
+Notes: Only addresses on hooks.zapier.com are accepted. Daksha cannot read results back from Zapier; it only starts the trigger.
+
+### Zoho Books
+
+App key `zoho-books`. Sign-in: OAuth. Read-only until full access is turned on.
+
+**Server settings:** `ZohoBooks__OAuth__ClientId`, `ZohoBooks__OAuth__ClientSecret`, `ZohoBooks__Region` (default `com`); optional `ZohoBooks__OAuth__RedirectUri` and `ZohoBooks__OAuth__FrontendUrl`.
+
+1. Open the Zoho API Console for your data centre and create a **Server-based Application**. Copy the client id and secret.
+2. Set `ZohoBooks__Region` to your data centre suffix (`in`, `com`, `eu`, `com.au`, `jp`).
+3. Register the redirect URI `<API address>/api/integrations/zoho-books/callback` with the provider (many providers require HTTPS).
 
 ### Zoho Mail
 
